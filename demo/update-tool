@@ -1,0 +1,326 @@
+#!/bin/bash
+
+# update-tool - Comprehensive update management demonstration
+# This script showcases all Shell Starter update management features
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SHELL_STARTER_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+source "${SHELL_STARTER_ROOT}/lib/main.sh"
+
+show_help() {
+	# Show banner header for help
+	banner::shell_starter minimal
+	cat <<EOF
+Usage: $(basename "$0") [OPTIONS] [COMMAND]
+
+A comprehensive tool demonstrating Shell Starter's update management system.
+
+COMMANDS:
+    check               Check for available updates (default)
+    status              Show detailed version status and configuration
+    config              Manage update notification settings
+    install <version>   Install a specific version (demonstration)
+    history             Show release history
+
+OPTIONS:
+    -h, --help          Show this help message and exit
+    -v, --version       Show version information and exit
+    --update            Check for available updates
+    --check-version     Show detailed version status and check for updates
+    --notify-config     Configure update notification settings
+    --uninstall         Remove Shell Starter installation
+    -q, --quiet         Suppress colorful output
+    --verbose           Show detailed operation information
+
+UPDATE NOTIFICATION COMMANDS:
+    config enable       Enable automatic update notifications
+    config disable      Disable automatic update notifications
+    config interval <hours>  Set check interval in hours
+    config quiet <on|off>    Enable/disable quiet notifications
+    config status       Show current notification configuration
+
+EXAMPLES:
+    $(basename "$0")                    # Check for updates
+    $(basename "$0") status             # Show detailed status
+    $(basename "$0") config enable      # Enable notifications
+    $(basename "$0") config interval 12 # Check every 12 hours
+    $(basename "$0") history            # Show release history
+    $(basename "$0") install v1.2.3     # Install specific version (demo)
+EOF
+}
+
+check_updates() {
+	local quiet="$1"
+
+	if [[ "$quiet" != "true" ]]; then
+		echo -e "${COLOR_BLUE}🔍 Checking for updates...${COLOR_RESET}"
+		echo
+	fi
+
+	local current_version
+	current_version=$(get_version)
+
+	if [[ "$quiet" != "true" ]]; then
+		echo -e "Current version: ${COLOR_BOLD}$current_version${COLOR_RESET}"
+	fi
+
+	# Check for updates
+	local latest_version
+	latest_version=$(check_for_update "$current_version")
+	local check_result=$?
+
+	if [[ $check_result -eq 0 ]]; then
+		if [[ "$quiet" != "true" ]]; then
+			echo -e "Latest version:  ${COLOR_GREEN}${COLOR_BOLD}$latest_version${COLOR_RESET}"
+			echo
+			echo -e "${COLOR_GREEN}✅ Update available!${COLOR_RESET}"
+			echo
+			echo "To install the update:"
+			echo "  1. Download: curl -sSL https://raw.githubusercontent.com/jeromecoloma/shell-starter/main/install.sh | bash"
+			echo "  2. Or visit: https://github.com/jeromecoloma/shell-starter/releases/latest"
+		else
+			echo "Update available: $current_version → $latest_version"
+		fi
+		return 0
+	else
+		if [[ "$quiet" != "true" ]]; then
+			echo -e "${COLOR_GREEN}✅ You're running the latest version${COLOR_RESET}"
+		else
+			echo "No update available"
+		fi
+		return 1
+	fi
+}
+
+show_status() {
+	local verbose="$1"
+
+	echo -e "${COLOR_BLUE}📊 Shell Starter Status${COLOR_RESET}"
+	echo "========================"
+	echo
+
+	# Version information
+	local current_version
+	current_version=$(get_version)
+	echo "Current version: ${COLOR_BOLD}$current_version${COLOR_RESET}"
+
+	# Check latest version
+	echo -e "${COLOR_BLUE}Checking latest version...${COLOR_RESET}"
+	local latest_version
+	latest_version=$(get_latest_release 2>/dev/null)
+	local fetch_result=$?
+
+	if [[ $fetch_result -eq 0 ]]; then
+		echo "Latest version:  ${COLOR_BOLD}$latest_version${COLOR_RESET}"
+
+		version_compare "$current_version" "$latest_version"
+		local comparison=$?
+
+		case $comparison in
+		0) echo -e "Status: ${COLOR_GREEN}Up to date${COLOR_RESET}" ;;
+		1) echo -e "Status: ${COLOR_YELLOW}Ahead of latest release${COLOR_RESET}" ;;
+		2) echo -e "Status: ${COLOR_RED}Update available${COLOR_RESET}" ;;
+		esac
+	else
+		echo -e "Latest version:  ${COLOR_RED}Unable to check${COLOR_RESET}"
+		echo -e "Status: ${COLOR_YELLOW}Connection failed${COLOR_RESET}"
+	fi
+
+	echo
+
+	# Installation information
+	echo -e "${COLOR_BLUE}Installation Details${COLOR_RESET}"
+	echo "--------------------"
+	echo "Shell Starter root: $SHELL_STARTER_ROOT"
+
+	if [[ "$verbose" == "true" ]]; then
+		echo "Library directory:  ${SHELL_STARTER_ROOT}/lib"
+		echo "Scripts directory:  ${SHELL_STARTER_ROOT}/bin"
+		echo "Install script:     ${SHELL_STARTER_ROOT}/install.sh"
+		echo "Uninstall script:   ${SHELL_STARTER_ROOT}/uninstall.sh"
+	fi
+
+	echo
+
+	# Configuration status
+	echo -e "${COLOR_BLUE}Notification Configuration${COLOR_RESET}"
+	echo "--------------------------"
+	update::config status
+
+	if [[ "$verbose" == "true" ]]; then
+		echo
+		echo -e "${COLOR_BLUE}System Information${COLOR_RESET}"
+		echo "------------------"
+		echo "Operating System: $(uname -s) $(uname -r)"
+		echo "Architecture:     $(uname -m)"
+		echo "Shell:           $SHELL"
+		echo "Bash version:    $BASH_VERSION"
+
+		# Check for required tools
+		echo
+		echo -e "${COLOR_BLUE}Tool Availability${COLOR_RESET}"
+		echo "-----------------"
+		local tools=("curl" "jq" "git")
+		for tool in "${tools[@]}"; do
+			if command -v "$tool" >/dev/null 2>&1; then
+				echo -e "$tool: ${COLOR_GREEN}✅ Available${COLOR_RESET}"
+			else
+				echo -e "$tool: ${COLOR_RED}❌ Not found${COLOR_RESET}"
+			fi
+		done
+	fi
+}
+
+show_history() {
+	echo -e "${COLOR_BLUE}📝 Release History${COLOR_RESET}"
+	echo "=================="
+	echo
+
+	echo "Fetching release information from GitHub..."
+	echo
+
+	# This would fetch actual release history in a real implementation
+	# For demo purposes, we'll show how it would work
+	echo -e "${COLOR_GREEN}Recent Releases:${COLOR_RESET}"
+	echo "v1.0.0 - Initial release with core features"
+	echo "v1.1.0 - Added update management system"
+	echo "v1.2.0 - Enhanced examples and documentation"
+	echo "v1.3.0 - CI/CD improvements and testing"
+	echo
+	echo "For complete history, visit:"
+	echo "https://github.com/jeromecoloma/shell-starter/releases"
+}
+
+install_version() {
+	local version="$1"
+	local quiet="$2"
+
+	if [[ "$quiet" != "true" ]]; then
+		echo -e "${COLOR_BLUE}📦 Installing version $version${COLOR_RESET}"
+		echo "================================"
+		echo
+	fi
+
+	# This is a demonstration - in a real implementation, this would:
+	# 1. Download the specified version
+	# 2. Backup current installation
+	# 3. Install the new version
+	# 4. Verify installation
+
+	if [[ "$quiet" != "true" ]]; then
+		echo -e "${COLOR_YELLOW}⚠️  This is a demonstration feature${COLOR_RESET}"
+		echo
+		echo "In a real implementation, this would:"
+		echo "1. Validate the version exists"
+		echo "2. Download from GitHub releases"
+		echo "3. Backup current installation"
+		echo "4. Install the new version"
+		echo "5. Verify installation success"
+		echo
+		echo "To manually install a specific version:"
+		echo "curl -sSL https://raw.githubusercontent.com/jeromecoloma/shell-starter/$version/install.sh | bash"
+	else
+		echo "Demo: Would install version $version"
+	fi
+}
+
+manage_config() {
+	local action="$1"
+	shift
+
+	case "$action" in
+	enable | disable | interval | quiet | status)
+		update::config "$action" "$@"
+		;;
+	*)
+		echo -e "${COLOR_RED}Unknown config action: $action${COLOR_RESET}"
+		echo "Use: config {enable|disable|interval|quiet|status}"
+		return 1
+		;;
+	esac
+}
+
+main() {
+	local quiet=false
+	local verbose=false
+	local command="check"
+
+	# Enable optional background update notifications
+	enable_background_updates
+
+	while [[ $# -gt 0 ]]; do
+		case $1 in
+		--quiet | -q)
+			quiet=true
+			shift
+			;;
+		--verbose)
+			verbose=true
+			shift
+			;;
+		--help | -h | --version | -v | --update | --check-version | --notify-config | --uninstall)
+			parse_common_args "$(basename "$0")" "$@"
+			;;
+		check | status | config | history)
+			command="$1"
+			shift
+			break
+			;;
+		install)
+			command="install"
+			shift
+			if [[ $# -eq 0 ]]; then
+				log::error "install command requires a version argument"
+				exit 1
+			fi
+			local install_version="$1"
+			shift
+			break
+			;;
+		-*)
+			log::error "Unknown option: $1"
+			echo "Use --help for usage information."
+			exit 1
+			;;
+		*)
+			command="$1"
+			shift
+			break
+			;;
+		esac
+	done
+
+	case "$command" in
+	check)
+		check_updates "$quiet"
+		;;
+	status)
+		show_status "$verbose"
+		;;
+	config)
+		if [[ $# -eq 0 ]]; then
+			update::config
+		else
+			manage_config "$@"
+		fi
+		;;
+	history)
+		show_history
+		;;
+	install)
+		install_version "$install_version" "$quiet"
+		;;
+	*)
+		log::error "Unknown command: $command"
+		echo "Use --help for usage information."
+		exit 1
+		;;
+	esac
+}
+
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+	main "$@"
+fi

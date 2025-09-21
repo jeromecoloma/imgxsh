@@ -1,0 +1,464 @@
+name: Release
+
+on:
+  push:
+    branches: [ main ]
+    paths: [ 'VERSION' ]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Monitor VERSION file changes
+      id: monitor
+      run: |
+        echo "🔍 Monitoring VERSION file changes..."
+
+        # Check if VERSION file exists
+        if [ ! -f "VERSION" ]; then
+          echo "❌ ERROR: VERSION file not found!"
+          exit 1
+        fi
+
+        # Show current VERSION file content
+        echo "📄 Current VERSION file content:"
+        cat VERSION
+
+        # Get the changed files in this push
+        echo "📝 Files changed in this push:"
+        git diff --name-only HEAD~1 HEAD || echo "No previous commit to compare"
+
+        # Verify VERSION file was actually changed
+        if git diff --name-only HEAD~1 HEAD | grep -q "VERSION"; then
+          echo "✅ VERSION file change confirmed"
+
+          # Show the actual changes
+          echo "🔄 VERSION file changes:"
+          git diff HEAD~1 HEAD VERSION || echo "This appears to be the first commit"
+        else
+          echo "⚠️  WARNING: Workflow triggered for VERSION file but no changes detected"
+          echo "This might be due to workflow_dispatch or other trigger"
+        fi
+
+        echo "monitoring_complete=true" >> $GITHUB_OUTPUT
+
+    - name: Validate and read version
+      id: version
+      run: |
+        VERSION=$(cat VERSION)
+        echo "Current VERSION file contains: $VERSION"
+
+        # Validate semantic versioning format
+        if ! echo "$VERSION" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9-]+)?(\+[a-zA-Z0-9-]+)?$' >/dev/null; then
+          echo "Error: VERSION file does not contain valid semantic version format"
+          echo "Expected format: MAJOR.MINOR.PATCH[-prerelease][+buildmetadata]"
+          echo "Found: $VERSION"
+          exit 1
+        fi
+
+        # Get previous version from the previous commit's VERSION file
+        # This ensures we compare against the actual previous version rather than
+        # the latest tag which might already be the current version
+        PREV_VERSION=$(git show HEAD~1:VERSION 2>/dev/null || echo "0.0.0")
+        echo "Previous version: $PREV_VERSION"
+
+        # Compare versions to ensure we're moving forward
+        if [ "$VERSION" != "$PREV_VERSION" ] || [ "$PREV_VERSION" = "0.0.0" ]; then
+          if [ "$PREV_VERSION" = "0.0.0" ]; then
+            echo "🎉 First release detected: $VERSION"
+          else
+            echo "Version change detected: $PREV_VERSION -> $VERSION"
+
+            # Basic version comparison (simplified - assumes standard semver)
+            VERSION_PARTS=(${VERSION//./ })
+            PREV_PARTS=(${PREV_VERSION//./ })
+
+            MAJOR=${VERSION_PARTS[0]:-0}
+            MINOR=${VERSION_PARTS[1]:-0}
+            PATCH=${VERSION_PARTS[2]:-0}
+
+            PREV_MAJOR=${PREV_PARTS[0]:-0}
+            PREV_MINOR=${PREV_PARTS[1]:-0}
+            PREV_PATCH=${PREV_PARTS[2]:-0}
+
+            echo "New version breakdown: $MAJOR.$MINOR.$PATCH"
+            echo "Previous version breakdown: $PREV_MAJOR.$PREV_MINOR.$PREV_PATCH"
+
+            # Validate version increment
+            if [ "$MAJOR" -gt "$PREV_MAJOR" ] || \
+               ([ "$MAJOR" -eq "$PREV_MAJOR" ] && [ "$MINOR" -gt "$PREV_MINOR" ]) || \
+               ([ "$MAJOR" -eq "$PREV_MAJOR" ] && [ "$MINOR" -eq "$PREV_MINOR" ] && [ "$PATCH" -gt "$PREV_PATCH" ]); then
+              echo "✅ Valid version increment detected"
+            else
+              echo "❌ Invalid version increment: $PREV_VERSION -> $VERSION"
+              echo "Versions must increment according to semantic versioning rules"
+              exit 1
+            fi
+          fi
+        else
+          echo "⚠️  No version change detected, but setting outputs for consistency"
+        fi
+
+        # Always set outputs so other steps can reference them
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+        echo "prev_version=$PREV_VERSION" >> $GITHUB_OUTPUT
+
+        # Set a flag for whether we should proceed with release
+        if [ "$VERSION" = "$PREV_VERSION" ] && [ "$PREV_VERSION" != "0.0.0" ]; then
+          echo "should_release=false" >> $GITHUB_OUTPUT
+          echo "Skipping release since version hasn't changed"
+        else
+          echo "should_release=true" >> $GITHUB_OUTPUT
+          echo "Proceeding with release"
+        fi
+
+    - name: Check if tag exists
+      id: check_tag
+      if: steps.version.outputs.should_release == 'true'
+      run: |
+        if git rev-parse "v${{ steps.version.outputs.version }}" >/dev/null 2>&1; then
+          echo "exists=true" >> $GITHUB_OUTPUT
+          echo "Tag v${{ steps.version.outputs.version }} already exists"
+        else
+          echo "exists=false" >> $GITHUB_OUTPUT
+          echo "Tag v${{ steps.version.outputs.version }} does not exist - will create"
+        fi
+
+    - name: Generate automated release notes
+      id: release_notes
+      if: steps.version.outputs.should_release == 'true' && steps.check_tag.outputs.exists == 'false'
+      run: |
+        PREV_VERSION="${{ steps.version.outputs.prev_version }}"
+        CURRENT_VERSION="${{ steps.version.outputs.version }}"
+
+        # Find the actual previous tag for changelog generation
+        PREV_TAG=$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo "")
+        if [ -z "$PREV_TAG" ]; then
+          # If no previous tag exists, look for the most recent tag before current
+          PREV_TAG=$(git tag --sort=-version:refname | grep -v "v$CURRENT_VERSION" | head -n1 || echo "")
+        fi
+
+        echo "🔄 Generating automated release notes for $CURRENT_VERSION..."
+        echo "Previous tag for changelog: $PREV_TAG"
+
+        # Initialize release notes
+        {
+          echo "# Release $CURRENT_VERSION"
+          echo ""
+        } > release_notes.md
+
+        if [ -n "$PREV_TAG" ] && git rev-parse "$PREV_TAG" >/dev/null 2>&1; then
+          # Get all commits since previous release
+          COMMITS=$(git log --pretty=format:"%H|%s|%an|%ae" --reverse $PREV_TAG..HEAD)
+          COMMIT_COUNT=$(echo "$COMMITS" | wc -l)
+
+          echo "Found $COMMIT_COUNT commits since $PREV_VERSION"
+
+          # Initialize change categories
+          echo "" > features.tmp
+          echo "" > fixes.tmp
+          echo "" > docs.tmp
+          echo "" > chores.tmp
+          echo "" > breaking.tmp
+          echo "" > other.tmp
+
+          # Parse commits using conventional commit format
+          while IFS='|' read -r hash subject author email; do
+            [ -z "$hash" ] && continue
+
+            # Extract conventional commit type and scope
+            if echo "$subject" | grep -E "^(feat|fix|docs|style|refactor|test|chore|perf|ci|build)(\(.+\))?\!?:" >/dev/null; then
+              TYPE=$(echo "$subject" | sed -E 's/^([a-z]+)(\(.+\))?\!?:.*/\1/')
+              SCOPE=$(echo "$subject" | sed -E 's/^[a-z]+\((.+)\)\!?:.*/\1/' | grep -v "^$subject$" || echo "")
+              DESC=$(echo "$subject" | sed -E 's/^[a-z]+(\(.+\))?\!?: ?//')
+              BREAKING=$(echo "$subject" | grep -E "\!" >/dev/null && echo "true" || echo "false")
+
+              # Format the entry
+              ENTRY="- **$DESC** ([${hash:0:7}](https://github.com/${{ github.repository }}/commit/$hash))"
+              if [ -n "$SCOPE" ]; then
+                ENTRY="- **$SCOPE**: $DESC ([${hash:0:7}](https://github.com/${{ github.repository }}/commit/$hash))"
+              fi
+
+              # Categorize by type
+              case "$TYPE" in
+                feat)
+                  echo "$ENTRY" >> features.tmp
+                  ;;
+                fix)
+                  echo "$ENTRY" >> fixes.tmp
+                  ;;
+                docs)
+                  echo "$ENTRY" >> docs.tmp
+                  ;;
+                chore|style|refactor|test|perf|ci|build)
+                  echo "$ENTRY" >> chores.tmp
+                  ;;
+              esac
+
+              # Check for breaking changes
+              if [ "$BREAKING" = "true" ]; then
+                echo "$ENTRY" >> breaking.tmp
+              fi
+            else
+              # Non-conventional commits go to other
+              DESC="$subject"
+              ENTRY="- $DESC ([${hash:0:7}](https://github.com/${{ github.repository }}/commit/$hash))"
+              echo "$ENTRY" >> other.tmp
+            fi
+          done <<< "$COMMITS"
+
+          # Build release notes with categories
+          {
+            echo "## What's Changed"
+            echo ""
+          } >> release_notes.md
+
+          # Breaking Changes (highest priority)
+          if [ -s breaking.tmp ]; then
+            {
+              echo "### ⚠️ Breaking Changes"
+              echo ""
+            } >> release_notes.md
+            cat breaking.tmp >> release_notes.md
+            echo "" >> release_notes.md
+          fi
+
+          # Features
+          if [ -s features.tmp ]; then
+            {
+              echo "### ✨ New Features"
+              echo ""
+            } >> release_notes.md
+            cat features.tmp >> release_notes.md
+            echo "" >> release_notes.md
+          fi
+
+          # Bug Fixes
+          if [ -s fixes.tmp ]; then
+            {
+              echo "### 🐛 Bug Fixes"
+              echo ""
+            } >> release_notes.md
+            cat fixes.tmp >> release_notes.md
+            echo "" >> release_notes.md
+          fi
+
+          # Documentation
+          if [ -s docs.tmp ]; then
+            {
+              echo "### 📚 Documentation"
+              echo ""
+            } >> release_notes.md
+            cat docs.tmp >> release_notes.md
+            echo "" >> release_notes.md
+          fi
+
+          # Maintenance & Chores
+          if [ -s chores.tmp ]; then
+            {
+              echo "### 🔧 Maintenance"
+              echo ""
+            } >> release_notes.md
+            cat chores.tmp >> release_notes.md
+            echo "" >> release_notes.md
+          fi
+
+          # Other changes
+          if [ -s other.tmp ]; then
+            {
+              echo "### 📝 Other Changes"
+              echo ""
+            } >> release_notes.md
+            cat other.tmp >> release_notes.md
+            echo "" >> release_notes.md
+          fi
+
+          # Contributors section - map git author names to GitHub usernames
+          CONTRIBUTORS=$(git log --pretty=format:"%an" $PREV_TAG..HEAD | sort | uniq)
+          CONTRIBUTOR_COUNT=$(echo "$CONTRIBUTORS" | wc -l)
+
+          {
+            echo "### 👥 Contributors"
+            echo ""
+            echo "Thank you to the $CONTRIBUTOR_COUNT contributor(s) who made this release possible:"
+            echo ""
+          } >> release_notes.md
+          echo "$CONTRIBUTORS" | while read -r contributor; do
+            # Map git author names to GitHub usernames
+            case "$contributor" in
+              "Jerome Coloma")
+                github_username="jeromecoloma"
+                ;;
+              *)
+                # For unknown contributors, use the name as-is (fallback)
+                github_username="$contributor"
+                ;;
+            esac
+            echo "- @$github_username" >> release_notes.md
+          done
+          echo "" >> release_notes.md
+
+          # Cleanup temp files
+          rm -f features.tmp fixes.tmp docs.tmp chores.tmp breaking.tmp other.tmp
+
+        else
+          # First release - comprehensive feature list
+          {
+            echo "## 🎉 Initial Release"
+            echo ""
+            echo "This is the first release of **Shell Starter** - a comprehensive shell scripting framework designed for both manual development and AI-assisted development."
+            echo ""
+            echo "### ✨ Core Features"
+            echo ""
+            echo "- 🎨 **Complete Library System**: Standardized colors, logging, spinner, and utility functions"
+            echo "- 📦 **Smart Installation**: Intelligent installer and uninstaller with manifest tracking"
+            echo "- 🔄 **Update Management**: Built-in update checking with GitHub release integration"
+            echo "- 🧪 **Testing Framework**: Comprehensive test suite using Bats framework"
+            echo "- 🚀 **CI/CD Pipeline**: Automated testing with shellcheck, shfmt, and quality checks"
+            echo "- 🤖 **AI-Ready**: Documentation and workflows optimized for AI-assisted development"
+            echo ""
+            echo "### 📝 Example Scripts Included"
+            echo ""
+            echo "- **hello-world**: Basic framework demonstration"
+            echo "- **show-colors**: Color palette showcase"
+            echo "- **long-task**: Spinner and progress indication"
+            echo "- **greet-user**: Interactive user input handling"
+            echo "- **my-cli**: Multi-command CLI structure"
+            echo "- **ai-action**: AI integration patterns"
+            echo "- **polyglot examples**: Bash + Python integration"
+            echo ""
+            echo "### 🛠️ Developer Tools"
+            echo ""
+            echo "- **Phase-based development**: Structured 5-phase build process"
+            echo "- **Task tracking**: Comprehensive task management in \`.development/TASKS.md\`"
+            echo "- **Quality assurance**: Automated linting, formatting, and testing"
+            echo "- **Release automation**: Semantic versioning with automated releases"
+            echo ""
+            echo "### 📚 Documentation"
+            echo ""
+            echo "- Complete installation and usage guides"
+            echo "- AI-focused development documentation"
+            echo "- Convention guides and examples"
+            echo "- Comprehensive test coverage"
+            echo ""
+          } >> release_notes.md
+        fi
+
+        # Add footer with metadata
+        {
+          echo ""
+          echo "---"
+          echo ""
+          echo "**Release Information:**"
+          echo "- **Version**: $CURRENT_VERSION"
+          echo "- **Previous Version**: $PREV_VERSION"
+          echo "- **Release Date**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
+          echo "- **Full Changelog**: https://github.com/${{ github.repository }}/compare/$PREV_TAG...v$CURRENT_VERSION"
+          echo ""
+          echo "*This release was automatically generated by Shell Starter's release automation system.*"
+        } >> release_notes.md
+
+        echo "✅ Automated release notes generated successfully"
+
+    - name: Generate release notes (alternative method)
+      id: release_notes_script
+      if: steps.version.outputs.should_release == 'true' && steps.check_tag.outputs.exists == 'false'
+      run: |
+        # Debug: Check what versions we have
+        echo "Debug: Current version: '${{ steps.version.outputs.version }}'"
+        echo "Debug: Previous version: '${{ steps.version.outputs.prev_version }}'"
+        echo "Debug: Repository: '${{ github.repository }}'"
+
+        # Validate required parameters
+        CURRENT_VERSION="${{ steps.version.outputs.version }}"
+        PREV_VERSION="${{ steps.version.outputs.prev_version }}"
+
+        if [ -z "$CURRENT_VERSION" ]; then
+          echo "❌ ERROR: Current version is empty"
+          exit 1
+        fi
+
+        # Also generate using the standalone script for comparison/backup
+        if [ -n "$PREV_VERSION" ] && [ "$PREV_VERSION" != "0.0.0" ]; then
+          echo "🔄 Generating release notes with previous version: $PREV_VERSION"
+          ./scripts/generate-release-notes.sh \
+            --current "$CURRENT_VERSION" \
+            --previous "$PREV_VERSION" \
+            --output release_notes_script.md \
+            --repository "${{ github.repository }}"
+        else
+          echo "🔄 Generating release notes for first release (no previous version)"
+          ./scripts/generate-release-notes.sh \
+            --current "$CURRENT_VERSION" \
+            --output release_notes_script.md \
+            --repository "${{ github.repository }}"
+        fi
+
+        echo "📋 Release notes also generated via standalone script: release_notes_script.md"
+
+    - name: Create release archive
+      if: steps.version.outputs.should_release == 'true' && steps.check_tag.outputs.exists == 'false'
+      run: |
+        # Create a clean archive of the project
+        mkdir -p dist
+
+        # Create tarball excluding development files
+        tar --exclude='.git' \
+            --exclude='.github' \
+            --exclude='dist' \
+            --exclude='*.md' \
+            --exclude='.development' \
+            --exclude='tests/bats-core' \
+            -czf dist/shell-starter-${{ steps.version.outputs.version }}.tar.gz .
+
+        # Create zip archive as well
+        zip -r dist/shell-starter-${{ steps.version.outputs.version }}.zip . \
+            -x '.git/*' '.github/*' 'dist/*' '*.md' '.development/*' 'tests/bats-core/*'
+
+    - name: Create Git Tag
+      if: steps.version.outputs.should_release == 'true' && steps.check_tag.outputs.exists == 'false'
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git tag -a "${{ steps.version.outputs.tag }}" -m "Release ${{ steps.version.outputs.version }}"
+        # Skip push when running with act (local testing)
+        if [ "${{ env.ACT }}" != "true" ]; then
+          git push origin "${{ steps.version.outputs.tag }}"
+        else
+          echo "⚠️ Running with act - skipping git push"
+        fi
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Act Testing Notice
+      if: steps.version.outputs.should_release == 'true' && steps.check_tag.outputs.exists == 'false' && env.ACT == 'true'
+      run: |
+        echo "⚠️ Running with act - skipping GitHub release creation"
+        echo "✅ Local tag created successfully: ${{ steps.version.outputs.tag }}"
+        echo "📦 Release archives available in dist/ directory"
+
+    - name: Create GitHub Release
+      if: steps.version.outputs.should_release == 'true' && steps.check_tag.outputs.exists == 'false' && env.ACT != 'true'
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ steps.version.outputs.tag }}
+        name: "Release ${{ steps.version.outputs.version }}"
+        body_path: release_notes.md
+        files: |
+          dist/shell-starter-${{ steps.version.outputs.version }}.tar.gz
+          dist/shell-starter-${{ steps.version.outputs.version }}.zip
+        draft: false
+        prerelease: false
+        make_latest: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

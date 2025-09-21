@@ -1,0 +1,428 @@
+#!/bin/bash
+
+# bump-version - Intelligent version bumping for shell-starter and cloned projects
+# Automatically detects context and updates appropriate version files
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
+
+# Try to source lib/main.sh from various locations
+for lib_path in \
+	"${SCRIPT_DIR}/../lib/main.sh" \
+	"${SCRIPT_DIR}/lib/main.sh" \
+	"$(dirname "${SCRIPT_DIR}")/lib/main.sh"; do
+	if [[ -f "$lib_path" ]]; then
+		source "$lib_path"
+		break
+	fi
+done
+
+# Enhanced fallback functionality when lib/main.sh is not available
+if [[ -z "${SHELL_STARTER_LIB_DIR:-}" ]]; then
+	# Color detection and fallback functions
+	colors_has_color() {
+		[[ "${NO_COLOR:-}" == "" ]] && {
+			[[ "${TERM:-}" != "dumb" ]] &&
+				[[ "${TERM:-}" != "" ]] &&
+				[[ -t 1 ]]
+		}
+	}
+
+	# Enhanced color variables with fallback support (guard against redefinition)
+	if ! declare -p COLOR_RESET >/dev/null 2>&1; then
+		if colors_has_color; then
+			readonly COLOR_INFO='\033[0;34m'    # Blue
+			readonly COLOR_SUCCESS='\033[0;32m' # Green
+			readonly COLOR_WARNING='\033[1;33m' # Yellow
+			readonly COLOR_ERROR='\033[0;31m'   # Red
+			readonly COLOR_RESET='\033[0m'
+			readonly COLOR_BOLD='\033[1m'
+		else
+			readonly COLOR_INFO=''
+			readonly COLOR_SUCCESS=''
+			readonly COLOR_WARNING=''
+			readonly COLOR_ERROR=''
+			readonly COLOR_RESET=''
+			readonly COLOR_BOLD=''
+		fi
+	fi
+
+	# Enhanced logging functions with visual indicators
+	log::info() {
+		printf '%bℹ%b %s\n' "${COLOR_INFO}" "${COLOR_RESET}" "$*"
+	}
+
+	log::warn() {
+		printf '%b⚠%b %s\n' "${COLOR_WARNING}" "${COLOR_RESET}" "$*"
+	}
+
+	log::error() {
+		printf '%b✗%b %s\n' "${COLOR_ERROR}" "${COLOR_RESET}" "$*" >&2
+	}
+
+	log::success() {
+		printf '%b✓%b %s\n' "${COLOR_SUCCESS}" "${COLOR_RESET}" "$*"
+	}
+
+	# Section header and divider functions
+	section_header() {
+		printf '\n%b─── %s ───%b\n' "${COLOR_BOLD}" "$*" "${COLOR_RESET}"
+	}
+
+	section_divider() {
+		printf '%b%s%b\n' "${COLOR_INFO}" "$(printf '%.40s' "────────────────────────────────────────")" "${COLOR_RESET}"
+	}
+
+	show_version() {
+		printf '%bBump Version Tool%b v1.0.0\n' "${COLOR_BOLD}" "${COLOR_RESET}"
+	}
+
+	# Minimal banner support
+	banner_minimal() {
+		if colors_has_color; then
+			printf '%b• Bump Version •%b\n' "${COLOR_INFO}" "${COLOR_RESET}"
+		else
+			echo "• Bump Version •"
+		fi
+	}
+fi
+
+# Ensure banner_minimal function is available regardless of lib loading
+if ! declare -f banner_minimal >/dev/null 2>&1; then
+	banner_minimal() {
+		if [[ "${NO_COLOR:-}" == "" ]] && [[ "${TERM:-}" != "dumb" ]] && [[ -t 1 ]]; then
+			printf '\033[0;34m• Bump Version •\033[0m\n'
+		else
+			echo "• Bump Version •"
+		fi
+	}
+fi
+
+# Configuration
+VERSION_FILE="VERSION"
+SHELL_STARTER_VERSION_FILE=".shell-starter-version"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+usage() {
+	echo
+	if command -v banner::shell_starter >/dev/null 2>&1; then
+		banner::shell_starter minimal
+	else
+		banner_minimal
+	fi
+	cat <<EOF
+
+${SCRIPT_NAME} - Intelligent version bumping for shell-starter and cloned projects
+
+USAGE:
+    ${SCRIPT_NAME} [OPTIONS] <VERSION|BUMP_TYPE>
+
+VERSION FORMATS:
+    x.y.z                   Set exact version (e.g., 1.2.3)
+
+BUMP TYPES:
+    major                   Increment major version (1.2.3 -> 2.0.0)
+    minor                   Increment minor version (1.2.3 -> 1.3.0)
+    patch                   Increment patch version (1.2.3 -> 1.2.4)
+
+OPTIONS:
+    --version               Show version information
+    --help                  Show this help message
+    --dry-run               Show what would be changed without making changes
+    --current               Show current version and exit
+    --check-repo            Show repository detection results and exit
+
+BEHAVIOR:
+    • Shell-starter repository: Updates VERSION and .shell-starter-version
+    • Cloned projects: Updates only VERSION file
+    • Automatically detects repository type by checking for shell-starter markers
+
+EXAMPLES:
+    ${SCRIPT_NAME} 1.2.3                # Set version to 1.2.3
+    ${SCRIPT_NAME} patch                # Bump patch version
+    ${SCRIPT_NAME} minor                # Bump minor version
+    ${SCRIPT_NAME} major                # Bump major version
+    ${SCRIPT_NAME} --current            # Show current version
+    ${SCRIPT_NAME} --dry-run patch      # Preview patch bump
+EOF
+}
+
+# Parse command line arguments
+parse_args() {
+	DRY_RUN=false
+	SHOW_CURRENT=false
+	CHECK_REPO=false
+	VERSION_ARG=""
+
+	while [[ $# -gt 0 ]]; do
+		case $1 in
+		--version)
+			show_version
+			exit 0
+			;;
+		--help)
+			usage
+			exit 0
+			;;
+		--dry-run)
+			DRY_RUN=true
+			shift
+			;;
+		--current)
+			SHOW_CURRENT=true
+			shift
+			;;
+		--check-repo)
+			CHECK_REPO=true
+			shift
+			;;
+		-*)
+			log::error "Unknown option: $1"
+			usage
+			exit 1
+			;;
+		*)
+			if [[ -n "$VERSION_ARG" ]]; then
+				log::error "Multiple version arguments provided"
+				usage
+				exit 1
+			fi
+			VERSION_ARG="$1"
+			shift
+			;;
+		esac
+	done
+
+	if [[ "$SHOW_CURRENT" == "false" ]] && [[ "$CHECK_REPO" == "false" ]] && [[ -z "$VERSION_ARG" ]]; then
+		log::error "Version or bump type required"
+		usage
+		exit 1
+	fi
+}
+
+# Detect if this is the shell-starter repository or a cloned project
+detect_repository_type() {
+	local repo_indicators=(
+		"bin/generate-ai-workflow"
+		"scripts/generate-release-notes.sh"
+		"tests/framework.bats"
+		"install.sh"
+	)
+
+	local found_indicators=0
+	for indicator in "${repo_indicators[@]}"; do
+		if [[ -f "${PROJECT_ROOT}/${indicator}" ]]; then
+			((found_indicators++))
+		fi
+	done
+
+	# If we find most indicators, this is likely the shell-starter repo
+	if [[ $found_indicators -ge 3 ]]; then
+		echo "shell-starter"
+	else
+		echo "cloned-project"
+	fi
+}
+
+# Get current version from VERSION file
+get_current_version() {
+	if [[ -f "${PROJECT_ROOT}/${VERSION_FILE}" ]]; then
+		tr -d '\n' <"${PROJECT_ROOT}/${VERSION_FILE}"
+	else
+		echo "0.0.0"
+	fi
+}
+
+# Get current shell-starter dependency version
+get_shell_starter_version() {
+	if [[ -f "${PROJECT_ROOT}/${SHELL_STARTER_VERSION_FILE}" ]]; then
+		tr -d '\n' <"${PROJECT_ROOT}/${SHELL_STARTER_VERSION_FILE}"
+	else
+		echo "unknown"
+	fi
+}
+
+# Validate semantic version format
+validate_version() {
+	local version="$1"
+	if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+		log::error "Invalid version format: $version (expected: x.y.z)"
+		return 1
+	fi
+}
+
+# Parse version components
+parse_version() {
+	local version="$1"
+	local major minor patch
+
+	IFS='.' read -r major minor patch <<<"$version"
+	echo "$major $minor $patch"
+}
+
+# Increment version based on bump type
+increment_version() {
+	local current_version="$1"
+	local bump_type="$2"
+	local major minor patch
+
+	read -r major minor patch <<<"$(parse_version "$current_version")"
+
+	case "$bump_type" in
+	major)
+		echo "$((major + 1)).0.0"
+		;;
+	minor)
+		echo "${major}.$((minor + 1)).0"
+		;;
+	patch)
+		echo "${major}.${minor}.$((patch + 1))"
+		;;
+	*)
+		log::error "Invalid bump type: $bump_type (expected: major, minor, patch)"
+		return 1
+		;;
+	esac
+}
+
+# Update version file
+update_version_file() {
+	local file="$1"
+	local version="$2"
+	local description="$3"
+
+	if [[ "$DRY_RUN" == "true" ]]; then
+		log::info "[DRY-RUN] Would update ${file} to: ${version}"
+	else
+		echo "$version" >"${PROJECT_ROOT}/${file}"
+		log::success "Updated ${description} to ${version}"
+	fi
+}
+
+# Show current versions and repository type
+show_current() {
+	local repo_type
+	local current_version
+	local shell_starter_version
+
+	repo_type=$(detect_repository_type)
+	current_version=$(get_current_version)
+	shell_starter_version=$(get_shell_starter_version)
+
+	log::info "Repository type: ${repo_type}"
+	log::info "Current version: ${current_version}"
+
+	if [[ "$repo_type" == "shell-starter" ]]; then
+		log::info "Shell Starter version: ${shell_starter_version}"
+	elif [[ -f "${PROJECT_ROOT}/${SHELL_STARTER_VERSION_FILE}" ]]; then
+		log::info "Shell Starter dependency: ${shell_starter_version}"
+	fi
+}
+
+# Show repository detection details
+show_repo_check() {
+	local repo_type
+	local indicators=(
+		"bin/generate-ai-workflow"
+		"scripts/generate-release-notes.sh"
+		"tests/framework.bats"
+		"install.sh"
+	)
+
+	repo_type=$(detect_repository_type)
+	section_header "Repository Detection Results"
+	log::info "Detected type: ${repo_type}"
+	printf '\n%bShell-starter indicators:%b\n' "${COLOR_BOLD}" "${COLOR_RESET}"
+
+	for indicator in "${indicators[@]}"; do
+		if [[ -f "${PROJECT_ROOT}/${indicator}" ]]; then
+			printf '%b  ✓%b %s (found)\n' "${COLOR_SUCCESS}" "${COLOR_RESET}" "${indicator}"
+		else
+			printf '%b  ✗%b %s (not found)\n' "${COLOR_ERROR}" "${COLOR_RESET}" "${indicator}"
+		fi
+	done
+
+	printf '\n%bFiles that will be updated:%b\n' "${COLOR_BOLD}" "${COLOR_RESET}"
+	log::info "  • ${VERSION_FILE} (always)"
+	if [[ "$repo_type" == "shell-starter" ]]; then
+		log::info "  • ${SHELL_STARTER_VERSION_FILE} (shell-starter repo)"
+	else
+		log::info "  • ${SHELL_STARTER_VERSION_FILE} (skipped - cloned project)"
+	fi
+}
+
+# Main version bumping function
+perform_bump() {
+	local version_arg="$1"
+	local current_version
+	local new_version
+	local repo_type
+
+	repo_type=$(detect_repository_type)
+	current_version=$(get_current_version)
+
+	section_header "Version Bump Summary"
+	log::info "Repository type: ${repo_type}"
+	log::info "Current version: ${current_version}"
+
+	# Determine new version
+	case "$version_arg" in
+	major | minor | patch)
+		if ! new_version=$(increment_version "$current_version" "$version_arg"); then
+			exit 1
+		fi
+		log::info "Bumping ${version_arg} version: ${current_version} -> ${new_version}"
+		;;
+	*)
+		new_version="$version_arg"
+		if ! validate_version "$new_version"; then
+			exit 1
+		fi
+		log::info "Setting version: ${current_version} -> ${new_version}"
+		;;
+	esac
+
+	# Update VERSION file (always)
+	update_version_file "$VERSION_FILE" "$new_version" "project version"
+
+	# Update .shell-starter-version only for shell-starter repository
+	if [[ "$repo_type" == "shell-starter" ]]; then
+		update_version_file "$SHELL_STARTER_VERSION_FILE" "$new_version" "shell-starter version"
+	else
+		log::info "Skipping ${SHELL_STARTER_VERSION_FILE} update (cloned project)"
+	fi
+
+	if [[ "$DRY_RUN" == "false" ]]; then
+		log::success "Version bump completed successfully!"
+	else
+		log::info "Dry run completed. Use without --dry-run to apply changes."
+	fi
+}
+
+# Main execution
+main() {
+	parse_args "$@"
+
+	# Handle special modes
+	if [[ "$SHOW_CURRENT" == "true" ]]; then
+		show_current
+		return
+	fi
+
+	if [[ "$CHECK_REPO" == "true" ]]; then
+		show_repo_check
+		return
+	fi
+
+	# Validate project structure
+	if [[ ! -f "${PROJECT_ROOT}/${VERSION_FILE}" ]]; then
+		log::warn "VERSION file not found, will create one"
+	fi
+
+	perform_bump "$VERSION_ARG"
+}
+
+# Run main function with all arguments
+main "$@"

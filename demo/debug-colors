@@ -1,0 +1,47 @@
+#!/bin/bash
+
+# debug-colors - Debug color support in the current terminal
+# This script helps identify why colors might not be displaying correctly
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SHELL_STARTER_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+source "${SHELL_STARTER_ROOT}/lib/main.sh"
+
+echo "=== Terminal Color Debug Information ==="
+echo
+echo "Basic environment:"
+echo "  TERM: ${TERM:-unset}"
+echo "  COLORTERM: ${COLORTERM:-unset}"
+echo "  TERM_PROGRAM: ${TERM_PROGRAM:-unset}"
+echo "  NO_COLOR: ${NO_COLOR:-unset}"
+echo
+echo "Detection results:"
+echo "  Output is terminal: $(colors::is_terminal && echo "yes" || echo "no")"
+echo "  Has truecolor: $(colors::has_truecolor && echo "yes" || echo "no")"
+echo "  Has 256color: $(colors::has_256color && echo "yes" || echo "no")"
+echo "  Has basic color: $(colors::has_color && echo "yes" || echo "no")"
+echo
+
+echo "Color test (if you see color names in color, your terminal works):"
+echo -e "  ${COLOR_RED}RED${COLOR_RESET}"
+echo -e "  ${COLOR_GREEN}GREEN${COLOR_RESET}"
+echo -e "  ${COLOR_BLUE}BLUE${COLOR_RESET}"
+echo -e "  ${COLOR_YELLOW}YELLOW${COLOR_RESET}"
+echo -e "  ${COLOR_CYAN}CYAN${COLOR_RESET}"
+echo -e "  ${COLOR_MAGENTA}MAGENTA${COLOR_RESET}"
+echo
+
+echo "Raw color codes (should show literal escape codes):"
+printf "  RED: '%s'\n" "$COLOR_RED"
+printf "  RESET: '%s'\n" "$COLOR_RESET"
+echo
+
+echo "If colors appear as literal text like [0;31m instead of actual colors,"
+echo "your terminal may not support ANSI colors or colors may be disabled."
+echo "Try:"
+echo "  - Using a different terminal (iTerm2, Terminal.app, etc.)"
+echo "  - Checking if NO_COLOR environment variable is set"
+echo "  - Running: export TERM=xterm-256color"

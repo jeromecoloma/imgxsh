@@ -1,0 +1,79 @@
+#!/bin/bash
+
+# hello-world - A simple greeting script demonstrating Shell Starter features
+# This script showcases basic logging, colors, and argument parsing
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SHELL_STARTER_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+source "${SHELL_STARTER_ROOT}/lib/main.sh"
+
+show_help() {
+	# Show banner header for help
+	banner::shell_starter minimal
+	cat <<EOF
+Usage: $(basename "$0") [OPTIONS] [NAME]
+
+A simple greeting script that demonstrates Shell Starter features.
+
+ARGUMENTS:
+    NAME              Name to greet (default: World)
+
+OPTIONS:
+    -h, --help        Show this help message and exit
+    -v, --version     Show version information and exit
+    --update          Check for available updates
+    --check-version   Show detailed version status and check for updates
+    --notify-config   Configure update notification settings
+    --uninstall       Remove Shell Starter installation
+    -q, --quiet       Suppress colorful output
+
+EXAMPLES:
+    $(basename "$0")                    # Greets "World"
+    $(basename "$0") Alice              # Greets "Alice"
+    $(basename "$0") --quiet Bob        # Greets "Bob" without colors
+EOF
+}
+
+main() {
+	local quiet=false
+	local name="World"
+
+	# Enable optional background update notifications
+	enable_background_updates
+
+	while [[ $# -gt 0 ]]; do
+		case $1 in
+		--quiet | -q)
+			quiet=true
+			shift
+			;;
+		--help | -h | --version | -v | --update | --check-version | --notify-config | --uninstall)
+			parse_common_args "$(basename "$0")" "$@"
+			;;
+		-*)
+			log::error "Unknown option: $1"
+			echo "Use --help for usage information."
+			exit 1
+			;;
+		*)
+			name="$1"
+			shift
+			;;
+		esac
+	done
+
+	if [[ "$quiet" == "true" ]]; then
+		echo "Hello, $name!"
+	else
+		echo -e "${COLOR_GREEN}Hello, ${COLOR_BOLD}$name${COLOR_RESET}${COLOR_GREEN}!${COLOR_RESET}"
+	fi
+
+	log::success "Greeting completed successfully"
+}
+
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+	main "$@"
+fi

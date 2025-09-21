@@ -1,0 +1,202 @@
+#!/bin/bash
+
+# show-banner - Demonstrates Shell Starter banner system with multiple styles
+# This script showcases the visual branding capabilities including gradient colors,
+# multiple banner styles, and terminal compatibility detection
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SHELL_STARTER_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+source "${SHELL_STARTER_ROOT}/lib/main.sh"
+
+show_help() {
+	# Show banner header for help
+	banner::shell_starter minimal
+	cat <<EOF
+Usage: $(basename "$0") [OPTIONS] [STYLE]
+
+Demonstrates the Shell Starter banner system with gradient colors and multiple styles.
+
+ARGUMENTS:
+    STYLE             Banner style to display (block, ascii, minimal, all)
+                      Default: all
+
+OPTIONS:
+    -h, --help        Show this help message and exit
+    -v, --version     Show version information and exit
+    --update          Check for available updates
+    --check-version   Show detailed version status and check for updates
+    --notify-config   Configure update notification settings
+    --uninstall       Remove Shell Starter installation
+    --no-info         Skip terminal compatibility information
+    --debug           Show terminal environment debug information
+    --plain           Force plain text output (no colors)
+
+STYLES:
+    block            Unicode block characters with gradient (default style)
+    pixel            Alias for block style
+    ascii            Traditional ASCII art with gradient
+    minimal          Simple bullet-point design with gradient
+    all              Show all available styles
+
+EXAMPLES:
+    $(basename "$0")              # Show all banner styles with info
+    $(basename "$0") block        # Show only block style banner
+    $(basename "$0") ascii        # Show only ASCII art banner
+    $(basename "$0") --debug      # Show banners with debug info
+    $(basename "$0") --plain      # Show banners without colors
+    $(basename "$0") --no-info    # Show banners without compatibility info
+EOF
+}
+
+show_terminal_info() {
+	echo -e "${COLOR_BOLD}${COLOR_CYAN}Terminal Compatibility Information:${COLOR_RESET}"
+	echo "=============================================="
+	echo "TERM: ${TERM:-unset}"
+	echo "COLORTERM: ${COLORTERM:-unset}"
+	echo "TERM_PROGRAM: ${TERM_PROGRAM:-unset}"
+	echo "NO_COLOR: ${NO_COLOR:-unset}"
+	echo
+	echo "Detected capabilities:"
+	echo "  Output is terminal: $(colors::is_terminal && echo "yes" || echo "no")"
+	echo "  Has truecolor: $(colors::has_truecolor && echo "yes" || echo "no")"
+	echo "  Has 256color: $(colors::has_256color && echo "yes" || echo "no")"
+	echo "  Has basic color: $(colors::has_color && echo "yes" || echo "no")"
+	echo
+}
+
+show_style_info() {
+	local style="$1"
+	case "$style" in
+	"block" | "pixel")
+		echo -e "${COLOR_DIM}Block/Pixel Style: Unicode block characters with gradient colors${COLOR_RESET}"
+		;;
+	"ascii")
+		echo -e "${COLOR_DIM}ASCII Style: Traditional figlet-style text art with gradient colors${COLOR_RESET}"
+		;;
+	"minimal")
+		echo -e "${COLOR_DIM}Minimal Style: Clean bullet-point design with gradient colors${COLOR_RESET}"
+		;;
+	esac
+}
+
+display_banner() {
+	local style="$1"
+	local show_info="$2"
+
+	echo -e "${COLOR_BOLD}${COLOR_YELLOW}$(echo "$style" | tr '[:lower:]' '[:upper:]') STYLE:${COLOR_RESET}"
+	echo "=================================="
+
+	if [[ "$show_info" == "true" ]]; then
+		show_style_info "$style"
+		echo
+	fi
+
+	banner::shell_starter "$style"
+	echo
+}
+
+display_all_banners() {
+	local show_info="$1"
+
+	display_banner "block" "$show_info"
+	display_banner "ascii" "$show_info"
+	display_banner "minimal" "$show_info"
+}
+
+main() {
+	local style="all"
+	local show_info=true
+	local show_debug=false
+	local force_plain=false
+
+	# Enable optional background update notifications
+	enable_background_updates
+
+	while [[ $# -gt 0 ]]; do
+		case $1 in
+		--no-info)
+			show_info=false
+			shift
+			;;
+		--debug)
+			show_debug=true
+			shift
+			;;
+		--plain)
+			force_plain=true
+			export NO_COLOR=1
+			shift
+			;;
+		--help | -h | --version | -v | --update | --check-version | --notify-config | --uninstall)
+			parse_common_args "$(basename "$0")" "$@"
+			;;
+		-*)
+			log::error "Unknown option: $1"
+			echo "Use --help for usage information."
+			exit 1
+			;;
+		*)
+			# Validate style argument
+			case "$1" in
+			"block" | "pixel" | "ascii" | "minimal" | "all")
+				style="$1"
+				;;
+			*)
+				log::error "Invalid style: $1"
+				echo "Valid styles: block, pixel, ascii, minimal, all"
+				echo "Use --help for usage information."
+				exit 1
+				;;
+			esac
+			shift
+			;;
+		esac
+	done
+
+	# Welcome banner for the script
+	banner::shell_starter minimal
+	echo -e "${COLOR_BOLD}${COLOR_MAGENTA}Banner System Showcase${COLOR_RESET}"
+	echo "======================"
+	echo
+
+	if [[ "$show_debug" == "true" ]]; then
+		colors::debug_terminal
+		echo
+	elif [[ "$show_info" == "true" ]]; then
+		show_terminal_info
+	fi
+
+	if [[ "$force_plain" == "true" ]]; then
+		echo -e "${COLOR_DIM}Running in plain text mode (NO_COLOR=1)${COLOR_RESET}"
+		echo
+	fi
+
+	case "$style" in
+	"all")
+		display_all_banners "$show_info"
+		;;
+	*)
+		display_banner "$style" "$show_info"
+		;;
+	esac
+
+	echo -e "${COLOR_BOLD}Banner Features:${COLOR_RESET}"
+	echo "• Gradient color implementation with RGB support"
+	echo "• Multiple styles: Block/Pixel, ASCII Art, and Minimalist"
+	echo "• Terminal compatibility detection and fallback"
+	echo "• NO_COLOR environment variable support"
+	echo "• Graceful degradation for all terminal types"
+	echo
+
+	echo -e "${COLOR_DIM}Try different styles with: $(basename "$0") <style>${COLOR_RESET}"
+	echo -e "${COLOR_DIM}Use --debug to see detailed terminal information${COLOR_RESET}"
+
+	log::info "Banner demonstration completed"
+}
+
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+	main "$@"
+fi
