@@ -5,8 +5,15 @@ set -euo pipefail
 # Get the project root directory
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# Check if Bats is available, auto-setup if missing
-if [ ! -f "$PROJECT_ROOT/tests/bats-core/bin/bats" ]; then
+# Resolve Bats command: prefer PATH (from bats-action), fallback to vendored
+if command -v bats >/dev/null 2>&1; then
+    BATS_CMD="$(command -v bats)"
+else
+    BATS_CMD="$PROJECT_ROOT/tests/bats-core/bin/bats"
+fi
+
+# Check if Bats is available, auto-setup vendored if still missing
+if [ ! -f "$BATS_CMD" ] && [ ! -x "$BATS_CMD" ]; then
     echo "⚠️  Bats-core not found. Attempting automatic setup..."
     if [ -f "$PROJECT_ROOT/scripts/setup-bats.sh" ]; then
         echo "Running scripts/setup-bats.sh..."
@@ -28,6 +35,7 @@ if [ ! -f "$PROJECT_ROOT/tests/bats-core/bin/bats" ]; then
         echo "❌ Bats-core still not found after setup attempt. Skipping tests." >&2
         exit 0
     fi
+    BATS_CMD="$PROJECT_ROOT/tests/bats-core/bin/bats"
 fi
 
 # Set up comprehensive CI environment
@@ -80,7 +88,7 @@ for test_file in "${test_files[@]}"; do
     echo "Running: $test_file"
     echo "$(printf '%.50s' "------------------------------------------------")"
     if command -v timeout >/dev/null 2>&1; then
-        if timeout 120s "$PROJECT_ROOT/tests/bats-core/bin/bats" "$PROJECT_ROOT/$test_file"; then
+        if timeout 120s "$BATS_CMD" "$PROJECT_ROOT/$test_file"; then
             file_tests=$(grep -c "^@test" "$PROJECT_ROOT/$test_file" 2>/dev/null || echo 0)
             echo "✅ Passed: $test_file ($file_tests tests)"
             total_tests=$((total_tests + file_tests))
@@ -97,7 +105,7 @@ for test_file in "${test_files[@]}"; do
         fi
     else
         echo "⚠️  Running without timeout (not available in this environment)"
-        if "$PROJECT_ROOT/tests/bats-core/bin/bats" "$PROJECT_ROOT/$test_file"; then
+        if "$BATS_CMD" "$PROJECT_ROOT/$test_file"; then
             file_tests=$(grep -c "^@test" "$PROJECT_ROOT/$test_file" 2>/dev/null || echo 0)
             echo "✅ Passed: $test_file ($file_tests tests)"
             total_tests=$((total_tests + file_tests))
@@ -131,7 +139,7 @@ if [[ "$RUN_INTEGRATION_TESTS" == "true" ]]; then
         echo "$(printf '%.50s' "------------------------------------------------")"
         export SHELL_STARTER_INTEGRATION_TEST=true
         if command -v timeout >/dev/null 2>&1; then
-            if timeout 300s "$PROJECT_ROOT/tests/bats-core/bin/bats" "$PROJECT_ROOT/$test_file"; then
+            if timeout 300s "$BATS_CMD" "$PROJECT_ROOT/$test_file"; then 
                 file_tests=$(grep -c "^@test" "$PROJECT_ROOT/$test_file" 2>/dev/null || echo 0)
                 echo "✅ Passed: $test_file ($file_tests integration tests)"
                 total_tests=$((total_tests + file_tests))
@@ -148,7 +156,7 @@ if [[ "$RUN_INTEGRATION_TESTS" == "true" ]]; then
             fi
         else
             echo "⚠️  Running integration tests without timeout (may take longer)"
-            if "$PROJECT_ROOT/tests/bats-core/bin/bats" "$PROJECT_ROOT/$test_file"; then
+            if "$BATS_CMD" "$PROJECT_ROOT/$test_file"; then
                 file_tests=$(grep -c "^@test" "$PROJECT_ROOT/$test_file" 2>/dev/null || echo 0)
                 echo "✅ Passed: $test_file ($file_tests integration tests)"
                 total_tests=$((total_tests + file_tests))
