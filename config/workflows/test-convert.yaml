@@ -1,0 +1,21 @@
+# Simple Convert Test Workflow
+name: test-convert
+description: "Simple image conversion test workflow"
+version: "1.0"
+
+steps:
+  - name: convert_to_webp
+    type: convert
+    description: "Convert images to WebP format"
+    params:
+      format: webp
+      quality: 85
+      output_template: "{output_dir}/{original_name}.webp"
+
+settings:
+  output_dir: "./output/converted"
+  parallel_jobs: 2
+
+hooks:
+  on_success:
+    - echo "Conversion completed successfully"

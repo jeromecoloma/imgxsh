@@ -36,6 +36,7 @@ OPTIONS:
     --quiet               Suppress non-essential output
     --check-deps          Check external dependencies and exit
     --init-config         Create default configuration and exit
+    --validate-workflow FILE  Validate workflow file and exit
 
 BUILT-IN WORKFLOWS:
     pdf-to-thumbnails     Extract PDF images and create thumbnails
@@ -270,7 +271,7 @@ execute_pdf_to_thumbnails() {
         if [[ $extracted_count -gt 0 ]]; then
             spinner::start "Creating thumbnails for $pdf_name"
             local counter=1
-            for image in "$temp_dir"/${pdf_name}-*.png; do
+            for image in "$temp_dir"/"${pdf_name}"-*.png; do
                 if [[ -f "$image" ]]; then
                     local thumb_name
                     thumb_name=$(printf "%s_thumb_%03d.jpg" "$pdf_name" $counter)
@@ -428,8 +429,353 @@ execute_watermark_apply() {
 
 execute_custom_workflow() {
     local workflow_file="$1"
-    log::info "Custom workflow execution not yet implemented"
-    log::info "YAML workflow parsing will be implemented in IMX-1.2"
+    local dry_run="$2"
+    local output_dir="$3"
+    local parallel_jobs="$4"
+    local inputs=("${@:5}")
+    
+    log::info "Loading custom workflow: $workflow_file"
+    
+    # Load and parse the workflow
+    if ! yaml::load_workflow "$workflow_file" "CUSTOM_WF"; then
+        log::error "Failed to load workflow: $workflow_file"
+        return 1
+    fi
+    
+    # Validate the workflow comprehensively
+    if ! validation::validate_workflow_comprehensive "CUSTOM_WF"; then
+        log::error "Workflow validation failed"
+        return 1
+    fi
+    
+    # Display workflow info
+    local wf_name
+    local wf_description
+    local wf_version
+    local step_count
+    
+    wf_name=$(yaml::get_workflow_var "CUSTOM_WF" "NAME")
+    wf_description=$(yaml::get_workflow_var "CUSTOM_WF" "DESCRIPTION")
+    wf_version=$(yaml::get_workflow_var "CUSTOM_WF" "VERSION")
+    step_count=$(yaml::get_workflow_var "CUSTOM_WF" "STEP_COUNT")
+    
+    log::info "Workflow: $wf_name"
+    log::info "Description: $wf_description"
+    [[ -n "$wf_version" ]] && log::info "Version: $wf_version"
+    log::info "Steps: $step_count"
+    echo
+    
+    if [[ "$dry_run" == true ]]; then
+        log::info "DRY RUN MODE - Workflow steps preview:"
+        for ((i=0; i<step_count; i++)); do
+            local step_name
+            local step_type
+            local step_desc
+            local step_condition
+            
+            step_name=$(yaml::get_step_var "CUSTOM_WF" "$i" "NAME")
+            step_type=$(yaml::get_step_var "CUSTOM_WF" "$i" "TYPE")
+            step_desc=$(yaml::get_step_var "CUSTOM_WF" "$i" "DESCRIPTION")
+            step_condition=$(yaml::get_step_var "CUSTOM_WF" "$i" "CONDITION")
+            
+            echo "  Step $((i+1)): $step_name ($step_type)"
+            [[ -n "$step_desc" ]] && echo "    Description: $step_desc"
+            [[ -n "$step_condition" ]] && echo "    Condition: $step_condition"
+            
+            # Show parameters
+            local param_vars
+            param_vars=$(compgen -v "CUSTOM_WF_STEP_${i}_PARAM_" 2>/dev/null || true)
+            if [[ -n "$param_vars" ]]; then
+                echo "    Parameters:"
+                while IFS= read -r var; do
+                    [[ -z "$var" ]] && continue
+                    local param_name="${var#CUSTOM_WF_STEP_"${i}"_PARAM_}"
+                    local param_value="${!var}"
+                    local lower_param=$(echo "$param_name" | tr '[:upper:]' '[:lower:]')
+                    echo "      $lower_param: $param_value"
+                done <<< "$param_vars"
+            fi
+        done
+        return 0
+    fi
+    
+    # Execute pre-workflow hooks
+    local pre_hooks
+    pre_hooks=$(yaml::get_hook "CUSTOM_WF" "PRE_WORKFLOW")
+    if [[ -n "$pre_hooks" ]]; then
+        log::info "Executing pre-workflow hooks"
+        IFS='|' read -ra hook_commands <<< "$pre_hooks"
+        for hook_cmd in "${hook_commands[@]}"; do
+            log::debug "Hook: $hook_cmd"
+            if ! eval "$hook_cmd"; then
+                log::warn "Pre-workflow hook failed: $hook_cmd"
+            fi
+        done
+    fi
+    
+    # Execute workflow steps
+    local failed_step=""
+    for ((i=0; i<step_count; i++)); do
+        local step_name
+        local step_type
+        local step_condition
+        
+        step_name=$(yaml::get_step_var "CUSTOM_WF" "$i" "NAME")
+        step_type=$(yaml::get_step_var "CUSTOM_WF" "$i" "TYPE")
+        step_condition=$(yaml::get_step_var "CUSTOM_WF" "$i" "CONDITION")
+        
+        log::info "Executing step $((i+1)): $step_name"
+        
+        # Check step condition if present
+        if [[ -n "$step_condition" ]]; then
+            log::debug "Checking condition: $step_condition"
+            # For now, skip conditional logic (will be implemented in IMX-1.4)
+            log::warn "Conditional steps not yet implemented, executing unconditionally"
+        fi
+        
+        # Execute post-step hooks
+        local post_hooks
+        post_hooks=$(yaml::get_hook "CUSTOM_WF" "POST_STEP")
+        if [[ -n "$post_hooks" ]]; then
+            IFS='|' read -ra hook_commands <<< "$post_hooks"
+            for hook_cmd in "${hook_commands[@]}"; do
+                # Substitute step variables
+                hook_cmd="${hook_cmd//\{step_name\}/$step_name}"
+                log::debug "Post-step hook: $hook_cmd"
+                eval "$hook_cmd"
+            done
+        fi
+        
+        # Execute step based on type
+        if ! execute_workflow_step "$step_type" "$i" "CUSTOM_WF" "$output_dir" "${inputs[@]}"; then
+            failed_step="$step_name"
+            break
+        fi
+    done
+    
+    # Execute completion hooks
+    if [[ -n "$failed_step" ]]; then
+        log::error "Workflow failed at step: $failed_step"
+        
+        # Execute failure hooks
+        local failure_hooks
+        failure_hooks=$(yaml::get_hook "CUSTOM_WF" "ON_FAILURE")
+        if [[ -n "$failure_hooks" ]]; then
+            log::info "Executing failure hooks"
+            IFS='|' read -ra hook_commands <<< "$failure_hooks"
+            for hook_cmd in "${hook_commands[@]}"; do
+                hook_cmd="${hook_cmd//\{failed_step\}/$failed_step}"
+                log::debug "Failure hook: $hook_cmd"
+                eval "$hook_cmd"
+            done
+        fi
+        return 1
+    else
+        # Execute success hooks
+        local success_hooks
+        success_hooks=$(yaml::get_hook "CUSTOM_WF" "ON_SUCCESS")
+        if [[ -n "$success_hooks" ]]; then
+            log::info "Executing success hooks"
+            IFS='|' read -ra hook_commands <<< "$success_hooks"
+            for hook_cmd in "${hook_commands[@]}"; do
+                hook_cmd="${hook_cmd//\{output_dir\}/$output_dir}"
+                log::debug "Success hook: $hook_cmd"
+                eval "$hook_cmd"
+            done
+        fi
+    fi
+    
+    return 0
+}
+
+# Execute a workflow step based on its type
+execute_workflow_step() {
+    local step_type="$1"
+    local step_index="$2"
+    local workflow_prefix="$3"
+    local output_dir="$4"
+    local inputs=("${@:5}")
+    
+    case "$step_type" in
+        "pdf_extract")
+            execute_pdf_extract_step "$step_index" "$workflow_prefix" "$output_dir" "${inputs[@]}"
+            ;;
+        "excel_extract")
+            execute_excel_extract_step "$step_index" "$workflow_prefix" "$output_dir" "${inputs[@]}"
+            ;;
+        "convert")
+            execute_convert_step "$step_index" "$workflow_prefix" "$output_dir" "${inputs[@]}"
+            ;;
+        "resize")
+            execute_resize_step "$step_index" "$workflow_prefix" "$output_dir" "${inputs[@]}"
+            ;;
+        "watermark")
+            execute_watermark_step "$step_index" "$workflow_prefix" "$output_dir" "${inputs[@]}"
+            ;;
+        "ocr")
+            execute_ocr_step "$step_index" "$workflow_prefix" "$output_dir" "${inputs[@]}"
+            ;;
+        "webhook")
+            execute_webhook_step "$step_index" "$workflow_prefix" "$output_dir" "${inputs[@]}"
+            ;;
+        "custom")
+            execute_custom_step "$step_index" "$workflow_prefix" "$output_dir" "${inputs[@]}"
+            ;;
+        *)
+            log::error "Unknown step type: $step_type"
+            return 1
+            ;;
+    esac
+}
+
+# Individual step executors (basic implementations)
+execute_pdf_extract_step() {
+    local step_index="$1"
+    local workflow_prefix="$2"
+    local output_dir="$3"
+    local inputs=("${@:4}")
+    
+    log::info "PDF extraction step (basic implementation)"
+    # This will be enhanced when we implement imgxsh-extract-pdf
+    return 0
+}
+
+execute_excel_extract_step() {
+    local step_index="$1"
+    local workflow_prefix="$2"
+    local output_dir="$3"
+    local inputs=("${@:4}")
+    
+    log::info "Excel extraction step (basic implementation)"
+    # This will be enhanced when we implement imgxsh-extract-excel
+    return 0
+}
+
+execute_convert_step() {
+    local step_index="$1"
+    local workflow_prefix="$2"
+    local output_dir="$3"
+    local inputs=("${@:4}")
+    
+    log::info "Convert step (basic implementation)"
+    # This will be enhanced when we implement imgxsh-convert
+    return 0
+}
+
+execute_resize_step() {
+    local step_index="$1"
+    local workflow_prefix="$2"
+    local output_dir="$3"
+    local inputs=("${@:4}")
+    
+    log::info "Resize step (basic implementation)"
+    # This will be enhanced when we implement imgxsh-resize
+    return 0
+}
+
+execute_watermark_step() {
+    local step_index="$1"
+    local workflow_prefix="$2"
+    local output_dir="$3"
+    local inputs=("${@:4}")
+    
+    log::info "Watermark step (basic implementation)"
+    # This will be enhanced when we implement imgxsh-watermark
+    return 0
+}
+
+execute_ocr_step() {
+    local step_index="$1"
+    local workflow_prefix="$2"
+    local output_dir="$3"
+    local inputs=("${@:4}")
+    
+    log::info "OCR step (basic implementation)"
+    # This will be enhanced when we implement imgxsh-ocr
+    return 0
+}
+
+execute_webhook_step() {
+    local step_index="$1"
+    local workflow_prefix="$2"
+    local output_dir="$3"
+    local inputs=("${@:4}")
+    
+    local webhook_url
+    webhook_url=$(yaml::get_step_param "$workflow_prefix" "$step_index" "URL")
+    
+    if [[ -z "$webhook_url" ]]; then
+        log::error "Webhook step missing URL parameter"
+        return 1
+    fi
+    
+    log::info "Sending webhook to: $webhook_url"
+    
+    if command -v curl >/dev/null 2>&1; then
+        local method
+        local payload
+        method=$(yaml::get_step_param "$workflow_prefix" "$step_index" "METHOD")
+        payload=$(yaml::get_step_param "$workflow_prefix" "$step_index" "PAYLOAD")
+        
+        method="${method:-POST}"
+        
+        if [[ -n "$payload" ]]; then
+            curl -s -X "$method" -H "Content-Type: application/json" -d "$payload" "$webhook_url" >/dev/null
+        else
+            curl -s -X "$method" "$webhook_url" >/dev/null
+        fi
+        
+        local curl_exit_code=$?
+        if [[ $curl_exit_code -eq 0 ]]; then
+            log::success "Webhook sent successfully"
+        else
+            log::error "Failed to send webhook"
+            return 1
+        fi
+    else
+        log::warn "curl not available, skipping webhook"
+    fi
+    
+    return 0
+}
+
+execute_custom_step() {
+    local step_index="$1"
+    local workflow_prefix="$2"
+    local output_dir="$3"
+    local inputs=("${@:4}")
+    
+    local script_content
+    script_content=$(yaml::get_step_param "$workflow_prefix" "$step_index" "SCRIPT")
+    
+    if [[ -z "$script_content" ]]; then
+        log::error "Custom step missing script parameter"
+        return 1
+    fi
+    
+    log::info "Executing custom script"
+    
+    # Create temporary script file
+    local temp_script="${IMGXSH_TEMP_DIR}/custom_step_${step_index}.sh"
+    mkdir -p "$(dirname "$temp_script")"
+    
+    echo "#!/bin/bash" > "$temp_script"
+    echo "set -euo pipefail" >> "$temp_script"
+    echo >> "$temp_script"
+    echo "$script_content" >> "$temp_script"
+    
+    chmod +x "$temp_script"
+    
+    # Execute script
+    if "$temp_script"; then
+        log::success "Custom script executed successfully"
+        rm -f "$temp_script"
+        return 0
+    else
+        log::error "Custom script failed"
+        rm -f "$temp_script"
+        return 1
+    fi
 }
 
 main() {
@@ -444,6 +790,7 @@ main() {
     local quiet=false
     local check_deps=false
     local init_config=false
+    local validate_workflow_file=""
     local inputs=()
     
     # Parse command line arguments
@@ -501,6 +848,10 @@ main() {
                 init_config=true
                 shift
                 ;;
+            --validate-workflow)
+                validate_workflow_file="$2"
+                shift 2
+                ;;
             -*)
                 log::error "Unknown option: $1"
                 show_help
@@ -523,6 +874,15 @@ main() {
         imgxsh::init
         log::success "Configuration initialized at $IMGXSH_CONFIG_FILE"
         exit 0
+    fi
+    
+    if [[ -n "$validate_workflow_file" ]]; then
+        if validation::validate_workflow_file "$validate_workflow_file"; then
+            log::success "Workflow validation passed"
+            exit 0
+        else
+            exit 1
+        fi
     fi
     
     # Initialize imgxsh environment

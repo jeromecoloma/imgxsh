@@ -9,6 +9,10 @@ source "${SHELL_STARTER_ROOT}/lib/colors.sh"
 source "${SHELL_STARTER_ROOT}/lib/logging.sh"
 source "${SHELL_STARTER_ROOT}/lib/spinner.sh"
 
+# Source imgxsh YAML parser and validation
+source "${SHELL_STARTER_ROOT}/lib/imgxsh/yaml.sh"
+source "${SHELL_STARTER_ROOT}/lib/imgxsh/validation.sh"
+
 # Core imgxsh configuration and constants
 readonly IMGXSH_CONFIG_DIR="${HOME}/.imgxsh"
 readonly IMGXSH_CONFIG_FILE="${IMGXSH_CONFIG_DIR}/config.yaml"
