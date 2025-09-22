@@ -22,22 +22,22 @@ if [[ -n "${CI:-}" ]]; then
     echo "DEBUG test_helper: /usr/local/lib/bats-support exists: $([ -d "/usr/local/lib/bats-support" ] && echo YES || echo NO)" >&2
 fi
 
-if [[ -d "${PROJECT_ROOT}/tests/bats-support" ]]; then
-    # Local vendored libraries (development)
-    export BATS_LIB_PATH="${PROJECT_ROOT}/tests"
-    [[ -n "${CI:-}" ]] && echo "DEBUG test_helper: Set BATS_LIB_PATH to local: $BATS_LIB_PATH" >&2
-elif [[ -d "/usr/lib/bats-support" ]]; then
-    # System installation (CI with bats-action)
+if [[ -n "${CI:-}" ]] && [[ -d "/usr/lib/bats-support" ]]; then
+    # CI environment: prefer system libraries from bats-action
     export BATS_LIB_PATH="/usr/lib"
-    [[ -n "${CI:-}" ]] && echo "DEBUG test_helper: Set BATS_LIB_PATH to system: $BATS_LIB_PATH" >&2
-elif [[ -d "/usr/local/lib/bats-support" ]]; then
-    # Alternative system installation path
+    [[ -n "${CI:-}" ]] && echo "DEBUG test_helper: CI - using system libraries: $BATS_LIB_PATH" >&2
+elif [[ -n "${CI:-}" ]] && [[ -d "/usr/local/lib/bats-support" ]]; then
+    # CI environment: alternative system installation path
     export BATS_LIB_PATH="/usr/local/lib"
-    [[ -n "${CI:-}" ]] && echo "DEBUG test_helper: Set BATS_LIB_PATH to local system: $BATS_LIB_PATH" >&2
+    [[ -n "${CI:-}" ]] && echo "DEBUG test_helper: CI - using local system libraries: $BATS_LIB_PATH" >&2
+elif [[ -d "${PROJECT_ROOT}/tests/bats-support" ]]; then
+    # Local development: use vendored libraries
+    export BATS_LIB_PATH="${PROJECT_ROOT}/tests"
+    [[ -n "${CI:-}" ]] && echo "DEBUG test_helper: Local dev - using vendored libraries: $BATS_LIB_PATH" >&2
 else
-    # Keep bats default if no libraries found
+    # Fallback: keep existing or use bats default
     export BATS_LIB_PATH="${BATS_LIB_PATH:-/usr/lib/bats}"
-    [[ -n "${CI:-}" ]] && echo "DEBUG test_helper: Using default BATS_LIB_PATH: $BATS_LIB_PATH" >&2
+    [[ -n "${CI:-}" ]] && echo "DEBUG test_helper: Fallback BATS_LIB_PATH: $BATS_LIB_PATH" >&2
 fi
 
 # Global test state tracking
