@@ -59,6 +59,7 @@ jobs:
       with:
         # Don't fetch submodules initially - let the test script handle setup
         submodules: false
+        clean: true
         
     - name: Configure Git for submodules
       run: |
@@ -69,11 +70,12 @@ jobs:
       id: setup-bats
       uses: bats-core/bats-action@3.0.1
       with:
-        # Install libs into repo tests/ to align with our tests layout and enable caching
-        support-path: ${{ github.workspace }}/tests/bats-support
-        assert-path: ${{ github.workspace }}/tests/bats-assert
-        file-path: ${{ github.workspace }}/tests/bats-file
-        detik-path: ${{ github.workspace }}/tests/bats-detik
+        # Install to system default paths to avoid workspace permission conflicts
+        bats-install: true
+        support-install: true
+        assert-install: true
+        file-install: true
+        detik-install: false
 
     # Shell Starter upstream workflow does not install additional system dependencies here
 
