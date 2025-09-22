@@ -65,6 +65,11 @@ jobs:
         git config --global user.email "ci@github.com"
         git config --global user.name "GitHub CI"
 
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y imagemagick poppler-utils unzip curl
+
     - name: Set up consistent test environment
       run: |
         # Use our comprehensive CI environment setup script

@@ -69,6 +69,14 @@ curl -fsSL https://github.com/jeromecoloma/imgxsh/install.sh | bash
 ```
 imgxsh/
 ├── bin/                # imgxsh binaries (main tool and individual utilities)
+├── tests/              # Comprehensive testing framework with CI integration
+│   ├── run-tests.sh   # Local development test runner
+│   ├── run-tests-ci.sh # CI-optimized test runner (Shell Starter pattern)
+│   ├── setup-ci-environment.sh # CI environment configuration
+│   ├── imgxsh-convert.bats # Comprehensive test suite (30+ tests)
+│   ├── fixtures/      # Test data (images, PDFs, Excel files)
+│   └── bats-*/        # Bats testing framework and libraries
+├── .github/workflows/  # GitHub Actions CI/CD workflows
 ├── demo/               # Shell Starter example scripts (for reference)
 ├── lib/                # Shell Starter library (colors, logging, spinners)
 ├── shell-starter-tests/# Shell Starter framework tests (temporary)
@@ -123,7 +131,7 @@ imgxsh is currently in development. The project is built using the Shell Starter
 - 🚧 Core binaries implementation (in progress)
 - 🚧 Workflow engine development
 - 🚧 Individual tool development
-- ⏳ Testing and quality assurance
+- ✅ Testing and quality assurance
 - ⏳ Documentation completion
 
 ### Development Framework
@@ -186,17 +194,37 @@ We welcome contributions to imgxsh! The project follows Shell Starter convention
 
 ### Testing
 
+imgxsh has a comprehensive testing framework with local and CI integration:
+
 ```bash
-# Run Shell Starter framework tests (temporary)
-bats shell-starter-tests/
+# Local development testing
+./tests/run-tests.sh                    # Run all tests
+./tests/run-tests.sh --verbose          # Detailed output
+./tests/run-tests.sh --setup            # Initialize Bats framework
+./tests/run-tests.sh --parallel 4       # Parallel execution (requires: brew install parallel)
 
-# Run imgxsh tests (when available)
-bats tests/
+# CI-optimized testing
+./tests/run-tests-ci.sh                 # CI environment tests
 
-# Check code quality
-shellcheck bin/* shell-starter-tests/*.bats
-shfmt -d bin/*
+# Individual test suites
+./tests/bats-core/bin/bats tests/imgxsh-convert.bats  # Specific tool tests
+
+# Local CI simulation (requires Act)
+act -W .github/workflows/ci.yml --job test --pull=false
+
+# Code quality checks
+shellcheck bin/*                        # Static analysis
+shfmt -d bin/*                         # Format checking
 ```
+
+**Testing Features**:
+- ✅ **30+ comprehensive tests** for imgxsh-convert
+- ✅ **Cross-platform compatibility** (ImageMagick `magick`/`convert` detection)
+- ✅ **CI/CD integration** with GitHub Actions
+- ✅ **Local CI simulation** with Act
+- ✅ **Shell Starter patterns** for reliable testing
+
+See [`tests/README.md`](tests/README.md) for comprehensive testing documentation, including CI setup lessons learned and troubleshooting guides.
 
 ### Available Shell Starter Functions
 

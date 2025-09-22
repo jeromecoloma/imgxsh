@@ -18,9 +18,9 @@ export TERM="${TERM:-xterm-256color}"
 # Create consistent temporary directory structure
 # Use a more container-friendly temp directory approach
 if [[ -n "${GITHUB_ACTIONS:-}" ]] || [[ -n "${ACT:-}" ]]; then
-    CI_TEMP_DIR="/tmp/shell-starter-ci-$$"
+	CI_TEMP_DIR="/tmp/shell-starter-ci-$$"
 else
-    CI_TEMP_DIR="${TMPDIR:-/tmp}/shell-starter-ci-$$"
+	CI_TEMP_DIR="${TMPDIR:-/tmp}/shell-starter-ci-$$"
 fi
 export SHELL_STARTER_CI_TEMP="$CI_TEMP_DIR"
 
