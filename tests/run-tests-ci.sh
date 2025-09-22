@@ -58,6 +58,12 @@ fi
 echo "Running tests in CI mode with individual file execution..."
 echo "======================================================="
 
+# Debug: Show current BATS_LIB_PATH and library detection
+echo "DEBUG: Current BATS_LIB_PATH: ${BATS_LIB_PATH:-UNSET}"
+echo "DEBUG: Checking for bats libraries..."
+echo "DEBUG: /usr/lib/bats-support exists: $([ -d "/usr/lib/bats-support" ] && echo YES || echo NO)"
+echo "DEBUG: ${PROJECT_ROOT}/tests/bats-support exists: $([ -d "${PROJECT_ROOT}/tests/bats-support" ] && echo YES || echo NO)"
+
 if [[ "$RUN_INTEGRATION_TESTS" == "false" ]]; then
     echo "ℹ️  Integration tests are skipped in containerized CI environments"
     echo "   To run integration tests locally, set: SHELL_STARTER_RUN_INTEGRATION_TESTS=true"

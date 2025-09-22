@@ -11,15 +11,33 @@ source "${PROJECT_ROOT}/lib/main.sh"
 
 # Set up BATS_LIB_PATH for library loading (must be at top level, not in setup())
 # Override bats default (/usr/lib/bats) with correct paths for our libraries
+
+# Debug output for CI troubleshooting
+if [[ -n "${CI:-}" ]]; then
+    echo "DEBUG test_helper: PROJECT_ROOT=${PROJECT_ROOT}" >&2
+    echo "DEBUG test_helper: Current BATS_LIB_PATH=${BATS_LIB_PATH:-UNSET}" >&2
+    echo "DEBUG test_helper: Checking paths..." >&2
+    echo "DEBUG test_helper: ${PROJECT_ROOT}/tests/bats-support exists: $([ -d "${PROJECT_ROOT}/tests/bats-support" ] && echo YES || echo NO)" >&2
+    echo "DEBUG test_helper: /usr/lib/bats-support exists: $([ -d "/usr/lib/bats-support" ] && echo YES || echo NO)" >&2
+    echo "DEBUG test_helper: /usr/local/lib/bats-support exists: $([ -d "/usr/local/lib/bats-support" ] && echo YES || echo NO)" >&2
+fi
+
 if [[ -d "${PROJECT_ROOT}/tests/bats-support" ]]; then
     # Local vendored libraries (development)
     export BATS_LIB_PATH="${PROJECT_ROOT}/tests"
+    [[ -n "${CI:-}" ]] && echo "DEBUG test_helper: Set BATS_LIB_PATH to local: $BATS_LIB_PATH" >&2
 elif [[ -d "/usr/lib/bats-support" ]]; then
     # System installation (CI with bats-action)
     export BATS_LIB_PATH="/usr/lib"
+    [[ -n "${CI:-}" ]] && echo "DEBUG test_helper: Set BATS_LIB_PATH to system: $BATS_LIB_PATH" >&2
+elif [[ -d "/usr/local/lib/bats-support" ]]; then
+    # Alternative system installation path
+    export BATS_LIB_PATH="/usr/local/lib"
+    [[ -n "${CI:-}" ]] && echo "DEBUG test_helper: Set BATS_LIB_PATH to local system: $BATS_LIB_PATH" >&2
 else
     # Keep bats default if no libraries found
     export BATS_LIB_PATH="${BATS_LIB_PATH:-/usr/lib/bats}"
+    [[ -n "${CI:-}" ]] && echo "DEBUG test_helper: Using default BATS_LIB_PATH: $BATS_LIB_PATH" >&2
 fi
 
 # Global test state tracking
