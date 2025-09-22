@@ -64,16 +64,31 @@ if [[ "$RUN_INTEGRATION_TESTS" == "false" ]]; then
     echo ""
 fi
 
-test_files=(
-    "tests/framework.bats"
-    "tests/lib-colors.bats"
-    "tests/lib-logging.bats"
-    "tests/lib-utils.bats"
-    "tests/lib-main.bats"
-    "tests/hello-world.bats"
-    "tests/lib-spinner.bats"
-    "tests/lib-integration.bats"
-)
+# Discover actual test files in the project
+test_files=()
+if ls "$PROJECT_ROOT/tests"/*.bats >/dev/null 2>&1; then
+    while IFS= read -r -d '' file; do
+        # Skip framework test files (bats-assert, bats-core, bats-support)
+        if [[ "$file" == *"/bats-assert/"* ]] || [[ "$file" == *"/bats-core/"* ]] || [[ "$file" == *"/bats-support/"* ]]; then
+            continue
+        fi
+        # Convert to relative path
+        relative_file="${file#$PROJECT_ROOT/}"
+        test_files+=("$relative_file")
+    done < <(find "$PROJECT_ROOT/tests" -name "*.bats" -not -path "*/bats-*/*" -print0 | sort -z)
+fi
+
+if [[ ${#test_files[@]} -eq 0 ]]; then
+    echo "⚠️  No test files found in tests/ directory"
+    echo "   This might be expected if tests are not set up yet"
+    exit 0
+fi
+
+echo "Found ${#test_files[@]} test file(s):"
+for file in "${test_files[@]}"; do
+    echo "  - $file"
+done
+echo ""
 
 total_tests=0
 passed_tests=0
