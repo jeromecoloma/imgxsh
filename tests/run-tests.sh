@@ -63,6 +63,13 @@ setup_bats() {
 		if [[ -d "$shell_starter_tests/bats-core" ]]; then
 			cp -r "$shell_starter_tests/bats-core" "$tests_dir/"
 			log::info "Copied bats-core"
+			# Ensure executables have the correct permissions
+			if [[ -f "$tests_dir/bats-core/bin/bats" ]]; then
+				chmod +x "$tests_dir/bats-core/bin/bats" || true
+			fi
+			if [[ -d "$tests_dir/bats-core/libexec/bats-core" ]]; then
+				chmod +x "$tests_dir/bats-core/libexec/bats-core"/* 2>/dev/null || true
+			fi
 		fi
 
 		if [[ -d "$shell_starter_tests/bats-support" ]]; then

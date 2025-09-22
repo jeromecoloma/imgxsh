@@ -40,6 +40,17 @@ if [ -z "${BATS_CMD}" ]; then
 fi
 
 if [ -z "${BATS_CMD}" ]; then
+    # As a last resort, try fixing executable bits and re-resolving
+    if [ -f "$PROJECT_ROOT/tests/bats-core/bin/bats" ]; then
+        chmod +x "$PROJECT_ROOT/tests/bats-core/bin/bats" 2>/dev/null || true
+        if [ -d "$PROJECT_ROOT/tests/bats-core/libexec/bats-core" ]; then
+            chmod +x "$PROJECT_ROOT/tests/bats-core/libexec/bats-core"/* 2>/dev/null || true
+        fi
+        BATS_CMD="$(resolve_bats_cmd || true)"
+    fi
+fi
+
+if [ -z "${BATS_CMD}" ]; then
     echo "❌ No Bats executable available after setup. Exiting." >&2
     exit 1
 fi
