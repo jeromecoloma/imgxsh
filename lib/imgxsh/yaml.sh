@@ -368,6 +368,413 @@ yaml::validate_workflow() {
     return 0
 }
 
+# Evaluate a condition string with variables
+yaml::evaluate_condition() {
+    local condition="$1"
+    local context_prefix="${2:-WORKFLOW_CONTEXT}"
+    
+    if [[ -z "$condition" ]]; then
+        # No condition means always execute
+        return 0
+    fi
+    
+    log::debug "Evaluating condition: $condition"
+    
+    # Simple condition evaluator for common patterns
+    # This supports basic comparisons: variable > number, variable < number, variable == value
+    
+    # Replace known variables with their values
+    local evaluated_condition="$condition"
+    
+    # Get all context variables (variables that start with the context prefix)
+    local context_vars
+    context_vars=$(compgen -v "${context_prefix}_" 2>/dev/null || true)
+    
+    if [[ -n "$context_vars" ]]; then
+        while IFS= read -r var; do
+            local var_name="${var#"${context_prefix}"_}"
+            local var_value="${!var}"
+            local var_name_lower=$(echo "$var_name" | tr '[:upper:]' '[:lower:]')
+            
+            # Replace variable references in the condition
+            evaluated_condition="${evaluated_condition//$var_name_lower/$var_value}"
+        done <<< "$context_vars"
+    fi
+    
+    log::debug "After variable substitution: $evaluated_condition"
+    
+    # Handle common comparison patterns
+    if [[ "$evaluated_condition" =~ ^([0-9]+)[[:space:]]*([><=]+)[[:space:]]*([0-9]+)$ ]]; then
+        local left="${BASH_REMATCH[1]}"
+        local operator="${BASH_REMATCH[2]}"
+        local right="${BASH_REMATCH[3]}"
+        
+        case "$operator" in
+            ">")
+                [[ "$left" -gt "$right" ]]
+                return $?
+                ;;
+            ">=")
+                [[ "$left" -ge "$right" ]]
+                return $?
+                ;;
+            "<")
+                [[ "$left" -lt "$right" ]]
+                return $?
+                ;;
+            "<=")
+                [[ "$left" -le "$right" ]]
+                return $?
+                ;;
+            "=="|"=")
+                [[ "$left" -eq "$right" ]]
+                return $?
+                ;;
+            "!=")
+                [[ "$left" -ne "$right" ]]
+                return $?
+                ;;
+            *)
+                log::warn "Unknown comparison operator: $operator"
+                return 1
+                ;;
+        esac
+    fi
+    
+    # Handle string comparisons
+    if [[ "$evaluated_condition" =~ ^\"?([^\"]+)\"?[[:space:]]*([><=!]+)[[:space:]]*\"?([^\"]+)\"?$ ]]; then
+        local left="${BASH_REMATCH[1]}"
+        local operator="${BASH_REMATCH[2]}"
+        local right="${BASH_REMATCH[3]}"
+        
+        case "$operator" in
+            "=="|"=")
+                [[ "$left" == "$right" ]]
+                return $?
+                ;;
+            "!=")
+                [[ "$left" != "$right" ]]
+                return $?
+                ;;
+            *)
+                log::warn "String comparison operator '$operator' not supported for strings"
+                return 1
+                ;;
+        esac
+    fi
+    
+    # Handle boolean conditions (true/false, yes/no, 1/0)  
+    local evaluated_condition_lower
+    evaluated_condition_lower=$(echo "$evaluated_condition" | tr '[:upper:]' '[:lower:]')
+    case "$evaluated_condition_lower" in
+        "true"|"yes"|"1"|"on"|"enabled")
+            return 0
+            ;;
+        "false"|"no"|"0"|"off"|"disabled")
+            return 1
+            ;;
+    esac
+    
+    # If we can't parse the condition, log a warning but default to true
+    log::warn "Could not evaluate condition: $condition"
+    log::warn "Condition will be treated as true (step will execute)"
+    return 0
+}
+
+# Set a context variable for condition evaluation
+yaml::set_context_var() {
+    local context_prefix="${1:-WORKFLOW_CONTEXT}"
+    local var_name="$2"
+    local var_value="$3"
+    
+    local upper_var_name=$(echo "$var_name" | tr '[:lower:]' '[:upper:]')
+    local full_var="${context_prefix}_${upper_var_name}"
+    
+    eval "${full_var}=\$var_value"
+    log::debug "Set context variable: ${full_var}=${var_value}"
+}
+
+# Get a context variable value
+yaml::get_context_var() {
+    local context_prefix="${1:-WORKFLOW_CONTEXT}"
+    local var_name="$2"
+    
+    local upper_var_name=$(echo "$var_name" | tr '[:lower:]' '[:upper:]')
+    local full_var="${context_prefix}_${upper_var_name}"
+    
+    echo "${!full_var:-}"
+}
+
+# Initialize context variables with common defaults
+yaml::init_context() {
+    local context_prefix="${1:-WORKFLOW_CONTEXT}"
+    
+    # Clear any existing context variables
+    local context_vars
+    context_vars=$(compgen -v "${context_prefix}_" 2>/dev/null || true)
+    if [[ -n "$context_vars" ]]; then
+        while IFS= read -r var; do
+            unset "$var"
+        done <<< "$context_vars"
+    fi
+    
+    # Set default context variables
+    yaml::set_context_var "$context_prefix" "extracted_count" "0"
+    yaml::set_context_var "$context_prefix" "processed_count" "0"
+    yaml::set_context_var "$context_prefix" "error_count" "0"
+    yaml::set_context_var "$context_prefix" "current_step" "0"
+    yaml::set_context_var "$context_prefix" "total_steps" "0"
+    
+    log::debug "Initialized context variables with defaults"
+}
+
+# Debug function to show all context variables
+yaml::debug_context() {
+    local context_prefix="${1:-WORKFLOW_CONTEXT}"
+    
+    echo "=== Context Variables (${context_prefix}) ==="
+    
+    local context_vars
+    context_vars=$(compgen -v "${context_prefix}_" 2>/dev/null || true)
+    if [[ -n "$context_vars" ]]; then
+        while IFS= read -r var; do
+            local var_name="${var#"${context_prefix}"_}"
+            local var_value="${!var}"
+            echo "  ${var_name,,}: $var_value"
+        done <<< "$context_vars"
+    else
+        echo "  No context variables set"
+    fi
+}
+
+# Template variable substitution system
+yaml::substitute_variables() {
+    local text="$1"
+    local context_prefix="${2:-TEMPLATE_VARS}"
+    
+    if [[ -z "$text" ]]; then
+        echo ""
+        return 0
+    fi
+    
+    local result="$text"
+    
+    # Get all template variables (variables that start with the context prefix)
+    local template_vars
+    template_vars=$(compgen -v "${context_prefix}_" 2>/dev/null || true)
+    
+    if [[ -n "$template_vars" ]]; then
+        while IFS= read -r var; do
+            [[ -z "$var" ]] && continue
+            local var_name="${var#"${context_prefix}"_}"
+            local var_value="${!var}"
+            local var_name_lower=$(echo "$var_name" | tr '[:upper:]' '[:lower:]')
+            
+            # Replace {variable_name} with value
+            result="${result//\{$var_name_lower\}/$var_value}"
+        done <<< "$template_vars"
+    fi
+    
+    # Handle special formatting patterns like {counter:03d}
+    # Extract counter variables and apply formatting
+    while [[ "$result" =~ \{([^}:]+):([^}]+)\} ]]; do
+        local full_match="${BASH_REMATCH[0]}"
+        local var_name="${BASH_REMATCH[1]}"
+        local format="${BASH_REMATCH[2]}"
+        
+        # Get the variable value
+        local upper_var_name=$(echo "$var_name" | tr '[:lower:]' '[:upper:]')
+        local full_var="${context_prefix}_${upper_var_name}"
+        local var_value="${!full_var:-0}"
+        
+        # Apply formatting
+        local formatted_value
+        case "$format" in
+            *d)
+                # Numeric formatting (e.g., 03d for zero-padded 3 digits)
+                formatted_value=$(printf "%${format}" "$var_value")
+                ;;
+            *)
+                # Unknown format, use value as-is
+                formatted_value="$var_value"
+                log::warn "Unknown variable format: $format, using value as-is"
+                ;;
+        esac
+        
+        # Replace the pattern
+        result="${result//$full_match/$formatted_value}"
+    done
+    
+    echo "$result"
+}
+
+# Set a template variable
+yaml::set_template_var() {
+    local context_prefix="${1:-TEMPLATE_VARS}"
+    local var_name="$2"
+    local var_value="$3"
+    
+    local upper_var_name=$(echo "$var_name" | tr '[:lower:]' '[:upper:]')
+    local full_var="${context_prefix}_${upper_var_name}"
+    
+    eval "${full_var}=\$var_value"
+    log::debug "Set template variable: ${full_var}=${var_value}"
+}
+
+# Get a template variable value
+yaml::get_template_var() {
+    local context_prefix="${1:-TEMPLATE_VARS}"
+    local var_name="$2"
+    
+    local upper_var_name=$(echo "$var_name" | tr '[:lower:]' '[:upper:]')
+    local full_var="${context_prefix}_${upper_var_name}"
+    
+    echo "${!full_var:-}"
+}
+
+# Initialize template variables with common defaults
+yaml::init_template_vars() {
+    local context_prefix="${1:-TEMPLATE_VARS}"
+    local workflow_input="$2"
+    local output_dir="$3"
+    
+    # Clear any existing template variables
+    local template_vars
+    template_vars=$(compgen -v "${context_prefix}_" 2>/dev/null || true)
+    if [[ -n "$template_vars" ]]; then
+        while IFS= read -r var; do
+            [[ -z "$var" ]] && continue
+            unset "$var"
+        done <<< "$template_vars"
+    fi
+    
+    # Set basic template variables
+    yaml::set_template_var "$context_prefix" "workflow_input" "$workflow_input"
+    yaml::set_template_var "$context_prefix" "output_dir" "$output_dir"
+    yaml::set_template_var "$context_prefix" "temp_dir" "/tmp/imgxsh"
+    
+    # Generate timestamp
+    local timestamp
+    timestamp=$(date +%Y%m%d_%H%M%S)
+    yaml::set_template_var "$context_prefix" "timestamp" "$timestamp"
+    
+    # Initialize counter
+    yaml::set_template_var "$context_prefix" "counter" "1"
+    
+    # Extract file-specific variables from workflow_input if it's a file
+    if [[ -f "$workflow_input" ]]; then
+        local base_name
+        base_name=$(basename "$workflow_input")
+        local name_without_ext="${base_name%.*}"
+        local file_ext="${base_name##*.}"
+        
+        yaml::set_template_var "$context_prefix" "input_basename" "$base_name"
+        yaml::set_template_var "$context_prefix" "input_name" "$name_without_ext"
+        yaml::set_template_var "$context_prefix" "input_ext" "$file_ext"
+        
+        # Set format-specific names (convert to lowercase for comparison)
+        local file_ext_lower
+        file_ext_lower=$(echo "$file_ext" | tr '[:upper:]' '[:lower:]')
+        case "$file_ext_lower" in
+            "pdf")
+                yaml::set_template_var "$context_prefix" "pdf_name" "$name_without_ext"
+                ;;
+            "xlsx"|"xls")
+                yaml::set_template_var "$context_prefix" "excel_name" "$name_without_ext"
+                ;;
+        esac
+    fi
+    
+    log::debug "Initialized template variables for: $workflow_input"
+}
+
+# Increment a numeric template variable (useful for counters)
+yaml::increment_template_var() {
+    local context_prefix="${1:-TEMPLATE_VARS}"
+    local var_name="$2"
+    local increment="${3:-1}"
+    
+    local current_value
+    current_value=$(yaml::get_template_var "$context_prefix" "$var_name")
+    local new_value=$((current_value + increment))
+    
+    yaml::set_template_var "$context_prefix" "$var_name" "$new_value"
+    echo "$new_value"
+}
+
+# Debug function to show all template variables
+yaml::debug_template_vars() {
+    local context_prefix="${1:-TEMPLATE_VARS}"
+    
+    echo "=== Template Variables (${context_prefix}) ==="
+    
+    local template_vars
+    template_vars=$(compgen -v "${context_prefix}_" 2>/dev/null || true)
+    if [[ -n "$template_vars" ]]; then
+        while IFS= read -r var; do
+            [[ -z "$var" ]] && continue
+            local var_name="${var#"${context_prefix}"_}"
+            local var_value="${!var}"
+            local var_name_lower
+            var_name_lower=$(echo "$var_name" | tr '[:upper:]' '[:lower:]')
+            echo "  {${var_name_lower}}: $var_value"
+        done <<< "$template_vars"
+    else
+        echo "  No template variables set"
+    fi
+}
+
+# Apply template substitution to a workflow step's parameters
+yaml::substitute_step_params() {
+    local workflow_prefix="$1"
+    local step_index="$2"
+    local template_context="${3:-TEMPLATE_VARS}"
+    
+    # Get all parameters for this step
+    local param_vars
+    param_vars=$(compgen -v "${workflow_prefix}_STEP_${step_index}_PARAM_" 2>/dev/null || true)
+    
+    if [[ -n "$param_vars" ]]; then
+        while IFS= read -r var; do
+            [[ -z "$var" ]] && continue
+            local original_value="${!var}"
+            local substituted_value
+            substituted_value=$(yaml::substitute_variables "$original_value" "$template_context")
+            
+            # Update the parameter with substituted value
+            eval "$var=\"\$substituted_value\""
+            
+            if [[ "$original_value" != "$substituted_value" ]]; then
+                log::debug "Template substitution: $original_value -> $substituted_value"
+            fi
+        done <<< "$param_vars"
+    fi
+}
+
+# Apply template substitution to hook commands
+yaml::substitute_hook_commands() {
+    local workflow_prefix="$1"
+    local hook_name="$2"
+    local template_context="${3:-TEMPLATE_VARS}"
+    
+    local hook_commands
+    hook_commands=$(yaml::get_hook "$workflow_prefix" "$hook_name")
+    
+    if [[ -n "$hook_commands" ]]; then
+        local substituted_commands
+        substituted_commands=$(yaml::substitute_variables "$hook_commands" "$template_context")
+        
+        # Update the hook variable
+        local upper_hook=$(echo "$hook_name" | tr '[:lower:]' '[:upper:]')
+        local hook_var="${workflow_prefix}_HOOK_${upper_hook}"
+        eval "$hook_var=\"\$substituted_commands\""
+        
+        if [[ "$hook_commands" != "$substituted_commands" ]]; then
+            log::debug "Hook template substitution: $hook_commands -> $substituted_commands"
+        fi
+    fi
+}
+
 # Load workflow from file or built-in workflow
 yaml::load_workflow() {
     local workflow_name="$1"

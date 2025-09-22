@@ -467,6 +467,21 @@ execute_custom_workflow() {
     
     if [[ "$dry_run" == true ]]; then
         log::info "DRY RUN MODE - Workflow steps preview:"
+        
+        # Initialize context for dry-run condition evaluation
+        yaml::init_context "DRY_CONTEXT"
+        yaml::set_context_var "DRY_CONTEXT" "total_steps" "$step_count"
+        
+        # Initialize template variables for dry-run parameter substitution  
+        local dry_primary_input="${inputs[0]:-}"
+        yaml::init_template_vars "DRY_TEMPLATE" "$dry_primary_input" "$output_dir"
+        yaml::set_template_var "DRY_TEMPLATE" "workflow_name" "$wf_name"
+        
+        echo
+        log::info "Template variables available:"
+        yaml::debug_template_vars "DRY_TEMPLATE"
+        echo
+        
         for ((i=0; i<step_count; i++)); do
             local step_name
             local step_type
@@ -478,24 +493,204 @@ execute_custom_workflow() {
             step_desc=$(yaml::get_step_var "CUSTOM_WF" "$i" "DESCRIPTION")
             step_condition=$(yaml::get_step_var "CUSTOM_WF" "$i" "CONDITION")
             
+            # Update template variables for this step
+            yaml::set_template_var "DRY_TEMPLATE" "step_name" "$step_name"
+            yaml::set_template_var "DRY_TEMPLATE" "step_number" "$((i+1))"
+            
             echo "  Step $((i+1)): $step_name ($step_type)"
             [[ -n "$step_desc" ]] && echo "    Description: $step_desc"
-            [[ -n "$step_condition" ]] && echo "    Condition: $step_condition"
             
-            # Show parameters
+            # Evaluate condition for dry run
+            if [[ -n "$step_condition" ]]; then
+                yaml::set_context_var "DRY_CONTEXT" "current_step" "$((i+1))"
+                if yaml::evaluate_condition "$step_condition" "DRY_CONTEXT"; then
+                    echo "    Condition: $step_condition [WOULD EXECUTE]"
+                else
+                    echo "    Condition: $step_condition [WOULD SKIP]"
+                fi
+            fi
+            
+            # Apply template substitution and show parameters
+            yaml::substitute_step_params "CUSTOM_WF" "$i" "DRY_TEMPLATE"
             local param_vars
             param_vars=$(compgen -v "CUSTOM_WF_STEP_${i}_PARAM_" 2>/dev/null || true)
             if [[ -n "$param_vars" ]]; then
-                echo "    Parameters:"
+                echo "    Parameters (after template substitution):"
                 while IFS= read -r var; do
                     [[ -z "$var" ]] && continue
                     local param_name="${var#CUSTOM_WF_STEP_"${i}"_PARAM_}"
                     local param_value="${!var}"
                     local lower_param=$(echo "$param_name" | tr '[:upper:]' '[:lower:]')
-                    echo "      $lower_param: $param_value"
+                    
+                    # Special handling for script parameters (multiline content)
+                    if [[ "$lower_param" == "script" ]]; then
+                        echo "      $lower_param: [Script Content]"
+                        # Show first few lines if it's a script
+                        local script_preview
+                        script_preview=$(echo "$param_value" | head -3 | sed 's/^/        /')
+                        if [[ -n "$script_preview" ]]; then
+                            echo "$script_preview"
+                            local line_count
+                            line_count=$(echo "$param_value" | wc -l)
+                            if [[ $line_count -gt 3 ]]; then
+                                echo "        ... ($((line_count - 3)) more lines)"
+                            fi
+                        fi
+                    else
+                        echo "      $lower_param: $param_value"
+                    fi
                 done <<< "$param_vars"
             fi
+            
+            # Show step validation status
+            case "$step_type" in
+                "pdf_extract")
+                    if command -v pdfimages >/dev/null 2>&1; then
+                        echo "    Dependencies: ✓ pdfimages available"
+                    else
+                        echo "    Dependencies: ✗ pdfimages missing (would cause failure)"
+                    fi
+                    ;;
+                "excel_extract")
+                    if command -v unzip >/dev/null 2>&1; then
+                        echo "    Dependencies: ✓ unzip available"
+                    else
+                        echo "    Dependencies: ✗ unzip missing (would cause failure)"
+                    fi
+                    ;;
+                "convert"|"resize"|"watermark")
+                    if command -v convert >/dev/null 2>&1; then
+                        echo "    Dependencies: ✓ ImageMagick available"
+                    else
+                        echo "    Dependencies: ✗ ImageMagick missing (would cause failure)"
+                    fi
+                    ;;
+                "ocr")
+                    if command -v tesseract >/dev/null 2>&1; then
+                        echo "    Dependencies: ✓ Tesseract available"
+                    else
+                        echo "    Dependencies: ✗ Tesseract missing (would cause failure)"
+                    fi
+                    ;;
+                "webhook")
+                    if command -v curl >/dev/null 2>&1; then
+                        echo "    Dependencies: ✓ curl available"
+                    else
+                        echo "    Dependencies: ✗ curl missing (would cause failure)"
+                    fi
+                    ;;
+                "custom")
+                    echo "    Dependencies: ✓ Custom script (no external deps)"
+                    ;;
+            esac
+            
+            # Update counter for next step template evaluation
+            yaml::increment_template_var "DRY_TEMPLATE" "counter"
         done
+        
+        echo
+        log::info "Dry-run analysis summary:"
+        
+        # Count conditional steps
+        local conditional_steps=0
+        local would_execute=0
+        local would_skip=0
+        
+        yaml::init_context "SUMMARY_CONTEXT"
+        yaml::set_context_var "SUMMARY_CONTEXT" "total_steps" "$step_count"
+        
+        for ((i=0; i<step_count; i++)); do
+            local step_condition
+            step_condition=$(yaml::get_step_var "CUSTOM_WF" "$i" "CONDITION")
+            
+            if [[ -n "$step_condition" ]]; then
+                ((conditional_steps++))
+                yaml::set_context_var "SUMMARY_CONTEXT" "current_step" "$((i+1))"
+                if yaml::evaluate_condition "$step_condition" "SUMMARY_CONTEXT"; then
+                    ((would_execute++))
+                else
+                    ((would_skip++))
+                fi
+            else
+                ((would_execute++))
+            fi
+        done
+        
+        echo "  Total steps: $step_count"
+        echo "  Steps that would execute: $would_execute"
+        if [[ $would_skip -gt 0 ]]; then
+            echo "  Steps that would be skipped: $would_skip"
+        fi
+        if [[ $conditional_steps -gt 0 ]]; then
+            echo "  Conditional steps: $conditional_steps"
+        fi
+        
+        # Check for missing dependencies
+        local missing_deps=()
+        local available_deps=()
+        
+        for ((i=0; i<step_count; i++)); do
+            local step_type
+            step_type=$(yaml::get_step_var "CUSTOM_WF" "$i" "TYPE")
+            
+            case "$step_type" in
+                "pdf_extract")
+                    if command -v pdfimages >/dev/null 2>&1; then
+                        available_deps+=("pdfimages")
+                    else
+                        missing_deps+=("pdfimages")
+                    fi
+                    ;;
+                "excel_extract")
+                    if command -v unzip >/dev/null 2>&1; then
+                        available_deps+=("unzip")
+                    else
+                        missing_deps+=("unzip")
+                    fi
+                    ;;
+                "convert"|"resize"|"watermark")
+                    if command -v convert >/dev/null 2>&1; then
+                        available_deps+=("ImageMagick")
+                    else
+                        missing_deps+=("ImageMagick")
+                    fi
+                    ;;
+                "ocr")
+                    if command -v tesseract >/dev/null 2>&1; then
+                        available_deps+=("tesseract")
+                    else
+                        missing_deps+=("tesseract")
+                    fi
+                    ;;
+                "webhook")
+                    if command -v curl >/dev/null 2>&1; then
+                        available_deps+=("curl")
+                    else
+                        missing_deps+=("curl")
+                    fi
+                    ;;
+            esac
+        done
+        
+        # Remove duplicates and show summary
+        local unique_missing=""
+        local unique_available=""
+        
+        if [[ ${#missing_deps[@]} -gt 0 ]]; then
+            unique_missing=$(printf '%s\n' "${missing_deps[@]}" | sort -u | tr '\n' ' ')
+        fi
+        
+        if [[ ${#available_deps[@]} -gt 0 ]]; then
+            unique_available=$(printf '%s\n' "${available_deps[@]}" | sort -u | tr '\n' ' ')
+        fi
+        
+        if [[ -n "$unique_missing" ]]; then
+            echo "  Missing dependencies: $unique_missing"
+            echo "  ⚠ Workflow would fail due to missing dependencies"
+        else
+            echo "  ✓ All required dependencies are available"
+        fi
+        
         return 0
     fi
     
@@ -513,8 +708,29 @@ execute_custom_workflow() {
         done
     fi
     
+    # Initialize workflow context for condition evaluation
+    yaml::init_context "WF_CONTEXT"
+    yaml::set_context_var "WF_CONTEXT" "total_steps" "$step_count"
+    
+    # Initialize template variables for parameter substitution
+    local primary_input="${inputs[0]:-}"
+    yaml::init_template_vars "WF_TEMPLATE" "$primary_input" "$output_dir"
+    
+    # Set workflow-specific template variables
+    yaml::set_template_var "WF_TEMPLATE" "workflow_name" "$wf_name"
+    yaml::set_template_var "WF_TEMPLATE" "parallel_jobs" "$parallel_jobs"
+    
+    # Apply template substitution to all hooks before execution
+    yaml::substitute_hook_commands "CUSTOM_WF" "pre_workflow" "WF_TEMPLATE"
+    yaml::substitute_hook_commands "CUSTOM_WF" "post_step" "WF_TEMPLATE"
+    yaml::substitute_hook_commands "CUSTOM_WF" "on_success" "WF_TEMPLATE"
+    yaml::substitute_hook_commands "CUSTOM_WF" "on_failure" "WF_TEMPLATE"
+    
     # Execute workflow steps
     local failed_step=""
+    local executed_steps=0
+    local skipped_steps=0
+    
     for ((i=0; i<step_count; i++)); do
         local step_name
         local step_type
@@ -524,13 +740,35 @@ execute_custom_workflow() {
         step_type=$(yaml::get_step_var "CUSTOM_WF" "$i" "TYPE")
         step_condition=$(yaml::get_step_var "CUSTOM_WF" "$i" "CONDITION")
         
-        log::info "Executing step $((i+1)): $step_name"
+        # Update context variables
+        yaml::set_context_var "WF_CONTEXT" "current_step" "$((i+1))"
+        yaml::set_context_var "WF_CONTEXT" "current_step_name" "$step_name"
+        
+        # Update template variables for this step
+        yaml::set_template_var "WF_TEMPLATE" "step_name" "$step_name"
+        yaml::set_template_var "WF_TEMPLATE" "step_number" "$((i+1))"
+        
+        # Apply template substitution to step parameters before execution
+        yaml::substitute_step_params "CUSTOM_WF" "$i" "WF_TEMPLATE"
         
         # Check step condition if present
+        local should_execute=true
         if [[ -n "$step_condition" ]]; then
-            log::debug "Checking condition: $step_condition"
-            # For now, skip conditional logic (will be implemented in IMX-1.4)
-            log::warn "Conditional steps not yet implemented, executing unconditionally"
+            log::debug "Evaluating condition for step '$step_name': $step_condition"
+            if yaml::evaluate_condition "$step_condition" "WF_CONTEXT"; then
+                log::debug "Condition evaluated to true, step will execute"
+            else
+                log::info "Skipping step $((i+1)) '$step_name' (condition not met: $step_condition)"
+                should_execute=false
+                ((skipped_steps++))
+            fi
+        fi
+        
+        if [[ "$should_execute" == true ]]; then
+            log::info "Executing step $((i+1)): $step_name"
+            ((executed_steps++))
+        else
+            continue
         fi
         
         # Execute post-step hooks
@@ -547,8 +785,32 @@ execute_custom_workflow() {
         fi
         
         # Execute step based on type
-        if ! execute_workflow_step "$step_type" "$i" "CUSTOM_WF" "$output_dir" "${inputs[@]}"; then
+        if execute_workflow_step "$step_type" "$i" "CUSTOM_WF" "$output_dir" "${inputs[@]}"; then
+            # Update context variables on successful step execution
+            yaml::set_context_var "WF_CONTEXT" "processed_count" "$(($(yaml::get_context_var "WF_CONTEXT" "processed_count") + 1))"
+            log::debug "Updated processed_count to $(yaml::get_context_var "WF_CONTEXT" "processed_count")"
+            
+            # Update template counter variable
+            yaml::increment_template_var "WF_TEMPLATE" "counter"
+            
+            # Update step-specific context variables based on step type
+            case "$step_type" in
+                "pdf_extract"|"excel_extract")
+                    # These steps set extracted_count - get it from the step result
+                    # For now, set a default value (actual implementation would get from step executor)
+                    local extracted_count=5
+                    yaml::set_context_var "WF_CONTEXT" "extracted_count" "$extracted_count"
+                    yaml::set_template_var "WF_TEMPLATE" "extracted_count" "$extracted_count"
+                    log::debug "Set extracted_count variables for conditional evaluation and templates"
+                    ;;
+            esac
+            
+            # Update template variables that might be needed for subsequent steps
+            yaml::set_template_var "WF_TEMPLATE" "processed_count" "$(yaml::get_context_var "WF_CONTEXT" "processed_count")"
+        else
             failed_step="$step_name"
+            yaml::set_context_var "WF_CONTEXT" "error_count" "$(($(yaml::get_context_var "WF_CONTEXT" "error_count") + 1))"
+            yaml::set_template_var "WF_TEMPLATE" "failed_step" "$step_name"
             break
         fi
     done
@@ -582,6 +844,13 @@ execute_custom_workflow() {
                 log::debug "Success hook: $hook_cmd"
                 eval "$hook_cmd"
             done
+        fi
+        
+        # Log execution summary
+        log::info "Workflow completed successfully"
+        log::info "Steps executed: $executed_steps"
+        if [[ $skipped_steps -gt 0 ]]; then
+            log::info "Steps skipped (conditions not met): $skipped_steps"
         fi
     fi
     

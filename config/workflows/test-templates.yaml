@@ -1,0 +1,58 @@
+# Test Template Variable Substitution Workflow
+# Tests the template variable substitution system
+
+name: test-templates
+description: "Test workflow for template variable substitution"
+version: "1.0"
+
+settings:
+  output_dir: "./output/test-templates"
+  
+steps:
+  - name: show_basic_variables
+    type: custom
+    description: "Show basic template variables"
+    params:
+      script: |
+        echo "Workflow Input: {workflow_input}"
+        echo "Output Directory: {output_dir}"
+        echo "Timestamp: {timestamp}"
+        echo "PDF Name: {pdf_name}"
+        echo "Input Name: {input_name}"
+        
+  - name: show_step_variables
+    type: custom
+    description: "Show step-specific template variables"
+    params:
+      script: |
+        echo "Step Name: {step_name}"
+        echo "Step Number: {step_number}"
+        echo "Counter: {counter}"
+        
+  - name: formatted_counter_test
+    type: custom
+    description: "Test formatted counter variables"
+    params:
+      script: |
+        echo "Formatted counter: {counter:03d}"
+        echo "Output file: output_{counter:03d}.jpg"
+      output_file: "{output_dir}/result_{counter:03d}.txt"
+      
+  - name: complex_template_test
+    type: custom
+    description: "Test complex template combinations"
+    params:
+      script: |
+        echo "Complex path: {output_dir}/{pdf_name}/page_{counter:03d}_{timestamp}.jpg"
+      output_template: "{output_dir}/{input_name}_processed_{counter:03d}.{input_ext}"
+
+hooks:
+  pre_workflow:
+    - echo "Starting template test for: {workflow_input}"
+    
+  post_step:
+    - echo "Completed step: {step_name} (step {step_number})"
+    
+  on_success:
+    - echo "Template test completed for {workflow_name}"
+    - echo "Output directory: {output_dir}"

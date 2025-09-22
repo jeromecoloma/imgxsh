@@ -1,0 +1,45 @@
+# Test Conditional Logic Workflow
+# Tests the conditional step logic implementation
+
+name: test-conditional
+description: "Test workflow for conditional step logic"
+version: "1.0"
+
+settings:
+  output_dir: "./output/test-conditional"
+  
+steps:
+  - name: always_execute
+    type: custom
+    description: "This step always executes"
+    params:
+      script: |
+        echo "Step 1: Always executing"
+        
+  - name: conditional_true
+    type: custom
+    description: "This step should execute (condition: 1 > 0)"
+    condition: "1 > 0"
+    params:
+      script: |
+        echo "Step 2: Condition 1 > 0 was true"
+        
+  - name: conditional_false
+    type: custom
+    description: "This step should skip (condition: 0 > 1)"
+    condition: "0 > 1"
+    params:
+      script: |
+        echo "Step 3: This should never print"
+        
+  - name: context_based
+    type: custom
+    description: "This step depends on processed_count"
+    condition: "processed_count >= 2"
+    params:
+      script: |
+        echo "Step 4: Processed count was >= 2"
+
+hooks:
+  on_success:
+    - echo "Test conditional workflow completed successfully"
