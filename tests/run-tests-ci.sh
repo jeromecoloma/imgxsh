@@ -12,7 +12,8 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 resolve_bats_cmd() {
     local vendored_bats="$PROJECT_ROOT/tests/bats-core/bin/bats"
 
-    if [ -x "$vendored_bats" ]; then
+    # Prefer vendored bats; accept if file exists even if not yet executable
+    if [ -f "$vendored_bats" ]; then
         echo "$vendored_bats"
         return 0
     fi
@@ -52,6 +53,12 @@ fi
 
 if [ -z "${BATS_CMD}" ]; then
     echo "❌ No Bats executable available after setup. Exiting." >&2
+    echo "Diagnostics:" >&2
+    echo "- PROJECT_ROOT=$PROJECT_ROOT" >&2
+    echo "- Expected vendored bats at: $PROJECT_ROOT/tests/bats-core/bin/bats" >&2
+    ls -la "$PROJECT_ROOT/tests" 2>/dev/null || true
+    ls -la "$PROJECT_ROOT/tests/bats-core" 2>/dev/null || true
+    ls -la "$PROJECT_ROOT/tests/bats-core/bin" 2>/dev/null || true
     exit 1
 fi
 
@@ -79,6 +86,8 @@ run_test_file() {
 	# Run each test file with timeout (if available)
 	if command -v timeout >/dev/null 2>&1; then
 		# Use timeout if available (most Linux systems)
+        # Ensure the resolved Bats is executable just before running
+        if [ -f "$BATS_CMD" ] && [ ! -x "$BATS_CMD" ]; then chmod +x "$BATS_CMD" 2>/dev/null || true; fi
         if timeout 120s "$BATS_CMD" "$PROJECT_ROOT/$test_file"; then
 			file_tests=$(grep -c "^@test" "$PROJECT_ROOT/$test_file" 2>/dev/null || echo 0)
 			echo "✅ Passed: $test_file ($file_tests tests)"
@@ -95,6 +104,7 @@ run_test_file() {
 	else
 		# Run without timeout in containers that don't support it
 		echo "⚠️  Running without timeout (not available in this environment)"
+        if [ -f "$BATS_CMD" ] && [ ! -x "$BATS_CMD" ]; then chmod +x "$BATS_CMD" 2>/dev/null || true; fi
         if "$BATS_CMD" "$PROJECT_ROOT/$test_file"; then
 			file_tests=$(grep -c "^@test" "$PROJECT_ROOT/$test_file" 2>/dev/null || echo 0)
 			echo "✅ Passed: $test_file ($file_tests tests)"
