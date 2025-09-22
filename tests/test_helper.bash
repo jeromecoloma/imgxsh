@@ -262,13 +262,37 @@ create_test_image_with_text() {
         skip "ImageMagick not available for test image creation"
     fi
     
-    # Create image with text
-    if convert -size "$size" "xc:$bg_color" -gravity center -pointsize 20 -fill "$text_color" -annotate +0+0 "$text" "$output_file"; then
+    # Create image with text - handle font availability gracefully
+    local font_arg=""
+    
+    # Try to use available fonts, fallback to system default if needed
+    if convert -list font | grep -qi helvetica 2>/dev/null; then
+        font_arg="-font Helvetica"
+    elif convert -list font | grep -qi arial 2>/dev/null; then
+        font_arg="-font Arial"
+    elif convert -list font | grep -qi liberation-sans 2>/dev/null; then
+        font_arg="-font Liberation-Sans"
+    elif convert -list font | grep -qi dejavu 2>/dev/null; then
+        font_arg="-font DejaVu-Sans"
+    else
+        # Use system default font (usually works in containers)
+        font_arg=""
+    fi
+    
+    # Create image with text using available font or system default
+    if convert -size "$size" "xc:$bg_color" -gravity center -pointsize 20 $font_arg -fill "$text_color" -annotate +0+0 "$text" "$output_file" 2>/dev/null; then
         track_test_image "$output_file"
         track_created_file "$output_file"
         return 0
     else
-        return 1
+        # Fallback: create simple image without text if font issues persist
+        if convert -size "$size" "xc:$bg_color" "$output_file" 2>/dev/null; then
+            track_test_image "$output_file"
+            track_created_file "$output_file"
+            return 0
+        else
+            return 1
+        fi
     fi
 }
 

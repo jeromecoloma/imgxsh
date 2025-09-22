@@ -59,6 +59,7 @@ curl -fsSL https://github.com/jeromecoloma/imgxsh/install.sh | bash
 ### Individual Tools
 - `imgxsh-convert` - Convert images between formats
 - `imgxsh-resize` - Resize images with aspect ratio control
+  - Pixel/percentage sizing, batch directories, smart no-upscale (`--allow-upscale` to override), `--max-file-size`
 - `imgxsh-extract-pdf` - Extract images from PDF documents
 - `imgxsh-extract-excel` - Extract images from Excel files
 - `imgxsh-watermark` - Add watermarks to images
@@ -74,6 +75,7 @@ imgxsh/
 │   ├── run-tests-ci.sh # CI-optimized test runner (Shell Starter pattern)
 │   ├── setup-ci-environment.sh # CI environment configuration
 │   ├── imgxsh-convert.bats # Comprehensive test suite (30+ tests)
+│   ├── imgxsh-resize.bats  # Resize test suite (CLI, sizing modes, batch)
 │   ├── fixtures/      # Test data (images, PDFs, Excel files)
 │   └── bats-*/        # Bats testing framework and libraries
 ├── .github/workflows/  # GitHub Actions CI/CD workflows
@@ -207,18 +209,25 @@ imgxsh has a comprehensive testing framework with local and CI integration:
 ./tests/run-tests-ci.sh                 # CI environment tests
 
 # Individual test suites
-./tests/bats-core/bin/bats tests/imgxsh-convert.bats  # Specific tool tests
+./tests/bats-core/bin/bats tests/imgxsh-convert.bats  # Convert tool tests
+./tests/bats-core/bin/bats tests/imgxsh-resize.bats   # Resize tool tests
 
 # Local CI simulation (requires Act)
 act -W .github/workflows/ci.yml --job test --pull=false
 
 # Code quality checks
-shellcheck bin/*                        # Static analysis
-shfmt -d bin/*                         # Format checking
+# Lint all scripts (configured via .shellcheckrc)
+shellcheck bin/* lib/*.sh install.sh uninstall.sh
+
+# Check formatting
+shfmt -d bin/* lib/*.sh install.sh uninstall.sh
+
+# Apply formatting fixes
+shfmt -w bin/* lib/*.sh install.sh uninstall.sh
 ```
 
 **Testing Features**:
-- ✅ **30+ comprehensive tests** for imgxsh-convert
+- ✅ **30+ comprehensive tests** for imgxsh-convert; dedicated suite for imgxsh-resize
 - ✅ **Cross-platform compatibility** (ImageMagick `magick`/`convert` detection)
 - ✅ **CI/CD integration** with GitHub Actions
 - ✅ **Local CI simulation** with Act

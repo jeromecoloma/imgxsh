@@ -11,6 +11,15 @@ The imgxsh testing framework provides comprehensive coverage for:
 - **Cross-platform testing** - macOS and Linux compatibility
 - **CI/CD integration** - Automated testing with GitHub Actions
 
+### New: imgxsh-resize Test Coverage
+- CLI interface: help/version, required arguments
+- Single-file resizing: width/height, dry-run, verbose
+- Smart resizing: no-upscale default, `--allow-upscale` override
+- Percentage sizing: single and dual percentage specs (`50%`, `120%x80%`)
+- Constraints: `--max-file-size` validation (platform-flexible assertion)
+- Batch mode: directory processing, nested output structure preservation
+- Error paths: invalid size spec, missing inputs
+
 ## 📁 Testing Structure
 
 ```
@@ -21,6 +30,7 @@ tests/
 ├── run-tests-ci.sh            # CI-optimized test runner (Shell Starter pattern)
 ├── setup-ci-environment.sh    # CI environment configuration script
 ├── imgxsh-convert.bats        # Comprehensive tests for imgxsh-convert (30+ tests)
+├── imgxsh-resize.bats         # Tests for imgxsh-resize (CLI, sizing modes, batch)
 ├── fixtures/                  # Test data and sample files
 │   ├── images/               # Sample images for testing (PNG, JPG)
 │   ├── pdfs/                 # Sample PDF files for extraction tests
@@ -36,6 +46,7 @@ tests/
 - **`run-tests-ci.sh`**: CI-specific runner following Shell Starter patterns
 - **`setup-ci-environment.sh`**: Environment setup for consistent CI testing
 - **`imgxsh-convert.bats`**: Complete test suite with 30 tests covering all functionality
+- **`imgxsh-resize.bats`**: Test suite covering resize operations and options
 
 ## 🔧 Test Runners
 
@@ -49,6 +60,7 @@ The main test runner using the Bats framework:
 
 # Run specific test file
 ./tests/run-tests.sh tests/imgxsh-convert.bats
+./tests/run-tests.sh tests/imgxsh-resize.bats
 
 # Run with verbose output
 ./tests/run-tests.sh --verbose
@@ -179,6 +191,18 @@ Test CLI interface and argument parsing:
 
 #### 2. Functionality Tests
 Test core functionality with real operations:
+#### imgxsh-resize Examples
+```bash
+# Single-file width resize with no-upscale default
+run "$PROJECT_ROOT/bin/imgxsh-resize" --width 200 in.png out.png
+assert_success
+run get_image_dimensions "out.png"
+assert_output "<original-or-200>x<original-or-200>"
+
+# Allow upscaling explicitly
+run "$PROJECT_ROOT/bin/imgxsh-resize" --allow-upscale --width 200 in.png out.png
+assert_success
+```
 
 ```bash
 @test "converts PNG to JPG successfully" {
@@ -579,6 +603,25 @@ act -W .github/workflows/ci.yml --job test -v
 - Container environment differs from local (Ubuntu vs macOS)
 - ImageMagick version differences require command detection
 - Test execution time indicates whether tests are actually running
+
+#### Act Compatibility Testing
+
+The compatibility workflow was restructured to work properly with act:
+
+```bash
+# Run Ubuntu compatibility tests
+act -j compatibility-ubuntu
+
+# Use the convenient script
+./scripts/run-act-compatibility.sh ubuntu
+./scripts/run-act-compatibility.sh both
+```
+
+**Compatibility Workflow Fixes**:
+- **Matrix Strategy Issue**: Original `runs-on: ${{ matrix.os }}` caused Docker image reference errors
+- **Solution**: Split into separate jobs (`compatibility-ubuntu`, `compatibility-macos`)
+- **GPG Signature Handling**: Added robust apt installation with `--allow-unauthenticated` fallback
+- **Platform Limitations**: act cannot simulate macOS; use GitHub Actions for full macOS testing
 
 #### GitHub Actions Workflow Structure
 

@@ -1,0 +1,919 @@
+#!/bin/bash
+
+# imgxsh-resize - Resize images with aspect ratio preservation and quality control
+# Part of imgxsh - comprehensive CLI image processing tool
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SHELL_STARTER_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+source "${SHELL_STARTER_ROOT}/lib/main.sh"
+
+# Default values
+DEFAULT_QUALITY=85
+DEFAULT_FORMAT="auto"
+
+show_help() {
+	cat <<EOF
+Usage: $(basename "$0") [OPTIONS] INPUT OUTPUT
+
+Resize images with aspect ratio preservation and quality control.
+
+ARGUMENTS:
+    INPUT               Input image file or directory
+    OUTPUT              Output image file or directory
+
+OPTIONS:
+    -h, --help          Show this help message and exit
+    -v, --version       Show version information and exit
+    -w, --width WIDTH   Target width in pixels (maintains aspect ratio)
+    --height HEIGHT    Target height in pixels (maintains aspect ratio)
+    -s, --size SIZE     Target size: WIDTHxHEIGHT | WIDTHx | xHEIGHT | PERCENT% | WIDTH%xHEIGHT%
+    --max-width WIDTH   Maximum width constraint
+    --max-height HEIGHT Maximum height constraint
+    --min-width WIDTH   Minimum width constraint  
+    --min-height HEIGHT Minimum height constraint
+    -q, --quality QUAL  Quality setting (1-100, default: $DEFAULT_QUALITY)
+    -f, --format FORMAT Output format (png, jpg, webp, tiff, bmp, auto)
+    --aspect-ratio RATIO Force specific aspect ratio (e.g., 16:9, 4:3)
+    --crop              Crop to exact dimensions (disables aspect ratio preservation)
+    --fit               Fit within dimensions (maintains aspect ratio, default)
+    --fill              Fill dimensions (crop to fit, maintains aspect ratio)
+    --stretch           Stretch to exact dimensions (ignores aspect ratio)
+    --max-file-size SZ  Max output size (bytes, or with K/M/G suffix)
+    --allow-upscale     Permit enlarging images (default: no upscaling)
+    --backup            Create backup of original file
+    --overwrite         Overwrite existing output files
+    --dry-run           Preview operations without executing
+    --verbose           Enable detailed logging
+    --quiet             Suppress non-essential output
+
+EXAMPLES:
+    # Resize to specific width (maintains aspect ratio)
+    $(basename "$0") --width 800 input.jpg output.jpg
+
+    # Resize to specific height (maintains aspect ratio)  
+    $(basename "$0") --height 600 input.png output.png
+
+    # Resize to specific dimensions
+    $(basename "$0") --size 800x600 input.jpg output.jpg
+
+    # Resize with percentage (uniform)
+    $(basename "$0") --size 50% input.jpg output.jpg
+
+    # Resize with dual percentage
+    $(basename "$0") --size 120%x80% input.jpg output.jpg
+
+    # Resize with constraints (max width/height)
+    $(basename "$0") --max-width 1200 --max-height 800 input.jpg output.jpg
+
+    # Force aspect ratio
+    $(basename "$0") --aspect-ratio 16:9 --width 1920 input.jpg output.jpg
+
+    # Crop to exact dimensions
+    $(basename "$0") --crop --size 800x600 input.jpg output.jpg
+
+    # Batch resize directory (preserves relative structure)
+    $(basename "$0") --width 800 ./images/ ./resized/
+
+    # Convert format while resizing
+    $(basename "$0") --width 800 --format webp input.jpg output.webp
+
+    # Dry run to preview operations
+    $(basename "$0") --dry-run --width 800 input.jpg output.jpg
+
+    # Prevent or allow upscaling
+    $(basename "$0") --width 200 input_small.jpg output.png
+    $(basename "$0") --allow-upscale --width 200 input_small.jpg output.png
+
+    # Enforce max output size
+    $(basename "$0") --width 1200 --max-file-size 500K input.jpg output.jpg
+
+SUPPORTED FORMATS:
+    Input:  PNG, JPG, JPEG, WebP, TIFF, BMP, GIF
+    Output: PNG, JPG, JPEG, WebP, TIFF, BMP
+
+QUALITY SETTINGS:
+    PNG:    Lossless (quality ignored)
+    JPG:    1-100 (default: $DEFAULT_QUALITY)
+    WebP:   1-100 (default: 90)
+    TIFF:   Lossless (quality ignored)
+    BMP:    Lossless (quality ignored)
+
+NOTES:
+    - Aspect ratio is preserved by default unless --crop or --stretch is used
+    - Use --fit to ensure image fits within specified dimensions
+    - Use --fill to fill dimensions completely (may crop)
+    - Use --stretch to ignore aspect ratio completely
+    - Quality settings only apply to lossy formats (JPG, WebP)
+    - Backup files are created with .bak extension and timestamp
+EOF
+}
+
+# Validate input file
+validate_input_file() {
+	local file="$1"
+
+	if [[ ! -f "$file" ]]; then
+		log::error "Input file does not exist: $file"
+		return 1
+	fi
+
+	if [[ ! -r "$file" ]]; then
+		log::error "Cannot read input file: $file"
+		return 1
+	fi
+
+	return 0
+}
+
+# Validate output path
+validate_output_path() {
+	local output="$1"
+	local input_is_dir="$2"
+
+	if [[ "$input_is_dir" == "true" ]]; then
+		# For directory input, output should be a directory
+		if [[ -f "$output" ]]; then
+			log::error "Output must be a directory when input is a directory: $output"
+			return 1
+		fi
+
+		# Create output directory if it doesn't exist
+		if [[ ! -d "$output" ]]; then
+			if [[ "$DRY_RUN" != "true" ]]; then
+				mkdir -p "$output" || {
+					log::error "Cannot create output directory: $output"
+					return 1
+				}
+				log::info "Created output directory: $output"
+			else
+				log::info "Would create output directory: $output"
+			fi
+		fi
+	else
+		# For file input, ensure output directory exists
+		local output_dir
+		output_dir="$(dirname "$output")"
+
+		if [[ ! -d "$output_dir" ]]; then
+			if [[ "$DRY_RUN" != "true" ]]; then
+				mkdir -p "$output_dir" || {
+					log::error "Cannot create output directory: $output_dir"
+					return 1
+				}
+				log::info "Created output directory: $output_dir"
+			else
+				log::info "Would create output directory: $output_dir"
+			fi
+		fi
+	fi
+
+	return 0
+}
+
+# Check ImageMagick dependency
+check_imagemagick() {
+	if ! command -v convert >/dev/null 2>&1 && ! command -v magick >/dev/null 2>&1; then
+		log::error "ImageMagick is required but not installed"
+		log::info "Install ImageMagick:"
+		log::info "  macOS: brew install imagemagick"
+		log::info "  Ubuntu: sudo apt-get install imagemagick"
+		log::info "  CentOS: sudo yum install ImageMagick"
+		return 1
+	fi
+	return 0
+}
+
+# Get ImageMagick command
+get_imagemagick_cmd() {
+	if command -v magick >/dev/null 2>&1; then
+		echo "magick"
+	else
+		echo "convert"
+	fi
+}
+
+# Get image dimensions
+get_image_dimensions() {
+	local input_file="$1"
+	local magick_cmd
+	magick_cmd="$(get_imagemagick_cmd)"
+
+	if [[ "$magick_cmd" == "magick" ]]; then
+		magick identify -format "%wx%h" "$input_file" 2>/dev/null || {
+			log::error "Cannot read image dimensions: $input_file"
+			return 1
+		}
+	else
+		identify -format "%wx%h" "$input_file" 2>/dev/null || {
+			log::error "Cannot read image dimensions: $input_file"
+			return 1
+		}
+	fi
+}
+
+# Convert human-readable size (e.g., 200K, 5M, 1G) to bytes
+_parse_size_to_bytes() {
+	local value="$1"
+	if [[ -z "$value" ]]; then
+		echo "" && return 1
+	fi
+	local number unit
+	if [[ "$value" =~ ^([0-9]+)([KkMmGg]?)$ ]]; then
+		number="${BASH_REMATCH[1]}"
+		unit="${BASH_REMATCH[2]}"
+		case "$unit" in
+		K | k) echo $((number * 1024)) ;;
+		M | m) echo $((number * 1024 * 1024)) ;;
+		G | g) echo $((number * 1024 * 1024 * 1024)) ;;
+		*) echo "$number" ;;
+		esac
+		return 0
+	else
+		return 1
+	fi
+}
+
+# Parse size specification
+parse_size() {
+	local size="$1"
+	local width=""
+	local height=""
+
+	if [[ "$size" =~ ^([0-9]+)%x([0-9]+)%$ ]]; then
+		width="${BASH_REMATCH[1]}%"
+		height="${BASH_REMATCH[2]}%"
+	elif [[ "$size" =~ ^([0-9]+)x([0-9]+)$ ]]; then
+		width="${BASH_REMATCH[1]}"
+		height="${BASH_REMATCH[2]}"
+	elif [[ "$size" =~ ^([0-9]+)x$ ]]; then
+		width="${BASH_REMATCH[1]}"
+	elif [[ "$size" =~ ^x([0-9]+)$ ]]; then
+		height="${BASH_REMATCH[1]}"
+	elif [[ "$size" =~ ^([0-9]+)%$ ]]; then
+		local percentage="${BASH_REMATCH[1]}"
+		width="${percentage}%"
+		height="${percentage}%"
+	else
+		log::error "Invalid size specification: $size"
+		log::info "Use format: WIDTHxHEIGHT, WIDTHx, xHEIGHT, PERCENTAGE%, or WIDTH%xHEIGHT%"
+		return 1
+	fi
+
+	echo "$width:$height"
+}
+
+# Parse aspect ratio
+parse_aspect_ratio() {
+	local ratio="$1"
+
+	if [[ "$ratio" =~ ^([0-9]+):([0-9]+)$ ]]; then
+		local w="${BASH_REMATCH[1]}"
+		local h="${BASH_REMATCH[2]}"
+		echo "$w:$h"
+	else
+		log::error "Invalid aspect ratio: $ratio"
+		log::info "Use format: WIDTH:HEIGHT (e.g., 16:9, 4:3)"
+		return 1
+	fi
+}
+
+# Determine output format
+determine_output_format() {
+	local input_file="$1"
+	local output_file="$2"
+	local specified_format="$3"
+
+	if [[ "$specified_format" != "auto" ]]; then
+		echo "$specified_format"
+		return 0
+	fi
+
+	# Extract extension from output file
+	local ext
+	ext="${output_file##*.}"
+	ext="$(echo "$ext" | tr '[:upper:]' '[:lower:]')" # Convert to lowercase
+
+	case "$ext" in
+	png | jpg | jpeg | webp | tiff | tif | bmp)
+		echo "$ext"
+		;;
+	*)
+		# Default to original format
+		local input_ext
+		input_ext="${input_file##*.}"
+		input_ext="$(echo "$input_ext" | tr '[:upper:]' '[:lower:]')"
+		echo "$input_ext"
+		;;
+	esac
+}
+
+# Build ImageMagick resize command
+build_resize_command() {
+	local input_file="$1"
+	local output_file="$2"
+	local width="$3"
+	local height="$4"
+	local max_width="$5"
+	local max_height="$6"
+	local min_width="$7"
+	local min_height="$8"
+	local aspect_ratio="$9"
+	local resize_mode="${10}"
+	local quality="${11}"
+	local format="${12}"
+
+	local magick_cmd
+	magick_cmd="$(get_imagemagick_cmd)"
+
+	# Build resize specification
+	local resize_spec=""
+	local is_percent_width=false
+	local is_percent_height=false
+	if [[ -n "$width" && "$width" == *% ]]; then
+		is_percent_width=true
+	fi
+	if [[ -n "$height" && "$height" == *% ]]; then
+		is_percent_height=true
+	fi
+
+	if [[ "$is_percent_width" == true || "$is_percent_height" == true ]]; then
+		# Percentage-based resizing ignores aspect modifiers like >, ^, !
+		if [[ "$is_percent_width" == true && "$is_percent_height" == true ]]; then
+			if [[ "$width" == "$height" ]]; then
+				# Single percentage shorthand when equal
+				resize_spec="$width"
+			else
+				resize_spec="${width}x${height}"
+			fi
+		elif [[ "$is_percent_width" == true ]]; then
+			resize_spec="$width"
+		else
+			resize_spec="x$height"
+		fi
+	elif [[ -n "$aspect_ratio" ]]; then
+		# Force aspect ratio
+		resize_spec="${width}x${height}^"
+	elif [[ "$resize_mode" == "crop" ]]; then
+		# Crop to exact dimensions
+		resize_spec="${width}x${height}^"
+	elif [[ "$resize_mode" == "fill" ]]; then
+		# Fill dimensions (crop to fit)
+		resize_spec="${width}x${height}^"
+	elif [[ "$resize_mode" == "stretch" ]]; then
+		# Stretch to exact dimensions
+		resize_spec="${width}x${height}!"
+	else
+		# Fit within dimensions (default)
+		if [[ -n "$width" && -n "$height" ]]; then
+			resize_spec="${width}x${height}"
+		elif [[ -n "$width" ]]; then
+			resize_spec="${width}x"
+		elif [[ -n "$height" ]]; then
+			resize_spec="x${height}"
+		fi
+	fi
+
+	# Add size constraints
+	if [[ -n "$max_width" || -n "$max_height" ]]; then
+		local constraint=""
+		if [[ -n "$max_width" && -n "$max_height" ]]; then
+			constraint="${max_width}x${max_height}>"
+		elif [[ -n "$max_width" ]]; then
+			constraint="${max_width}>"
+		elif [[ -n "$max_height" ]]; then
+			constraint="x${max_height}>"
+		fi
+
+		if [[ -n "$resize_spec" ]]; then
+			resize_spec="${resize_spec} ${constraint}"
+		else
+			resize_spec="$constraint"
+		fi
+	fi
+
+	if [[ -n "$min_width" || -n "$min_height" ]]; then
+		local min_constraint=""
+		if [[ -n "$min_width" && -n "$min_height" ]]; then
+			min_constraint="${min_width}x${min_height}<"
+		elif [[ -n "$min_width" ]]; then
+			min_constraint="${min_width}<"
+		elif [[ -n "$min_height" ]]; then
+			min_constraint="x${min_height}<"
+		fi
+
+		if [[ -n "$resize_spec" ]]; then
+			resize_spec="${resize_spec} ${min_constraint}"
+		else
+			resize_spec="$min_constraint"
+		fi
+	fi
+
+	# Build command array
+	local cmd_parts=()
+
+	if [[ "$magick_cmd" == "magick" ]]; then
+		cmd_parts+=("magick")
+	else
+		cmd_parts+=("convert")
+	fi
+
+	cmd_parts+=("$input_file")
+
+	if [[ -n "$resize_spec" ]]; then
+		# Enforce smart no-upscale for fit mode when not using percentages
+		if [[ "$is_percent_width" != true && "$is_percent_height" != true && "$resize_mode" == "fit" && "${ALLOW_UPSCALE:-false}" != true ]]; then
+			resize_spec+=">"
+		fi
+		cmd_parts+=("-resize" "\"$resize_spec\"")
+	fi
+
+	# Add crop operations for crop/fill modes
+	if [[ "$resize_mode" == "crop" || "$resize_mode" == "fill" ]]; then
+		cmd_parts+=("-gravity" "center" "-crop" "${width}x${height}+0+0")
+	fi
+
+	# Add quality setting for lossy formats
+	if [[ "$format" == "jpg" || "$format" == "jpeg" || "$format" == "webp" ]]; then
+		cmd_parts+=("-quality" "$quality")
+	fi
+
+	# Add format specification if different from input
+	local input_format
+	input_format="$(echo "${input_file##*.}" | tr '[:upper:]' '[:lower:]')"
+
+	# We rely on the output file extension for format; avoid adding a separate
+	# "$format:" token which can cause ImageMagick to read from stdin and hang.
+
+	cmd_parts+=("$output_file")
+
+	# Join command parts with spaces
+	printf '%s ' "${cmd_parts[@]}"
+}
+
+# Resize single image
+resize_image() {
+	local input_file="$1"
+	local output_file="$2"
+	local width="$3"
+	local height="$4"
+	local max_width="$5"
+	local max_height="$6"
+	local min_width="$7"
+	local min_height="$8"
+	local aspect_ratio="$9"
+	local resize_mode="${10}"
+	local quality="${11}"
+	local format="${12}"
+	local backup="${13}"
+
+	# Validate input
+	if ! validate_input_file "$input_file"; then
+		return 1
+	fi
+
+	# Determine output format
+	local output_format
+	output_format="$(determine_output_format "$input_file" "$output_file" "$format")"
+
+	# Get original dimensions
+	local original_dims
+	original_dims="$(get_image_dimensions "$input_file")"
+
+	if [[ "$VERBOSE" == "true" ]]; then
+		log::info "Original dimensions: $original_dims"
+		log::info "Target dimensions: ${width:-auto}x${height:-auto}"
+		log::info "Output format: $output_format"
+	fi
+
+	# Create backup if requested
+	if [[ "$backup" == "true" && -f "$input_file" ]]; then
+		local backup_file="${input_file}.bak.$(date +%Y%m%d_%H%M%S)"
+		if [[ "$DRY_RUN" == "true" ]]; then
+			log::info "Would create backup: $backup_file"
+		else
+			cp "$input_file" "$backup_file" || {
+				log::error "Failed to create backup: $backup_file"
+				return 1
+			}
+			log::info "Created backup: $backup_file"
+		fi
+	fi
+
+	# Build resize command
+	local resize_cmd
+	resize_cmd="$(build_resize_command "$input_file" "$output_file" "$width" "$height" "$max_width" "$max_height" "$min_width" "$min_height" "$aspect_ratio" "$resize_mode" "$quality" "$output_format")"
+
+	if [[ "$VERBOSE" == "true" ]]; then
+		log::info "Resize command: $resize_cmd"
+	fi
+
+	if [[ "$DRY_RUN" == "true" ]]; then
+		log::info "Would resize: $input_file -> $output_file"
+		return 0
+	fi
+
+	# Execute resize command
+	if eval "$resize_cmd"; then
+		# Enforce max file size if requested
+		if [[ -n "${MAX_FILE_SIZE_LIMIT:-}" ]]; then
+			if [[ "$DRY_RUN" == "true" ]]; then
+				log::warn "Max file size limit specified: $MAX_FILE_SIZE_LIMIT (dry-run only, not enforced)"
+			else
+				local limit_bytes
+				limit_bytes="$(_parse_size_to_bytes "$MAX_FILE_SIZE_LIMIT")" || {
+					log::error "Invalid --max-file-size value: $MAX_FILE_SIZE_LIMIT"
+					return 1
+				}
+				local actual_bytes
+				actual_bytes="$(wc -c <"$output_file" | tr -d ' ')"
+				if [[ "$actual_bytes" -gt "$limit_bytes" ]]; then
+					log::error "Output exceeds max size: ${actual_bytes} > ${limit_bytes} bytes"
+					return 1
+				fi
+			fi
+		fi
+		# Get new dimensions
+		local new_dims
+		new_dims="$(get_image_dimensions "$output_file")"
+
+		if [[ "$VERBOSE" == "true" ]]; then
+			log::info "New dimensions: $new_dims"
+		fi
+
+		log::success "Resized: $input_file -> $output_file ($original_dims -> $new_dims)"
+		return 0
+	else
+		log::error "Failed to resize image: $input_file"
+		return 1
+	fi
+}
+
+# Process directory
+process_directory() {
+	local input_dir="$1"
+	local output_dir="$2"
+	local width="$3"
+	local height="$4"
+	local max_width="$5"
+	local max_height="$6"
+	local min_width="$7"
+	local min_height="$8"
+	local aspect_ratio="$9"
+	local resize_mode="${10}"
+	local quality="${11}"
+	local format="${12}"
+	local backup="${13}"
+	local overwrite="${14}"
+
+	local processed=0
+	local failed=0
+
+	# Find image files
+	local image_files=()
+	while IFS= read -r -d '' file; do
+		image_files+=("$file")
+	done < <(find "$input_dir" -type f \( -iname "*.png" -o -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.webp" -o -iname "*.tiff" -o -iname "*.tif" -o -iname "*.bmp" -o -iname "*.gif" \) -print0)
+
+	if [[ ${#image_files[@]} -eq 0 ]]; then
+		log::warn "No image files found in directory: $input_dir"
+		return 0
+	fi
+
+	log::info "Found ${#image_files[@]} image files to process"
+
+	for input_file in "${image_files[@]}"; do
+		# Determine output file path
+		local relative_path
+		relative_path="${input_file#"$input_dir"}"
+		relative_path="${relative_path#/}" # Remove leading slash
+
+		local output_file="$output_dir/$relative_path"
+
+		# Change extension if format is specified
+		if [[ "$format" != "auto" ]]; then
+			local base_name
+			base_name="${output_file%.*}"
+			output_file="${base_name}.${format}"
+		fi
+
+		# Ensure parent directory exists for nested outputs
+		local parent_dir
+		parent_dir="$(dirname "$output_file")"
+		if [[ ! -d "$parent_dir" ]]; then
+			if [[ "${DRY_RUN:-false}" == "true" ]]; then
+				log::info "Would create output subdirectory: $parent_dir"
+			else
+				mkdir -p "$parent_dir" || {
+					log::error "Cannot create output subdirectory: $parent_dir"
+					((failed++))
+					continue
+				}
+			fi
+		fi
+
+		# Check if output file exists
+		if [[ -f "$output_file" && "$overwrite" != "true" ]]; then
+			log::warn "Output file exists, skipping: $output_file"
+			continue
+		fi
+
+		# Process the file
+		# Progress indicator
+		if [[ "${QUIET:-false}" != "true" ]]; then
+			local idx_msg
+			idx_msg="[$((processed + failed + 1))/${#image_files[@]}] Processing: $relative_path"
+			log::info "$idx_msg"
+		fi
+		local spinner_active=false
+		if [[ "${DRY_RUN:-false}" != "true" && "${QUIET:-false}" != "true" ]]; then
+			spinner::start "Resizing $relative_path"
+			spinner_active=true
+		fi
+		if resize_image "$input_file" "$output_file" "$width" "$height" "$max_width" "$max_height" "$min_width" "$min_height" "$aspect_ratio" "$resize_mode" "$quality" "$format" "$backup"; then
+			((processed++))
+		else
+			((failed++))
+		fi
+		if [[ "$spinner_active" == true ]]; then
+			spinner::stop || true
+		fi
+	done
+
+	log::info "Processed: $processed files, Failed: $failed files"
+
+	if [[ $failed -gt 0 ]]; then
+		return 1
+	fi
+
+	return 0
+}
+
+main() {
+	# Default values
+	local width=""
+	local height=""
+	local max_width=""
+	local max_height=""
+	local min_width=""
+	local min_height=""
+	local aspect_ratio=""
+	local resize_mode="fit"
+	local quality="$DEFAULT_QUALITY"
+	local format="$DEFAULT_FORMAT"
+	local max_file_size=""
+	local allow_upscale=false
+	local backup=false
+	local overwrite=false
+	local dry_run=false
+	local verbose=false
+	local quiet=false
+	local input_file=""
+	local output_file=""
+
+	# Parse command line arguments
+	while [[ $# -gt 0 ]]; do
+		case $1 in
+		-h | --help)
+			show_help
+			exit 0
+			;;
+		-v | --version)
+			echo "$(basename "$0") $(get_version)"
+			exit 0
+			;;
+		-w | --width)
+			width="$2"
+			shift 2
+			;;
+		--height)
+			height="$2"
+			shift 2
+			;;
+		-s | --size)
+			local size_info
+			if size_info="$(parse_size "$2")"; then
+				IFS=':' read -r width height <<<"$size_info"
+			else
+				exit 1
+			fi
+			shift 2
+			;;
+		--max-width)
+			max_width="$2"
+			shift 2
+			;;
+		--max-height)
+			max_height="$2"
+			shift 2
+			;;
+		--min-width)
+			min_width="$2"
+			shift 2
+			;;
+		--min-height)
+			min_height="$2"
+			shift 2
+			;;
+		--max-file-size)
+			max_file_size="$2"
+			shift 2
+			;;
+		--allow-upscale)
+			allow_upscale=true
+			shift
+			;;
+		--aspect-ratio)
+			if ! aspect_ratio="$(parse_aspect_ratio "$2")"; then
+				exit 1
+			fi
+			shift 2
+			;;
+		--crop)
+			resize_mode="crop"
+			shift
+			;;
+		--fit)
+			resize_mode="fit"
+			shift
+			;;
+		--fill)
+			resize_mode="fill"
+			shift
+			;;
+		--stretch)
+			resize_mode="stretch"
+			shift
+			;;
+		-q | --quality)
+			quality="$2"
+			if [[ ! "$quality" =~ ^[0-9]+$ ]] || [[ "$quality" -lt 1 ]] || [[ "$quality" -gt 100 ]]; then
+				log::error "Quality must be a number between 1 and 100: $quality"
+				exit 1
+			fi
+			shift 2
+			;;
+		-f | --format)
+			format="$2"
+			case "$format" in
+			png | jpg | jpeg | webp | tiff | tif | bmp | auto) ;;
+			*)
+				log::error "Unsupported format: $format"
+				log::info "Supported formats: png, jpg, jpeg, webp, tiff, tif, bmp, auto"
+				exit 1
+				;;
+			esac
+			shift 2
+			;;
+		--backup)
+			backup=true
+			shift
+			;;
+		--overwrite)
+			overwrite=true
+			shift
+			;;
+		--dry-run)
+			dry_run=true
+			shift
+			;;
+		--verbose)
+			verbose=true
+			shift
+			;;
+		--quiet)
+			quiet=true
+			shift
+			;;
+		-*)
+			log::error "Unknown option: $1"
+			show_help
+			exit 1
+			;;
+		*)
+			# Positional arguments
+			if [[ -z "$input_file" ]]; then
+				input_file="$1"
+			elif [[ -z "$output_file" ]]; then
+				output_file="$1"
+			else
+				log::error "Too many arguments"
+				show_help
+				exit 1
+			fi
+			shift
+			;;
+		esac
+	done
+
+	# Set global variables for use in functions
+	export DRY_RUN="$dry_run"
+	export VERBOSE="$verbose"
+	export QUIET="$quiet"
+	export MAX_FILE_SIZE_LIMIT="$max_file_size"
+	export ALLOW_UPSCALE="$allow_upscale"
+
+	# Validate required arguments
+	if [[ -z "$input_file" ]]; then
+		log::error "Input file or directory is required"
+		show_help
+		exit 1
+	fi
+
+	if [[ -z "$output_file" ]]; then
+		log::error "Output file or directory is required"
+		show_help
+		exit 1
+	fi
+
+	# Validate size parameters
+	if [[ -z "$width" && -z "$height" && -z "$max_width" && -z "$max_height" && -z "$min_width" && -z "$min_height" ]]; then
+		log::error "At least one size parameter is required"
+		log::info "Use --width, --height, --size, --max-width, --max-height, --min-width, or --min-height"
+		show_help
+		exit 1
+	fi
+
+	# Check dependencies
+	if ! check_imagemagick; then
+		exit 1
+	fi
+
+	# Determine if input is directory
+	local input_is_dir=false
+	if [[ -d "$input_file" ]]; then
+		input_is_dir=true
+	elif [[ -f "$input_file" ]]; then
+		input_is_dir=false
+	else
+		log::error "Input path does not exist: $input_file"
+		exit 1
+	fi
+
+	# Validate output path
+	if ! validate_output_path "$output_file" "$input_is_dir"; then
+		exit 1
+	fi
+
+	# Show operation summary
+	if [[ "$quiet" != "true" ]]; then
+		log::info "Starting image resize operation..."
+		if [[ "$input_is_dir" == "true" ]]; then
+			log::info "Input directory: $input_file"
+			log::info "Output directory: $output_file"
+		else
+			log::info "Input file: $input_file"
+			log::info "Output file: $output_file"
+		fi
+
+		if [[ -n "$width" || -n "$height" ]]; then
+			log::info "Target size: ${width:-auto}x${height:-auto}"
+		fi
+
+		if [[ -n "$max_width" || -n "$max_height" ]]; then
+			log::info "Max size: ${max_width:-auto}x${max_height:-auto}"
+		fi
+
+		if [[ -n "$min_width" || -n "$min_height" ]]; then
+			log::info "Min size: ${min_width:-auto}x${min_height:-auto}"
+		fi
+
+		if [[ -n "$aspect_ratio" ]]; then
+			log::info "Aspect ratio: $aspect_ratio"
+		fi
+
+		log::info "Resize mode: $resize_mode"
+		log::info "Quality: $quality"
+		log::info "Format: $format"
+
+		if [[ "$backup" == "true" ]]; then
+			log::info "Backup: enabled"
+		fi
+
+		if [[ "$dry_run" == "true" ]]; then
+			log::info "Mode: dry-run (preview only)"
+		fi
+	fi
+
+	# Process files
+	if [[ "$input_is_dir" == "true" ]]; then
+		if ! process_directory "$input_file" "$output_file" "$width" "$height" "$max_width" "$max_height" "$min_width" "$min_height" "$aspect_ratio" "$resize_mode" "$quality" "$format" "$backup" "$overwrite"; then
+			exit 1
+		fi
+	else
+		if ! resize_image "$input_file" "$output_file" "$width" "$height" "$max_width" "$max_height" "$min_width" "$min_height" "$aspect_ratio" "$resize_mode" "$quality" "$format" "$backup"; then
+			exit 1
+		fi
+	fi
+
+	if [[ "$quiet" != "true" ]]; then
+		log::success "Resize operation completed successfully"
+	fi
+}
+
+# Only run main if script is executed directly
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+	main "$@"
+fi
