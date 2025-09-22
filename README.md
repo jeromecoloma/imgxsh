@@ -259,17 +259,14 @@ MIT License - see LICENSE file for details.
 
 ## 📚 Resources
 
-- **[Product Requirements Document](/.ai-workflow/state/requirements.md)** - Detailed project specifications
 - **[Shell Starter Framework](https://github.com/jeromecoloma/shell-starter)** - The underlying framework
-- **[Shell Starter Documentation](shell-starter-docs/)** - Development patterns and conventions (temporary)
 
 ## 🤝 Support
 
 imgxsh is in active development. For questions or contributions:
 
-1. Check the [PRD](/.ai-workflow/state/requirements.md) for project details
-2. Review Shell Starter examples in `./demo/` for development patterns
-3. Follow Shell Starter conventions for consistency
+1. Review Shell Starter examples in `./demo/` for development patterns
+2. Follow Shell Starter conventions for consistency
 
 ---
 

@@ -8,15 +8,40 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-# Check if Bats is available, auto-setup if missing
-if [ ! -f "$PROJECT_ROOT/tests/bats-core/bin/bats" ]; then
-	echo "⚠️  Bats-core not found. Attempting automatic setup..."
-	if "$PROJECT_ROOT/tests/run-tests.sh" --setup; then
-		echo "✅ Bats-core setup completed successfully"
-	else
-		echo "❌ Bats setup failed. Skipping tests." >&2
-		exit 0
-	fi
+# Resolve Bats command (prefer vendored, fallback to system)
+resolve_bats_cmd() {
+    local vendored_bats="$PROJECT_ROOT/tests/bats-core/bin/bats"
+
+    if [ -x "$vendored_bats" ]; then
+        echo "$vendored_bats"
+        return 0
+    fi
+
+    if command -v bats >/dev/null 2>&1; then
+        command -v bats
+        return 0
+    fi
+
+    echo "" # not found
+    return 1
+}
+
+# Ensure Bats is available (vendored or system-installed)
+BATS_CMD="$(resolve_bats_cmd || true)"
+if [ -z "${BATS_CMD}" ]; then
+    echo "⚠️  Bats not found. Attempting automatic setup (vendored bats-core)..."
+    if "$PROJECT_ROOT/tests/run-tests.sh" --setup; then
+        echo "✅ Bats-core setup completed successfully"
+    else
+        echo "❌ Bats setup failed. Skipping tests." >&2
+        exit 0
+    fi
+    BATS_CMD="$(resolve_bats_cmd || true)"
+fi
+
+if [ -z "${BATS_CMD}" ]; then
+    echo "❌ No Bats executable available after setup. Exiting." >&2
+    exit 1
 fi
 
 # Set up comprehensive CI environment
@@ -43,7 +68,7 @@ run_test_file() {
 	# Run each test file with timeout (if available)
 	if command -v timeout >/dev/null 2>&1; then
 		# Use timeout if available (most Linux systems)
-		if timeout 120s "$PROJECT_ROOT/tests/bats-core/bin/bats" "$PROJECT_ROOT/$test_file"; then
+        if timeout 120s "$BATS_CMD" "$PROJECT_ROOT/$test_file"; then
 			file_tests=$(grep -c "^@test" "$PROJECT_ROOT/$test_file" 2>/dev/null || echo 0)
 			echo "✅ Passed: $test_file ($file_tests tests)"
 			TOTAL_TESTS=$((TOTAL_TESTS + file_tests))
@@ -59,7 +84,7 @@ run_test_file() {
 	else
 		# Run without timeout in containers that don't support it
 		echo "⚠️  Running without timeout (not available in this environment)"
-		if "$PROJECT_ROOT/tests/bats-core/bin/bats" "$PROJECT_ROOT/$test_file"; then
+        if "$BATS_CMD" "$PROJECT_ROOT/$test_file"; then
 			file_tests=$(grep -c "^@test" "$PROJECT_ROOT/$test_file" 2>/dev/null || echo 0)
 			echo "✅ Passed: $test_file ($file_tests tests)"
 			TOTAL_TESTS=$((TOTAL_TESTS + file_tests))
@@ -143,7 +168,7 @@ if [[ ${#failed_files[@]} -gt 0 ]]; then
 	echo "💡 Debugging tips:"
 	echo "   - Check if all dependencies are installed"
 	echo "   - Run tests locally: ./tests/run-tests.sh"
-	echo "   - Run individual test: ./tests/bats-core/bin/bats tests/[filename].bats"
+    echo "   - Run individual test: $BATS_CMD tests/[filename].bats"
 	echo ""
 	exit 1
 else

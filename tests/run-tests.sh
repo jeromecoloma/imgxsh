@@ -87,11 +87,15 @@ setup_bats() {
 check_dependencies() {
 	local missing_deps=()
 
-	# Check for Bats in tests directory
-	local bats_executable="${PROJECT_ROOT}/tests/bats-core/bin/bats"
-	if [[ ! -x "$bats_executable" ]]; then
-		missing_deps+=("Bats testing framework")
-	fi
+    # Check for Bats (vendored or system)
+    local bats_executable="${PROJECT_ROOT}/tests/bats-core/bin/bats"
+    if [[ -x "$bats_executable" ]]; then
+        true
+    elif command -v bats >/dev/null 2>&1; then
+        bats_executable="$(command -v bats)"
+    else
+        missing_deps+=("Bats testing framework")
+    fi
 
 	if [[ ${#missing_deps[@]} -gt 0 ]]; then
 		log::error "Missing dependencies: ${missing_deps[*]}"
@@ -104,7 +108,10 @@ check_dependencies() {
 
 run_tests() {
 	local test_files=("$@")
-	local bats_executable="${PROJECT_ROOT}/tests/bats-core/bin/bats"
+    local bats_executable="${PROJECT_ROOT}/tests/bats-core/bin/bats"
+    if [[ ! -x "$bats_executable" ]] && command -v bats >/dev/null 2>&1; then
+        bats_executable="$(command -v bats)"
+    fi
 	local bats_args=()
 
 	# Add common Bats arguments
