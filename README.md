@@ -220,10 +220,10 @@ act -W .github/workflows/ci.yml --job test --pull=false
 shellcheck bin/* lib/*.sh install.sh uninstall.sh
 
 # Check formatting
-shfmt -d bin/* lib/*.sh install.sh uninstall.sh
+shfmt -d bin/* lib/*.sh scripts/*.sh install.sh uninstall.sh
 
 # Apply formatting fixes
-shfmt -w bin/* lib/*.sh install.sh uninstall.sh
+shfmt -w bin/* lib/*.sh scripts/*.sh install.sh uninstall.sh
 ```
 
 **Testing Features**:
