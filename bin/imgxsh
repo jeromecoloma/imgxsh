@@ -1,0 +1,591 @@
+#!/bin/bash
+
+# imgxsh - Main workflow orchestrator for image processing
+# A comprehensive CLI image processing tool built on Shell Starter
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SHELL_STARTER_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+source "${SHELL_STARTER_ROOT}/lib/main.sh"
+source "${SHELL_STARTER_ROOT}/lib/imgxsh/core.sh"
+
+show_help() {
+    cat << EOF
+Usage: $(basename "$0") [OPTIONS] [--workflow WORKFLOW] [INPUT_PATHS...]
+
+imgxsh - Comprehensive CLI image processing tool with workflow orchestration.
+
+Extract, convert, resize, and process images from various sources (PDFs, Excel
+files, individual images) through configurable workflows.
+
+ARGUMENTS:
+    INPUT_PATHS           Input files or directories to process
+
+OPTIONS:
+    -h, --help            Show this help message and exit
+    -v, --version         Show version information and exit
+    -w, --workflow NAME   Run named workflow or workflow file
+    -c, --config FILE     Use specific config file (default: ~/.imgxsh/config.yaml)
+    -o, --output DIR      Override output directory
+    -p, --preset NAME     Use built-in or user preset
+    -n, --dry-run         Preview operations without execution
+    -j, --parallel JOBS   Set parallel processing limit (default: 4)
+    --verbose             Enable detailed logging
+    --quiet               Suppress non-essential output
+    --check-deps          Check external dependencies and exit
+    --init-config         Create default configuration and exit
+
+BUILT-IN WORKFLOWS:
+    pdf-to-thumbnails     Extract PDF images and create thumbnails
+    web-optimize          Optimize images for web use
+    excel-extract         Extract images from Excel files
+    batch-convert         Convert image formats in batch
+    watermark-apply       Apply watermarks to images
+
+EXAMPLES:
+    # Check dependencies
+    $(basename "$0") --check-deps
+    
+    # Initialize default configuration
+    $(basename "$0") --init-config
+    
+    # Basic workflow execution
+    $(basename "$0") --workflow pdf-to-thumbnails document.pdf
+    
+    # Use preset with custom output
+    $(basename "$0") --preset quick-thumbnails --output ./thumbnails/ *.pdf
+    
+    # Dry-run to preview operations
+    $(basename "$0") --workflow web-optimize --dry-run ./images/
+    
+    # Custom config with parallel processing
+    $(basename "$0") --config custom.yaml --parallel 8 --workflow batch-convert *.jpg
+    
+    # Process multiple inputs with verbose output
+    $(basename "$0") --verbose --workflow excel-extract *.xlsx
+    
+    # Custom workflow file
+    $(basename "$0") --workflow ./my-custom-workflow.yaml input.pdf
+
+CONFIGURATION:
+    Default config: ~/.imgxsh/config.yaml
+    Workflows dir:  ~/.imgxsh/workflows/
+    Plugins dir:    ~/.imgxsh/plugins/
+    Presets dir:    ~/.imgxsh/presets/
+
+For more information and examples, see the documentation or run specific
+workflow help with: $(basename "$0") --workflow WORKFLOW_NAME --help
+EOF
+}
+
+show_workflow_help() {
+    local workflow="$1"
+    
+    case "$workflow" in
+        "pdf-to-thumbnails")
+            cat << EOF
+Workflow: pdf-to-thumbnails
+Description: Extract images from PDF documents and create thumbnails
+
+This workflow extracts all embedded images from PDF files and creates
+thumbnail versions optimized for web galleries or quick preview.
+
+Steps:
+  1. Extract images from PDF using pdfimages
+  2. Create thumbnail versions (200x200 pixels by default)
+  3. Optimize for web display (JPEG format, 80% quality)
+
+Input: PDF files
+Output: Thumbnail images in specified directory
+
+Configuration variables:
+  - thumbnail_width: Width of thumbnails (default: 200)
+  - thumbnail_height: Height of thumbnails (default: 200)
+  - thumbnail_quality: JPEG quality (default: 80)
+  - maintain_aspect: Preserve aspect ratio (default: true)
+
+Example:
+  $(basename "$0") --workflow pdf-to-thumbnails --output ./thumbs/ document.pdf
+EOF
+            ;;
+        "web-optimize")
+            cat << EOF
+Workflow: web-optimize
+Description: Optimize images for web use
+
+This workflow resizes and compresses images for optimal web performance
+while maintaining acceptable quality.
+
+Steps:
+  1. Resize images to web-friendly dimensions (max 1200x800)
+  2. Convert to WebP format for better compression
+  3. Apply quality optimization (85% default)
+
+Input: Image files (JPG, PNG, TIFF, BMP)
+Output: Web-optimized images in WebP format
+
+Configuration variables:
+  - max_width: Maximum width (default: 1200)
+  - max_height: Maximum height (default: 800)
+  - web_quality: Compression quality (default: 85)
+  - output_format: Target format (default: webp)
+
+Example:
+  $(basename "$0") --workflow web-optimize --output ./web/ *.jpg *.png
+EOF
+            ;;
+        *)
+            log::error "Unknown workflow: $workflow"
+            log::info "Available workflows: pdf-to-thumbnails, web-optimize, excel-extract, batch-convert, watermark-apply"
+            exit 1
+            ;;
+    esac
+}
+
+validate_workflow_input() {
+    local workflow="$1"
+    local inputs=("${@:2}")
+    
+    case "$workflow" in
+        "pdf-to-thumbnails")
+            for input in "${inputs[@]}"; do
+                if ! imgxsh::validate_file "$input" "pdf"; then
+                    return 1
+                fi
+            done
+            ;;
+        "excel-extract")
+            for input in "${inputs[@]}"; do
+                if ! imgxsh::validate_file "$input" "excel"; then
+                    return 1
+                fi
+            done
+            ;;
+        "web-optimize"|"batch-convert"|"watermark-apply")
+            for input in "${inputs[@]}"; do
+                if [[ -d "$input" ]]; then
+                    continue  # Directory input is valid
+                elif ! imgxsh::validate_file "$input" "image"; then
+                    return 1
+                fi
+            done
+            ;;
+    esac
+    
+    return 0
+}
+
+execute_workflow() {
+    local workflow="$1"
+    local dry_run="$2"
+    local output_dir="$3"
+    local parallel_jobs="$4"
+    local inputs=("${@:5}")
+    
+    if [[ "$dry_run" == true ]]; then
+        log::info "DRY RUN MODE - No actual processing will occur"
+        echo
+    fi
+    
+    log::info "Executing workflow: $workflow"
+    log::info "Output directory: $output_dir"
+    log::info "Parallel jobs: $parallel_jobs"
+    log::info "Input files: ${#inputs[@]} items"
+    echo
+    
+    # Ensure output directory exists
+    if [[ "$dry_run" == false ]]; then
+        imgxsh::ensure_output_dir "$output_dir"
+    fi
+    
+    case "$workflow" in
+        "pdf-to-thumbnails")
+            execute_pdf_to_thumbnails "$dry_run" "$output_dir" "$parallel_jobs" "${inputs[@]}"
+            ;;
+        "web-optimize")
+            execute_web_optimize "$dry_run" "$output_dir" "$parallel_jobs" "${inputs[@]}"
+            ;;
+        "excel-extract")
+            execute_excel_extract "$dry_run" "$output_dir" "$parallel_jobs" "${inputs[@]}"
+            ;;
+        "batch-convert")
+            execute_batch_convert "$dry_run" "$output_dir" "$parallel_jobs" "${inputs[@]}"
+            ;;
+        "watermark-apply")
+            execute_watermark_apply "$dry_run" "$output_dir" "$parallel_jobs" "${inputs[@]}"
+            ;;
+        *)
+            # Try to load custom workflow file
+            if [[ -f "$workflow" ]]; then
+                execute_custom_workflow "$workflow" "$dry_run" "$output_dir" "$parallel_jobs" "${inputs[@]}"
+            else
+                log::error "Unknown workflow: $workflow"
+                exit 1
+            fi
+            ;;
+    esac
+}
+
+execute_pdf_to_thumbnails() {
+    local dry_run="$1"
+    local output_dir="$2"
+    local parallel_jobs="$3"
+    local inputs=("${@:4}")
+    
+    log::info "Starting PDF to thumbnails workflow"
+    
+    for pdf_file in "${inputs[@]}"; do
+        local pdf_name
+        pdf_name=$(basename "$pdf_file" .pdf)
+        local temp_dir="${IMGXSH_TEMP_DIR}/${pdf_name}"
+        
+        log::info "Processing: $pdf_file"
+        
+        if [[ "$dry_run" == true ]]; then
+            echo "  Would extract images to: $temp_dir"
+            echo "  Would create thumbnails in: $output_dir"
+            echo "  Would use parallel processing: $parallel_jobs jobs"
+            continue
+        fi
+        
+        # Create temporary directory
+        mkdir -p "$temp_dir"
+        
+        # Extract images from PDF
+        spinner::start "Extracting images from $pdf_name"
+        if pdfimages -png "$pdf_file" "$temp_dir/$pdf_name" 2>/dev/null; then
+            spinner::stop
+            local extracted_count
+            extracted_count=$(find "$temp_dir" -name "${pdf_name}-*.png" | wc -l)
+            log::success "Extracted $extracted_count images from $pdf_name"
+        else
+            spinner::stop
+            log::error "Failed to extract images from $pdf_file"
+            continue
+        fi
+        
+        # Create thumbnails
+        if [[ $extracted_count -gt 0 ]]; then
+            spinner::start "Creating thumbnails for $pdf_name"
+            local counter=1
+            for image in "$temp_dir"/${pdf_name}-*.png; do
+                if [[ -f "$image" ]]; then
+                    local thumb_name
+                    thumb_name=$(printf "%s_thumb_%03d.jpg" "$pdf_name" $counter)
+                    
+                    if convert "$image" -resize "200x200>" -quality 80 "$output_dir/$thumb_name" 2>/dev/null; then
+                        ((counter++))
+                    else
+                        log::warn "Failed to create thumbnail for $(basename "$image")"
+                    fi
+                fi
+            done
+            spinner::stop
+            log::success "Created $((counter-1)) thumbnails for $pdf_name"
+        fi
+        
+        # Cleanup temporary files
+        rm -rf "$temp_dir"
+    done
+}
+
+execute_web_optimize() {
+    local dry_run="$1"
+    local output_dir="$2"
+    local parallel_jobs="$3"
+    local inputs=("${@:4}")
+    
+    log::info "Starting web optimization workflow"
+    
+    # Collect all image files
+    local image_files=()
+    for input in "${inputs[@]}"; do
+        if [[ -d "$input" ]]; then
+            while IFS= read -r -d '' file; do
+                image_files+=("$file")
+            done < <(find "$input" -type f \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" -o -iname "*.tiff" -o -iname "*.bmp" \) -print0)
+        else
+            image_files+=("$input")
+        fi
+    done
+    
+    if [[ ${#image_files[@]} -eq 0 ]]; then
+        log::error "No image files found to process"
+        exit 1
+    fi
+    
+    log::info "Found ${#image_files[@]} images to optimize"
+    
+    if [[ "$dry_run" == true ]]; then
+        for image in "${image_files[@]}"; do
+            local base_name
+            base_name=$(basename "$image" | sed 's/\.[^.]*$//')
+            echo "  Would optimize: $image -> $output_dir/${base_name}_web.webp"
+        done
+        return 0
+    fi
+    
+    # Process images
+    local processed=0
+    local failed=0
+    
+    spinner::start "Optimizing images for web"
+    for image in "${image_files[@]}"; do
+        local base_name
+        base_name=$(basename "$image" | sed 's/\.[^.]*$//')
+        local output_file="$output_dir/${base_name}_web.webp"
+        
+        if convert "$image" -resize "1200x800>" -quality 85 "$output_file" 2>/dev/null; then
+            ((processed++))
+        else
+            ((failed++))
+            log::warn "Failed to optimize: $(basename "$image")"
+        fi
+    done
+    spinner::stop
+    
+    log::success "Web optimization completed: $processed processed, $failed failed"
+}
+
+execute_excel_extract() {
+    local dry_run="$1"
+    local output_dir="$2" 
+    local parallel_jobs="$3"
+    local inputs=("${@:4}")
+    
+    log::info "Starting Excel image extraction workflow"
+    
+    for excel_file in "${inputs[@]}"; do
+        local excel_name
+        excel_name=$(basename "$excel_file" | sed 's/\.[^.]*$//')
+        local temp_dir="${IMGXSH_TEMP_DIR}/${excel_name}"
+        
+        log::info "Processing: $excel_file"
+        
+        if [[ "$dry_run" == true ]]; then
+            echo "  Would extract to temporary: $temp_dir"
+            echo "  Would copy images to: $output_dir"
+            continue
+        fi
+        
+        # Create temporary directory
+        mkdir -p "$temp_dir"
+        
+        # Extract Excel file
+        spinner::start "Extracting Excel file $excel_name"
+        if unzip -q "$excel_file" -d "$temp_dir" 2>/dev/null; then
+            spinner::stop
+            
+            # Look for images in xl/media directory
+            local media_dir="$temp_dir/xl/media"
+            if [[ -d "$media_dir" ]]; then
+                local image_count
+                image_count=$(find "$media_dir" -type f \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" -o -iname "*.gif" -o -iname "*.bmp" \) | wc -l)
+                
+                if [[ $image_count -gt 0 ]]; then
+                    log::success "Found $image_count images in $excel_name"
+                    
+                    # Copy images to output directory
+                    local counter=1
+                    for image in "$media_dir"/*; do
+                        if [[ -f "$image" ]]; then
+                            local ext="${image##*.}"
+                            local new_name
+                            new_name=$(printf "%s_image_%03d.%s" "$excel_name" $counter "$ext")
+                            cp "$image" "$output_dir/$new_name"
+                            ((counter++))
+                        fi
+                    done
+                    
+                    log::success "Extracted $((counter-1)) images from $excel_name"
+                else
+                    log::warn "No images found in $excel_name"
+                fi
+            else
+                log::warn "No media directory found in $excel_name"
+            fi
+        else
+            spinner::stop
+            log::error "Failed to extract Excel file: $excel_file"
+        fi
+        
+        # Cleanup temporary files
+        rm -rf "$temp_dir"
+    done
+}
+
+execute_batch_convert() {
+    log::info "Batch convert workflow not yet implemented"
+    log::info "This will be implemented in IMX-2 (imgxsh-convert)"
+}
+
+execute_watermark_apply() {
+    log::info "Watermark apply workflow not yet implemented"
+    log::info "This will be implemented in IMX-7 (imgxsh-watermark)"
+}
+
+execute_custom_workflow() {
+    local workflow_file="$1"
+    log::info "Custom workflow execution not yet implemented"
+    log::info "YAML workflow parsing will be implemented in IMX-1.2"
+}
+
+main() {
+    # Default values
+    local workflow=""
+    local config_file=""
+    local output_dir="./output"
+    local preset=""
+    local dry_run=false
+    local parallel_jobs=4
+    local verbose=false
+    local quiet=false
+    local check_deps=false
+    local init_config=false
+    local inputs=()
+    
+    # Parse command line arguments
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -h|--help)
+                if [[ -n "$workflow" ]]; then
+                    show_workflow_help "$workflow"
+                else
+                    show_help
+                fi
+                exit 0
+                ;;
+            -v|--version)
+                echo "$(basename "$0") $(imgxsh::version)"
+                exit 0
+                ;;
+            -w|--workflow)
+                workflow="$2"
+                shift 2
+                ;;
+            -c|--config)
+                config_file="$2"
+                shift 2
+                ;;
+            -o|--output)
+                output_dir="$2"
+                shift 2
+                ;;
+            -p|--preset)
+                preset="$2"
+                shift 2
+                ;;
+            -n|--dry-run)
+                dry_run=true
+                shift
+                ;;
+            -j|--parallel)
+                parallel_jobs="$2"
+                shift 2
+                ;;
+            --verbose)
+                verbose=true
+                shift
+                ;;
+            --quiet)
+                quiet=true
+                shift
+                ;;
+            --check-deps)
+                check_deps=true
+                shift
+                ;;
+            --init-config)
+                init_config=true
+                shift
+                ;;
+            -*)
+                log::error "Unknown option: $1"
+                show_help
+                exit 1
+                ;;
+            *)
+                # Positional argument
+                inputs+=("$1")
+                shift
+                ;;
+        esac
+    done
+    
+    # Handle special operations
+    if [[ "$check_deps" == true ]]; then
+        exec "${SCRIPT_DIR}/imgxsh-check-deps" "$@"
+    fi
+    
+    if [[ "$init_config" == true ]]; then
+        imgxsh::init
+        log::success "Configuration initialized at $IMGXSH_CONFIG_FILE"
+        exit 0
+    fi
+    
+    # Initialize imgxsh environment
+    if ! imgxsh::init; then
+        log::error "Failed to initialize imgxsh environment"
+        exit 1
+    fi
+    
+    # Check dependencies if not in dry-run mode
+    if [[ "$dry_run" == false ]] && ! imgxsh::check_dependencies; then
+        log::error "Required dependencies are missing"
+        log::info "Run '$(basename "$0") --check-deps --install-guide' for help"
+        exit 1
+    fi
+    
+    # Validate required arguments
+    if [[ -z "$workflow" ]] && [[ -z "$preset" ]]; then
+        log::error "Either --workflow or --preset is required"
+        show_help
+        exit 1
+    fi
+    
+    if [[ ${#inputs[@]} -eq 0 ]]; then
+        log::error "At least one input file or directory is required"
+        show_help
+        exit 1
+    fi
+    
+    # Use preset if specified
+    if [[ -n "$preset" ]]; then
+        case "$preset" in
+            "quick-thumbnails")
+                workflow="pdf-to-thumbnails"
+                parallel_jobs=8
+                ;;
+            *)
+                log::error "Unknown preset: $preset"
+                exit 1
+                ;;
+        esac
+    fi
+    
+    # Validate workflow and inputs
+    if ! validate_workflow_input "$workflow" "${inputs[@]}"; then
+        log::error "Invalid input files for workflow: $workflow"
+        exit 1
+    fi
+    
+    # Set up logging
+    if [[ "$verbose" == true ]]; then
+        export DEBUG=1
+    fi
+    
+    # Execute workflow
+    execute_workflow "$workflow" "$dry_run" "$output_dir" "$parallel_jobs" "${inputs[@]}"
+    
+    # Cleanup
+    imgxsh::cleanup
+    
+    log::success "Workflow completed successfully"
+}
+
+# Only run main if script is executed directly
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@"
+fi

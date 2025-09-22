@@ -1,0 +1,122 @@
+# PDF to Web Gallery Workflow
+# Extracts images from PDF files and optimizes them for web display
+
+name: pdf-to-web
+description: "Extract PDF images and optimize for web gallery"
+version: "1.0"
+
+settings:
+  output_dir: "./output/pdf-web"
+  temp_dir: "/tmp/imgxsh/pdf-web"
+  parallel_jobs: 4
+
+steps:
+  - name: extract_images
+    type: pdf_extract
+    description: "Extract all images from PDF"
+    params:
+      input: "{workflow_input}"
+      output_dir: "{temp_dir}/extracted"
+      format: "png"  # Extract as PNG to preserve quality
+      
+  - name: create_thumbnails
+    type: resize
+    description: "Create thumbnail versions"
+    condition: "extracted_count > 0"
+    params:
+      input_dir: "{temp_dir}/extracted"
+      width: 300
+      height: 200
+      maintain_aspect: true
+      quality: 80
+      output_template: "{output_dir}/thumbnails/{pdf_name}_thumb_{counter:03d}.jpg"
+      
+  - name: create_full_size
+    type: convert
+    description: "Create full-size web-optimized versions"
+    condition: "extracted_count > 0"
+    params:
+      input_dir: "{temp_dir}/extracted"
+      format: "webp"
+      quality: 85
+      max_width: 1200
+      max_height: 800
+      output_template: "{output_dir}/full/{pdf_name}_full_{counter:03d}.{format}"
+      
+  - name: generate_gallery_html
+    type: custom
+    description: "Generate HTML gallery page"
+    condition: "extracted_count > 0"
+    script: |
+      #!/bin/bash
+      # Generate simple HTML gallery
+      html_file="{output_dir}/gallery.html"
+      cat > "$html_file" << 'HTML_EOF'
+      <!DOCTYPE html>
+      <html>
+      <head>
+          <title>PDF Image Gallery - {pdf_name}</title>
+          <style>
+              body { font-family: Arial, sans-serif; margin: 20px; }
+              .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+              .image-item { border: 1px solid #ddd; padding: 10px; text-align: center; }
+              .thumbnail { max-width: 100%; height: auto; cursor: pointer; }
+              .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.9); }
+              .modal-content { margin: auto; display: block; width: 80%; max-width: 1200px; }
+              .close { position: absolute; top: 15px; right: 35px; color: #f1f1f1; font-size: 40px; font-weight: bold; cursor: pointer; }
+          </style>
+      </head>
+      <body>
+          <h1>Image Gallery: {pdf_name}</h1>
+          <div class="gallery">
+              <!-- Images will be inserted here by post-processing -->
+          </div>
+          <div id="modal" class="modal">
+              <span class="close">&times;</span>
+              <img class="modal-content" id="modal-image">
+          </div>
+          <script>
+              // Simple modal functionality
+              const modal = document.getElementById('modal');
+              const modalImg = document.getElementById('modal-image');
+              const closeBtn = document.getElementsByClassName('close')[0];
+              
+              document.querySelectorAll('.thumbnail').forEach(img => {
+                  img.onclick = function() {
+                      modal.style.display = 'block';
+                      modalImg.src = this.dataset.fullsize;
+                  }
+              });
+              
+              closeBtn.onclick = function() { modal.style.display = 'none'; }
+              modal.onclick = function(event) { if (event.target === modal) modal.style.display = 'none'; }
+          </script>
+      </body>
+      </html>
+      HTML_EOF
+
+hooks:
+  pre_workflow:
+    - echo "Starting PDF to web gallery conversion for: {workflow_input}"
+    
+  post_step:
+    - echo "Completed step: {step_name}"
+    
+  on_success:
+    - echo "Gallery created successfully at: {output_dir}/gallery.html"
+    - echo "Thumbnails: {output_dir}/thumbnails/"
+    - echo "Full images: {output_dir}/full/"
+    
+  on_failure:
+    - echo "Workflow failed at step: {failed_step}"
+    - echo "Check logs for details"
+
+# Template variables available:
+# {workflow_input} - Input file/directory path
+# {pdf_name} - Base name of PDF file without extension  
+# {output_dir} - Configured output directory
+# {temp_dir} - Temporary working directory
+# {timestamp} - Current timestamp (YYYYMMDD_HHMMSS)
+# {counter:03d} - Sequential counter with zero padding
+# {step_name} - Current step name
+# {extracted_count} - Number of images extracted from PDF

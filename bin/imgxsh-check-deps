@@ -1,0 +1,403 @@
+#!/bin/bash
+
+# imgxsh-check-deps - Assess and report on external dependencies for imgxsh
+# This tool checks for required and optional dependencies needed by imgxsh
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SHELL_STARTER_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+source "${SHELL_STARTER_ROOT}/lib/main.sh"
+
+show_help() {
+    cat << EOF
+Usage: $(basename "$0") [OPTIONS]
+
+Assess and report on external dependencies required by imgxsh.
+
+This tool checks for the availability of required and optional dependencies
+needed for imgxsh image processing workflows. It provides installation 
+guidance for missing dependencies and reports compatibility information.
+
+OPTIONS:
+    -h, --help        Show this help message and exit
+    -v, --version     Show version information and exit
+    -q, --quiet       Show only missing dependencies
+    --install-guide   Show detailed installation instructions
+    --check-versions  Check and report dependency versions
+    --json            Output results in JSON format
+
+DEPENDENCY CATEGORIES:
+    Required:
+        - ImageMagick (convert, identify commands)
+        - poppler-utils (pdfimages command)
+        - unzip (Excel file processing)
+
+    Optional:
+        - Tesseract OCR (tesseract command)
+        - curl (webhook notifications)
+        - notify-send (desktop notifications - Linux)
+        - osascript (desktop notifications - macOS)
+
+EXAMPLES:
+    $(basename "$0")                    # Basic dependency check
+    $(basename "$0") --quiet            # Show only missing deps
+    $(basename "$0") --install-guide    # Show installation instructions
+    $(basename "$0") --check-versions   # Include version information
+    $(basename "$0") --json             # Machine-readable output
+EOF
+}
+
+# Define dependency arrays
+REQUIRED_DEPS=("convert:ImageMagick - Image format conversion and processing"
+               "identify:ImageMagick - Image information and metadata extraction"
+               "pdfimages:poppler-utils - PDF image extraction"
+               "unzip:unzip - Excel file processing (.xlsx files)")
+
+OPTIONAL_DEPS=("tesseract:Tesseract OCR - Text extraction from images"
+               "curl:curl - HTTP requests for webhook notifications"
+               "notify-send:libnotify - Desktop notifications (Linux)"
+               "osascript:macOS built-in - Desktop notifications (macOS)")
+
+detect_platform() {
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        echo "macos"
+    elif [[ -f /etc/os-release ]]; then
+        local id
+        id=$(grep '^ID=' /etc/os-release | cut -d= -f2 | tr -d '"')
+        case "$id" in
+            ubuntu|debian) echo "ubuntu" ;;
+            centos|rhel|fedora) echo "centos" ;;
+            arch|manjaro) echo "arch" ;;
+            *) echo "linux" ;;
+        esac
+    else
+        echo "unknown"
+    fi
+}
+
+get_version() {
+    local cmd="$1"
+    local version=""
+    
+    case "$cmd" in
+        "convert"|"identify")
+            version=$("$cmd" -version 2>/dev/null | head -n1 | awk '{print $3}' || echo "unknown")
+            ;;
+        "pdfimages")
+            version=$(pdfimages -v 2>&1 | grep -o 'pdfimages version [0-9.]*' | awk '{print $3}' || echo "unknown")
+            ;;
+        "tesseract")
+            version=$(tesseract --version 2>/dev/null | head -n1 | awk '{print $2}' || echo "unknown")
+            ;;
+        "curl")
+            version=$(curl --version 2>/dev/null | head -n1 | awk '{print $2}' || echo "unknown")
+            ;;
+        *)
+            version="present"
+            ;;
+    esac
+    
+    echo "$version"
+}
+
+check_dependency() {
+    local cmd="$1"
+    local description="$2"
+    local is_required="$3"
+    local quiet="$4"
+    local check_versions="$5"
+    
+    local status="✅"
+    local version=""
+    local missing=false
+    
+    if ! command -v "$cmd" >/dev/null 2>&1; then
+        status="❌"
+        missing=true
+    elif [[ "$check_versions" == true ]]; then
+        version=$(get_version "$cmd")
+    fi
+    
+    if [[ "$quiet" == true ]] && [[ "$missing" == false ]]; then
+        return 0
+    fi
+    
+    local type_label=""
+    if [[ "$is_required" == true ]]; then
+        type_label="[REQUIRED]"
+    else
+        type_label="[OPTIONAL]"
+    fi
+    
+    printf "%-12s %-10s %-15s %s" "$status" "$type_label" "$cmd" "$description"
+    if [[ -n "$version" ]]; then
+        printf " (v%s)" "$version"
+    fi
+    printf "\n"
+    
+    return $([[ "$missing" == false ]] && echo 0 || echo 1)
+}
+
+show_install_guide() {
+    local platform
+    platform=$(detect_platform)
+    
+    log::info "Installation Guide for $platform"
+    echo
+    
+    echo "=== Required Dependencies ==="
+    echo
+    
+    case "$platform" in
+        "macos")
+            echo "Install via Homebrew:"
+            echo "  brew install imagemagick poppler"
+            echo
+            echo "Note: unzip is typically pre-installed on macOS"
+            ;;
+        "ubuntu")
+            echo "Install via apt:"
+            echo "  sudo apt-get update"
+            echo "  sudo apt-get install imagemagick poppler-utils unzip"
+            ;;
+        "centos")
+            echo "Install via yum:"
+            echo "  sudo yum install ImageMagick poppler-utils unzip"
+            ;;
+        "arch")
+            echo "Install via pacman:"
+            echo "  sudo pacman -S imagemagick poppler unzip"
+            ;;
+        *)
+            echo "Platform-specific instructions not available."
+            echo "Please install the following packages using your system's package manager:"
+            echo "  - ImageMagick (provides convert, identify commands)"
+            echo "  - poppler-utils (provides pdfimages command)"
+            echo "  - unzip utility"
+            ;;
+    esac
+    
+    echo
+    echo "=== Optional Dependencies ==="
+    echo
+    
+    case "$platform" in
+        "macos")
+            echo "Install via Homebrew:"
+            echo "  brew install tesseract curl"
+            echo
+            echo "Note: osascript is built into macOS for notifications"
+            ;;
+        "ubuntu")
+            echo "Install via apt:"
+            echo "  sudo apt-get install tesseract-ocr curl libnotify-bin"
+            ;;
+        "centos")
+            echo "Install via yum:"
+            echo "  sudo yum install tesseract curl libnotify"
+            ;;
+        "arch")
+            echo "Install via pacman:"
+            echo "  sudo pacman -S tesseract curl libnotify"
+            ;;
+        *)
+            echo "Optional packages to install:"
+            echo "  - Tesseract OCR (for text extraction)"
+            echo "  - curl (for webhook notifications)"
+            echo "  - libnotify/notify-send (for desktop notifications)"
+            ;;
+    esac
+    
+    echo
+    echo "=== Verification ==="
+    echo "After installation, run: $(basename "$0") --check-versions"
+}
+
+output_json() {
+    local required_missing=("$@")
+    local platform
+    platform=$(detect_platform)
+    
+    echo "{"
+    echo "  \"platform\": \"$platform\","
+    echo "  \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\","
+    echo "  \"dependencies\": {"
+    
+    echo "    \"required\": {"
+    local first=true
+    for dep_info in "${REQUIRED_DEPS[@]}"; do
+        local cmd="${dep_info%%:*}"
+        local desc="${dep_info#*:}"
+        
+        [[ "$first" == false ]] && echo ","
+        first=false
+        
+        local available="false"
+        local version=""
+        if command -v "$cmd" >/dev/null 2>&1; then
+            available="true"
+            version=$(get_version "$cmd")
+        fi
+        
+        printf "      \"%s\": {\"available\": %s, \"description\": \"%s\"" "$cmd" "$available" "$desc"
+        [[ -n "$version" ]] && printf ", \"version\": \"%s\"" "$version"
+        printf "}"
+    done
+    echo
+    echo "    },"
+    
+    echo "    \"optional\": {"
+    first=true
+    for dep_info in "${OPTIONAL_DEPS[@]}"; do
+        local cmd="${dep_info%%:*}"
+        local desc="${dep_info#*:}"
+        
+        [[ "$first" == false ]] && echo ","
+        first=false
+        
+        local available="false"
+        local version=""
+        if command -v "$cmd" >/dev/null 2>&1; then
+            available="true"
+            version=$(get_version "$cmd")
+        fi
+        
+        printf "      \"%s\": {\"available\": %s, \"description\": \"%s\"" "$cmd" "$available" "$desc"
+        [[ -n "$version" ]] && printf ", \"version\": \"%s\"" "$version"
+        printf "}"
+    done
+    echo
+    echo "    }"
+    
+    echo "  },"
+    echo "  \"summary\": {"
+    echo "    \"all_required_available\": $([[ ${#required_missing[@]} -eq 0 ]] && echo "true" || echo "false"),"
+    echo "    \"missing_required_count\": ${#required_missing[@]}"
+    echo "  }"
+    echo "}"
+}
+
+main() {
+    local quiet=false
+    local install_guide=false
+    local check_versions=false
+    local json_output=false
+    
+    # Parse command line arguments
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -h|--help)
+                show_help
+                exit 0
+                ;;
+            -v|--version)
+                echo "$(basename "$0") $(get_version)"
+                exit 0
+                ;;
+            -q|--quiet)
+                quiet=true
+                shift
+                ;;
+            --install-guide)
+                install_guide=true
+                shift
+                ;;
+            --check-versions)
+                check_versions=true
+                shift
+                ;;
+            --json)
+                json_output=true
+                shift
+                ;;
+            -*)
+                log::error "Unknown option: $1"
+                show_help
+                exit 1
+                ;;
+            *)
+                log::error "No positional arguments expected"
+                show_help
+                exit 1
+                ;;
+        esac
+    done
+    
+    if [[ "$install_guide" == true ]]; then
+        show_install_guide
+        exit 0
+    fi
+    
+    # Check dependencies
+    local required_missing=()
+    local optional_missing=()
+    
+    if [[ "$json_output" == false ]] && [[ "$quiet" == false ]]; then
+        log::info "imgxsh Dependency Assessment"
+        echo
+        echo "Checking external dependencies required for imgxsh functionality..."
+        echo
+        printf "%-12s %-10s %-15s %s\n" "Status" "Type" "Command" "Description"
+        printf "%-12s %-10s %-15s %s\n" "------" "----" "-------" "-----------"
+    fi
+    
+    # Check required dependencies
+    for dep_info in "${REQUIRED_DEPS[@]}"; do
+        local cmd="${dep_info%%:*}"
+        local desc="${dep_info#*:}"
+        if ! check_dependency "$cmd" "$desc" true "$quiet" "$check_versions"; then
+            required_missing+=("$cmd")
+        fi
+    done
+    
+    # Check optional dependencies
+    for dep_info in "${OPTIONAL_DEPS[@]}"; do
+        local cmd="${dep_info%%:*}"
+        local desc="${dep_info#*:}"
+        if ! check_dependency "$cmd" "$desc" false "$quiet" "$check_versions"; then
+            optional_missing+=("$cmd")
+        fi
+    done
+    
+    if [[ "$json_output" == true ]]; then
+        output_json "${required_missing[@]}"
+        exit 0
+    fi
+    
+    # Summary
+    if [[ "$quiet" == false ]]; then
+        echo
+        log::info "Dependency Assessment Summary"
+        echo
+    fi
+    
+    if [[ ${#required_missing[@]} -eq 0 ]]; then
+        if [[ "$quiet" == false ]]; then
+            log::success "All required dependencies are available"
+        fi
+    else
+        log::error "Missing required dependencies: ${required_missing[*]}"
+        if [[ "$quiet" == false ]]; then
+            log::info "Run '$(basename "$0") --install-guide' for installation instructions"
+        fi
+    fi
+    
+    if [[ ${#optional_missing[@]} -gt 0 ]] && [[ "$quiet" == false ]]; then
+        log::warn "Missing optional dependencies: ${optional_missing[*]}"
+        log::info "Some imgxsh features will be unavailable"
+    fi
+    
+    # Exit with error code if required dependencies are missing
+    if [[ ${#required_missing[@]} -gt 0 ]]; then
+        exit 1
+    fi
+    
+    exit 0
+}
+
+# Only run main if script is executed directly
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@"
+fi

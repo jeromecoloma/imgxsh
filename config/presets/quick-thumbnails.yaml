@@ -1,0 +1,27 @@
+# Quick Thumbnails Preset
+# Fast thumbnail generation for quick previews
+
+name: quick-thumbnails
+description: "Generate small thumbnails quickly for preview purposes"
+base_workflow: pdf-to-web
+
+# Override settings for speed and smaller size
+overrides:
+  settings:
+    parallel_jobs: 8  # More parallel processing for speed
+    
+  steps:
+    create_thumbnails:
+      params:
+        width: 150
+        height: 100
+        quality: 70
+        
+    create_full_size:
+      # Skip full-size creation for quick mode
+      enabled: false
+
+# Use cases:
+# - Quick PDF preview generation
+# - Batch processing where speed is priority over quality
+# - Initial content review before full processing
