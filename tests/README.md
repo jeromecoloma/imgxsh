@@ -20,6 +20,19 @@ The imgxsh testing framework provides comprehensive coverage for:
 - Batch mode: directory processing, nested output structure preservation
 - Error paths: invalid size spec, missing inputs
 
+### New: imgxsh-extract-pdf Test Coverage
+- CLI interface: help/version, argument validation, dependency checking
+- PDF validation: file existence, readability, format detection
+- Output directory: creation, validation, file vs directory handling
+- Format support: jpg, png, tiff, bmp with case-insensitive input
+- Quality control: validation (1-100), format-specific defaults
+- Page ranges: validation and parsing of complex range formats
+- Extraction modes: list-only, dry-run, verbose, quiet
+- Template naming: custom prefixes, sequential numbering
+- Metadata handling: extraction, preservation, optional skipping
+- Error handling: missing dependencies, invalid inputs, file permissions
+- Shell Starter integration: logging patterns, version management
+
 ## 📁 Testing Structure
 
 ```
@@ -31,6 +44,7 @@ tests/
 ├── setup-ci-environment.sh    # CI environment configuration script
 ├── imgxsh-convert.bats        # Comprehensive tests for imgxsh-convert (30+ tests)
 ├── imgxsh-resize.bats         # Tests for imgxsh-resize (CLI, sizing modes, batch)
+├── imgxsh-extract-pdf.bats    # Tests for imgxsh-extract-pdf (40+ tests)
 ├── fixtures/                  # Test data and sample files
 │   ├── images/               # Sample images for testing (PNG, JPG)
 │   ├── pdfs/                 # Sample PDF files for extraction tests
@@ -47,6 +61,7 @@ tests/
 - **`setup-ci-environment.sh`**: Environment setup for consistent CI testing
 - **`imgxsh-convert.bats`**: Complete test suite with 30 tests covering all functionality
 - **`imgxsh-resize.bats`**: Test suite covering resize operations and options
+- **`imgxsh-extract-pdf.bats`**: Test suite covering PDF extraction functionality (40+ tests)
 
 ## 🔧 Test Runners
 
@@ -61,6 +76,7 @@ The main test runner using the Bats framework:
 # Run specific test file
 ./tests/run-tests.sh tests/imgxsh-convert.bats
 ./tests/run-tests.sh tests/imgxsh-resize.bats
+./tests/run-tests.sh tests/imgxsh-extract-pdf.bats
 
 # Run with verbose output
 ./tests/run-tests.sh --verbose
@@ -464,6 +480,7 @@ DEBUG=1 ./tests/run-tests.sh
 
 # Run specific test with verbose Bats output
 ./tests/run-tests.sh --verbose tests/imgxsh-convert.bats
+./tests/run-tests.sh --verbose tests/imgxsh-extract-pdf.bats
 ```
 
 ### Test Isolation

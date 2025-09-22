@@ -415,6 +415,18 @@ require_imagemagick() {
     fi
 }
 
+# Helper function to check if pdfimages is available
+has_pdfimages() {
+    command -v pdfimages >/dev/null 2>&1
+}
+
+# Helper function to skip tests requiring pdfimages
+require_pdfimages() {
+    if ! has_pdfimages; then
+        skip "pdfimages not available. Install with: brew install poppler (macOS) or apt-get install poppler-utils (Ubuntu)"
+    fi
+}
+
 # Helper function to test workflow execution
 run_workflow() {
     local workflow_name="$1"

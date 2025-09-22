@@ -61,6 +61,8 @@ curl -fsSL https://github.com/jeromecoloma/imgxsh/install.sh | bash
 - `imgxsh-resize` - Resize images with aspect ratio control
   - Pixel/percentage sizing, batch directories, smart no-upscale (`--allow-upscale` to override), `--max-file-size`
 - `imgxsh-extract-pdf` - Extract images from PDF documents
+  - Page range selection, format conversion, metadata preservation
+  - Template-based naming, quality control, dry-run mode
 - `imgxsh-extract-excel` - Extract images from Excel files
 - `imgxsh-watermark` - Add watermarks to images
 - `imgxsh-ocr` - Extract text from images using OCR
@@ -76,6 +78,7 @@ imgxsh/
 │   ├── setup-ci-environment.sh # CI environment configuration
 │   ├── imgxsh-convert.bats # Comprehensive test suite (30+ tests)
 │   ├── imgxsh-resize.bats  # Resize test suite (CLI, sizing modes, batch)
+│   ├── imgxsh-extract-pdf.bats # PDF extraction test suite (40+ tests)
 │   ├── fixtures/      # Test data (images, PDFs, Excel files)
 │   └── bats-*/        # Bats testing framework and libraries
 ├── .github/workflows/  # GitHub Actions CI/CD workflows
