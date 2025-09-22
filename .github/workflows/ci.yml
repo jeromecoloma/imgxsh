@@ -54,15 +54,6 @@ jobs:
     timeout-minutes: 25
     
     steps:
-    - name: Setup Bats and Bats libs
-      id: setup-bats
-      uses: bats-core/bats-action@3.0.1
-      with:
-        # Install libs into repo tests/ to align with our tests layout and enable caching
-        support-path: ${{ github.workspace }}/tests/bats-support
-        assert-path: ${{ github.workspace }}/tests/bats-assert
-        file-path: ${{ github.workspace }}/tests/bats-file
-        detik-path: ${{ github.workspace }}/tests/bats-detik
     - name: Checkout code
       uses: actions/checkout@v4
       with:
@@ -73,6 +64,16 @@ jobs:
       run: |
         git config --global user.email "ci@github.com"
         git config --global user.name "GitHub CI"
+
+    - name: Setup Bats and Bats libs
+      id: setup-bats
+      uses: bats-core/bats-action@3.0.1
+      with:
+        # Install libs into repo tests/ to align with our tests layout and enable caching
+        support-path: ${{ github.workspace }}/tests/bats-support
+        assert-path: ${{ github.workspace }}/tests/bats-assert
+        file-path: ${{ github.workspace }}/tests/bats-file
+        detik-path: ${{ github.workspace }}/tests/bats-detik
 
     # Shell Starter upstream workflow does not install additional system dependencies here
 
