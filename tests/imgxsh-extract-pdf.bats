@@ -336,10 +336,17 @@ EOF
     echo "This is not actually a PDF file" >> "$BATS_TMPDIR/fake.pdf"
     
     run_imgxsh "imgxsh-extract-pdf" "$BATS_TMPDIR/fake.pdf" "$BATS_TMPDIR/output" --dry-run
-    # This should succeed because the file is actually a valid PDF format
-    # The file command correctly identifies it as a PDF
-    assert_success
-    assert_output --partial "Would run:"
+    
+    # The behavior depends on whether pdfimages is available
+    if command -v pdfimages >/dev/null 2>&1; then
+        # If pdfimages is available, should succeed in dry-run mode
+        assert_success
+        assert_output --partial "Would run:"
+    else
+        # If pdfimages is not available, should fail due to missing dependencies
+        assert_failure
+        assert_output --partial "Required dependencies missing"
+    fi
 }
 
 @test "imgxsh-extract-pdf handles large page ranges" {

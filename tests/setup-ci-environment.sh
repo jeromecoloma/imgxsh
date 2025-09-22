@@ -51,6 +51,33 @@ fi
 echo "Checking imgxsh dependencies..."
 missing_imgxsh_deps=()
 
+# Install pdfimages/poppler-utils for PDF processing tests
+if ! command -v pdfimages >/dev/null 2>&1; then
+	echo "Installing pdfimages (poppler-utils) for PDF processing tests..."
+	if command -v apt-get >/dev/null 2>&1; then
+		sudo apt-get update -qq
+		sudo apt-get install -y poppler-utils
+	elif command -v yum >/dev/null 2>&1; then
+		sudo yum install -y poppler-utils
+	elif command -v dnf >/dev/null 2>&1; then
+		sudo dnf install -y poppler-utils
+	elif command -v pacman >/dev/null 2>&1; then
+		sudo pacman -S --noconfirm poppler
+	else
+		echo "⚠️  Cannot install pdfimages automatically on this system"
+		missing_imgxsh_deps+=("pdfimages")
+	fi
+fi
+
+if command -v pdfimages >/dev/null 2>&1; then
+	echo "✅ pdfimages available for PDF processing tests"
+	export IMGXSH_PDFIMAGES_AVAILABLE=true
+else
+	echo "⚠️  pdfimages not available - PDF processing tests will be skipped"
+	export IMGXSH_PDFIMAGES_AVAILABLE=false
+	missing_imgxsh_deps+=("pdfimages")
+fi
+
 # Check for ImageMagick (either magick or convert command)
 if command -v magick >/dev/null 2>&1; then
 	echo "✅ ImageMagick (magick) available for image processing tests"
