@@ -1,8 +1,8 @@
 #!/usr/bin/env bats
 
 load 'test_helper.bash'
-load 'bats-support/load'
-load 'bats-assert/load'
+bats_load_library bats-support
+bats_load_library bats-assert
 
 @test "imgxsh-resize shows help" {
   run "$PROJECT_ROOT/bin/imgxsh-resize" --help

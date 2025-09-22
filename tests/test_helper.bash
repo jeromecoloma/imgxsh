@@ -9,6 +9,16 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # Source the main library
 source "${PROJECT_ROOT}/lib/main.sh"
 
+# Set up BATS_LIB_PATH for library loading (must be at top level, not in setup())
+# Check for system libraries first (CI environment), then fall back to local vendored
+if [[ -d "/usr/lib/bats-support" ]]; then
+    # System installation (CI with bats-action)
+    export BATS_LIB_PATH="${BATS_LIB_PATH:-/usr/lib}"
+elif [[ -d "${PROJECT_ROOT}/tests/bats-support" ]]; then
+    # Local vendored libraries
+    export BATS_LIB_PATH="${BATS_LIB_PATH:-${PROJECT_ROOT}/tests}"
+fi
+
 # Global test state tracking
 declare -a TEMP_DIRS_CREATED=()
 declare -a BACKGROUND_PIDS=()

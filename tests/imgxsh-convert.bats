@@ -4,8 +4,8 @@
 
 # Load test helpers
 load test_helper
-load bats-support/load
-load bats-assert/load
+bats_load_library bats-support
+bats_load_library bats-assert
 
 # Help and version tests
 @test "imgxsh-convert: help flag" {
