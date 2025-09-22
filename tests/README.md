@@ -889,8 +889,92 @@ Before pushing to GitHub, ensure:
 | Tests run but fail content | Environment differences (paths, commands) |
 | Act network timeouts | Use `act --pull=false` |
 
+## Lessons Learned: CI Integration with bats-action
+
+### The Challenge: Multiple Bats Environments
+
+During CI setup, we discovered a complex interaction between:
+- **Local vendored bats**: `tests/bats-core/bin/bats` with libraries in `tests/bats-*`
+- **System bats from bats-action**: `/home/runner/.local/share/bats/bin/bats` with libraries in `/usr/lib/bats-*`
+- **Bats default BATS_LIB_PATH**: `/usr/lib/bats` (set by bats executable itself)
+
+### Root Cause Analysis
+
+The critical insight was that **bats executables and bats libraries must match**:
+- ❌ **Wrong**: System bats + vendored libraries → `Could not find library 'bats-support'`
+- ❌ **Wrong**: Vendored bats + system libraries → Path mismatches
+- ✅ **Correct**: System bats + system libraries in CI, vendored bats + vendored libraries locally
+
+### Solution Architecture
+
+#### 1. CI Workflow Integration
+```yaml
+- name: Setup Bats and Bats libs
+  uses: bats-core/bats-action@3.0.1
+  with:
+    bats-install: true
+    support-install: true
+    assert-install: true
+    file-install: true
+```
+
+#### 2. Environment-Aware Library Detection
+```bash
+# test_helper.bash - CI-first detection
+if [[ -n "${CI:-}" ]] && [[ -d "/usr/lib/bats-support" ]]; then
+    export BATS_LIB_PATH="/usr/lib"  # System libraries from bats-action
+elif [[ -d "${PROJECT_ROOT}/tests/bats-support" ]]; then
+    export BATS_LIB_PATH="${PROJECT_ROOT}/tests"  # Local vendored libraries
+fi
+```
+
+#### 3. Bats Executable Selection
+```bash
+# run-tests-ci.sh - Environment-aware bats selection
+if [[ -n "${CI:-}" ]] && command -v bats >/dev/null 2>&1; then
+    BATS_CMD="$(command -v bats)"  # Use system bats in CI
+elif [[ -f "$PROJECT_ROOT/tests/bats-core/bin/bats" ]]; then
+    BATS_CMD="$PROJECT_ROOT/tests/bats-core/bin/bats"  # Use vendored locally
+fi
+```
+
+#### 4. Test Environment Compatibility
+```bash
+# Handle dependency vs logic errors
+if [[ "$output" == *"Missing required dependencies"* ]]; then
+    assert_output --partial "Missing required dependencies"  # CI without ImageMagick
+else
+    assert_output --partial "Cannot read input file"  # Local with ImageMagick
+fi
+```
+
+### Key Success Factors
+
+1. **Environment Detection**: Always check CI vs local environment first
+2. **Library Path Consistency**: Match bats executable with corresponding libraries
+3. **Override Bats Defaults**: Don't rely on bats built-in BATS_LIB_PATH defaults
+4. **Test Robustness**: Handle both dependency errors and logic errors in tests
+5. **Debug Systematically**: Add debug output to understand actual vs expected paths
+
+### Debugging Workflow
+
+When CI fails with library loading issues:
+1. **Check bats executable**: Which bats is actually running?
+2. **Check library paths**: Where are libraries actually installed?
+3. **Check BATS_LIB_PATH**: What path is being used for library discovery?
+4. **Verify consistency**: Do the bats executable and libraries match?
+
+### Production-Ready Configuration
+
+The final working setup:
+- **✅ Local Development**: Vendored bats + vendored libraries via `tests/run-tests.sh`
+- **✅ CI Environment**: System bats + system libraries via bats-action
+- **✅ Cross-Platform**: Works on macOS (local) and Ubuntu (CI)
+- **✅ Dependency Aware**: Handles ImageMagick presence/absence gracefully
+- **✅ Shell Starter Compatible**: Follows all framework conventions
+
 ---
 
 This testing framework provides comprehensive coverage for imgxsh functionality while maintaining compatibility with Shell Starter conventions and enabling reliable CI/CD integration.
 
-**Key Success Factors**: Follow Shell Starter patterns exactly, test locally first, use Act for CI validation, and document everything for future development.
+**Key Success Factors**: Follow Shell Starter patterns exactly, test locally first, use Act for CI validation, understand bats environment interactions, and document everything for future development.

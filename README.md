@@ -257,9 +257,29 @@ When developing imgxsh tools, you have access to:
 
 MIT License - see LICENSE file for details.
 
+## 🧪 Testing
+
+imgxsh includes comprehensive test coverage with CI/CD integration:
+
+```bash
+# Run all tests locally
+./tests/run-tests.sh
+
+# Run specific test suite
+./tests/run-tests.sh tests/imgxsh-convert.bats
+
+# Run in CI mode
+./tests/run-tests-ci.sh
+```
+
+**Test Coverage**: 43 tests across imgxsh-convert (30 tests) and imgxsh-resize (13 tests) with support for both local development (with ImageMagick) and CI environments (without ImageMagick).
+
+See `tests/README.md` for detailed testing documentation and CI integration lessons learned.
+
 ## 📚 Resources
 
 - **[Shell Starter Framework](https://github.com/jeromecoloma/shell-starter)** - The underlying framework
+- **[Testing Documentation](tests/README.md)** - Comprehensive test setup and CI integration guide
 
 ## 🤝 Support
 
@@ -267,6 +287,7 @@ imgxsh is in active development. For questions or contributions:
 
 1. Review Shell Starter examples in `./demo/` for development patterns
 2. Follow Shell Starter conventions for consistency
+3. Run tests locally before submitting changes: `./tests/run-tests.sh`
 
 ---
 
