@@ -5,11 +5,20 @@ set -euo pipefail
 # Get the project root directory
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# Resolve Bats command: prefer PATH (from bats-action), fallback to vendored
-if command -v bats >/dev/null 2>&1; then
+# Resolve Bats command: in CI, always use system bats (from bats-action)
+# In local development, prefer vendored bats
+if [[ -n "${CI:-}" ]] && command -v bats >/dev/null 2>&1; then
     BATS_CMD="$(command -v bats)"
-else
+    echo "DEBUG: Using system bats from bats-action: $BATS_CMD"
+elif [[ -f "$PROJECT_ROOT/tests/bats-core/bin/bats" ]]; then
     BATS_CMD="$PROJECT_ROOT/tests/bats-core/bin/bats"
+    echo "DEBUG: Using vendored bats: $BATS_CMD"
+elif command -v bats >/dev/null 2>&1; then
+    BATS_CMD="$(command -v bats)"
+    echo "DEBUG: Using system bats: $BATS_CMD"
+else
+    echo "❌ No bats executable found!"
+    exit 1
 fi
 
 # Check if Bats is available, auto-setup vendored if still missing

@@ -91,20 +91,11 @@ jobs:
           export TERM=xterm-256color
         fi
 
-    - name: Debug bats-action installation
-      run: |
-        echo "=== Debugging bats-action installation ==="
-        echo "Checking for bats libraries in various locations:"
-        find /usr -name "*bats*" -type d 2>/dev/null | head -20 || true
-        ls -la /usr/lib/ | grep bats || echo "No bats dirs in /usr/lib/"
-        ls -la /usr/local/lib/ | grep bats || echo "No bats dirs in /usr/local/lib/"
-        echo "PATH: $PATH"
-        which bats || echo "bats not in PATH"
-        bats --version || echo "bats version failed"
-        
     - name: Run Bats tests
       run: |
         if [ -d tests ] && ls tests/*.bats 1> /dev/null 2>&1; then
+          # Ensure system bats uses the correct library path
+          export BATS_LIB_PATH="/usr/lib"
           ./tests/run-tests-ci.sh
         else
           echo "No tests directory or test files found. Skipping tests."
