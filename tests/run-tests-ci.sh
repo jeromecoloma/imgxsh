@@ -9,13 +9,10 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # In local development, prefer vendored bats
 if [[ -n "${CI:-}" ]] && command -v bats >/dev/null 2>&1; then
     BATS_CMD="$(command -v bats)"
-    echo "DEBUG: Using system bats from bats-action: $BATS_CMD"
 elif [[ -f "$PROJECT_ROOT/tests/bats-core/bin/bats" ]]; then
     BATS_CMD="$PROJECT_ROOT/tests/bats-core/bin/bats"
-    echo "DEBUG: Using vendored bats: $BATS_CMD"
 elif command -v bats >/dev/null 2>&1; then
     BATS_CMD="$(command -v bats)"
-    echo "DEBUG: Using system bats: $BATS_CMD"
 else
     echo "❌ No bats executable found!"
     exit 1
@@ -67,11 +64,11 @@ fi
 echo "Running tests in CI mode with individual file execution..."
 echo "======================================================="
 
-# Debug: Show current BATS_LIB_PATH and library detection
-echo "DEBUG: Current BATS_LIB_PATH: ${BATS_LIB_PATH:-UNSET}"
-echo "DEBUG: Checking for bats libraries..."
-echo "DEBUG: /usr/lib/bats-support exists: $([ -d "/usr/lib/bats-support" ] && echo YES || echo NO)"
-echo "DEBUG: ${PROJECT_ROOT}/tests/bats-support exists: $([ -d "${PROJECT_ROOT}/tests/bats-support" ] && echo YES || echo NO)"
+# Debug: Show current BATS_LIB_PATH and library detection (can be removed once CI is stable)
+# echo "DEBUG: Current BATS_LIB_PATH: ${BATS_LIB_PATH:-UNSET}"
+# echo "DEBUG: Checking for bats libraries..."
+# echo "DEBUG: /usr/lib/bats-support exists: $([ -d "/usr/lib/bats-support" ] && echo YES || echo NO)"
+# echo "DEBUG: ${PROJECT_ROOT}/tests/bats-support exists: $([ -d "${PROJECT_ROOT}/tests/bats-support" ] && echo YES || echo NO)"
 
 if [[ "$RUN_INTEGRATION_TESTS" == "false" ]]; then
     echo "ℹ️  Integration tests are skipped in containerized CI environments"
