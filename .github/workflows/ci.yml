@@ -94,6 +94,13 @@ jobs:
     - name: Run Bats tests
       run: |
         if [ -d tests ] && ls tests/*.bats 1> /dev/null 2>&1; then
+          # Debug: Show what bats-action installed
+          echo "Debug: Checking bats library locations..."
+          ls -la /usr/lib/bats-* 2>/dev/null || echo "No /usr/lib/bats-* directories"
+          ls -la /usr/local/lib/bats-* 2>/dev/null || echo "No /usr/local/lib/bats-* directories"
+          # Set BATS_LIB_PATH explicitly for CI
+          export BATS_LIB_PATH="/usr/lib"
+          echo "BATS_LIB_PATH set to: $BATS_LIB_PATH"
           ./tests/run-tests-ci.sh
         else
           echo "No tests directory or test files found. Skipping tests."
