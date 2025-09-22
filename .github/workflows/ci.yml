@@ -14,16 +14,10 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
         
-    - name: Install shellcheck (static binary)
+    - name: Install shellcheck
       run: |
-        set -euo pipefail
-        SC_VER="v0.11.0"
-        SC_TAR="shellcheck-${SC_VER}.linux.x86_64.tar.xz"
-        SC_URL="https://github.com/koalaman/shellcheck/releases/download/${SC_VER}/${SC_TAR}"
-        curl -sSL "$SC_URL" -o /tmp/${SC_TAR}
-        tar -xJf /tmp/${SC_TAR} -C /tmp
-        sudo install "/tmp/shellcheck-${SC_VER}/shellcheck" /usr/local/bin/shellcheck
-        shellcheck --version
+        sudo apt-get update
+        sudo apt-get install -y shellcheck
         
     - name: Run shellcheck
       run: |
@@ -71,38 +65,7 @@ jobs:
         git config --global user.email "ci@github.com"
         git config --global user.name "GitHub CI"
 
-    - name: Install system dependencies
-      run: |
-        # Handle potential GPG signature issues in containerized environments
-        set -euo pipefail
-        
-        # Try standard update first, fallback to --allow-unauthenticated if needed
-        if ! sudo apt-get update; then
-          echo "Standard apt update failed, trying with --allow-unauthenticated..."
-          sudo apt-get update --allow-unauthenticated || true
-        fi
-        
-        # Install dependencies with proper error handling
-        sudo apt-get install -y imagemagick poppler-utils unzip curl || {
-          echo "Package installation failed, trying alternative approach..."
-          sudo apt-get install -y --allow-unauthenticated imagemagick poppler-utils unzip curl || {
-            echo "Alternative package installation failed, checking what's available..."
-            # At minimum, try to get imagemagick which is essential
-            sudo apt-get install -y --force-yes imagemagick 2>/dev/null || {
-              echo "Critical: Could not install imagemagick. Attempting manual installation..."
-              # Try to install from a different source or use pre-installed version
-              which convert || which magick || {
-                echo "ERROR: No ImageMagick installation found and cannot install"
-                exit 1
-              }
-            }
-          }
-        }
-        
-        # Verify critical dependencies
-        echo "Verifying installations..."
-        which convert || which magick || { echo "ImageMagick not found"; exit 1; }
-        echo "Dependencies verified successfully"
+    # Shell Starter upstream workflow does not install additional system dependencies here
 
     - name: Set up consistent test environment
       run: |

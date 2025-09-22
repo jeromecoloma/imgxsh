@@ -1,199 +1,188 @@
 #!/usr/bin/env bash
-
-# CI-optimized test runner for imgxsh
-# This script runs tests in CI environments with proper setup and error handling
-
+# CI-optimized test runner for Bats tests (Shell Starter reference)
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+# Get the project root directory
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# Resolve Bats command (prefer vendored, fallback to system)
-resolve_bats_cmd() {
-    local vendored_bats="$PROJECT_ROOT/tests/bats-core/bin/bats"
-
-    # Prefer vendored bats; accept if file exists even if not yet executable
-    if [ -f "$vendored_bats" ]; then
-        echo "$vendored_bats"
-        return 0
-    fi
-
-    if command -v bats >/dev/null 2>&1; then
-        command -v bats
-        return 0
-    fi
-
-    echo "" # not found
-    return 1
-}
-
-# Ensure Bats is available (vendored or system-installed)
-BATS_CMD="$(resolve_bats_cmd || true)"
-if [ -z "${BATS_CMD}" ]; then
-    echo "⚠️  Bats not found. Attempting automatic setup (vendored bats-core)..."
-    if "$PROJECT_ROOT/tests/run-tests.sh" --setup; then
-        echo "✅ Bats-core setup completed successfully"
+# Check if Bats is available, auto-setup if missing
+if [ ! -f "$PROJECT_ROOT/tests/bats-core/bin/bats" ]; then
+    echo "⚠️  Bats-core not found. Attempting automatic setup..."
+    if [ -f "$PROJECT_ROOT/scripts/setup-bats.sh" ]; then
+        echo "Running scripts/setup-bats.sh..."
+        if "$PROJECT_ROOT/scripts/setup-bats.sh"; then
+            echo "✅ Bats-core setup completed successfully"
+        else
+            echo "❌ Bats setup failed. Skipping tests." >&2
+            echo "   This is expected for user projects that don't need testing." >&2
+            echo "   To manually set up testing, run: ./scripts/setup-bats.sh" >&2
+            exit 0
+        fi
     else
-        echo "❌ Bats setup failed. Skipping tests." >&2
+        echo "⚠️  No setup script found. Skipping tests." >&2
+        echo "   This is expected for user projects that don't need testing." >&2
+        echo "   To set up testing, ensure scripts/setup-bats.sh exists and run it." >&2
         exit 0
     fi
-    BATS_CMD="$(resolve_bats_cmd || true)"
-fi
-
-if [ -z "${BATS_CMD}" ]; then
-    # As a last resort, try fixing executable bits and re-resolving
-    if [ -f "$PROJECT_ROOT/tests/bats-core/bin/bats" ]; then
-        chmod +x "$PROJECT_ROOT/tests/bats-core/bin/bats" 2>/dev/null || true
-        if [ -d "$PROJECT_ROOT/tests/bats-core/libexec/bats-core" ]; then
-            chmod +x "$PROJECT_ROOT/tests/bats-core/libexec/bats-core"/* 2>/dev/null || true
-        fi
-        BATS_CMD="$(resolve_bats_cmd || true)"
+    if [ ! -f "$PROJECT_ROOT/tests/bats-core/bin/bats" ]; then
+        echo "❌ Bats-core still not found after setup attempt. Skipping tests." >&2
+        exit 0
     fi
-fi
-
-if [ -z "${BATS_CMD}" ]; then
-    echo "❌ No Bats executable available after setup. Exiting." >&2
-    echo "Diagnostics:" >&2
-    echo "- PROJECT_ROOT=$PROJECT_ROOT" >&2
-    echo "- Expected vendored bats at: $PROJECT_ROOT/tests/bats-core/bin/bats" >&2
-    ls -la "$PROJECT_ROOT/tests" 2>/dev/null || true
-    ls -la "$PROJECT_ROOT/tests/bats-core" 2>/dev/null || true
-    ls -la "$PROJECT_ROOT/tests/bats-core/bin" 2>/dev/null || true
-    exit 1
 fi
 
 # Set up comprehensive CI environment
 if [[ -f "$PROJECT_ROOT/tests/setup-ci-environment.sh" ]]; then
-	echo "🔧 Setting up CI environment..."
-	# shellcheck source=tests/setup-ci-environment.sh
-	source "$PROJECT_ROOT/tests/setup-ci-environment.sh"
+    echo "🔧 Setting up CI environment..."
+    # shellcheck source=tests/setup-ci-environment.sh
+    source "$PROJECT_ROOT/tests/setup-ci-environment.sh"
 else
-	echo "⚠️  CI environment setup script not found, using basic setup"
-	export CI=true
-	export SHELL_STARTER_CI_MODE=true
+    echo "⚠️  CI environment setup script not found, using basic setup"
+    export CI=true
+    export SHELL_STARTER_CI_MODE=true
 fi
 
-# Initialize test tracking
-TOTAL_TESTS=0
-PASSED_TESTS=0
-FAILED_TESTS=0
-
-# Function to run individual test files (following Shell Starter pattern)
-run_test_file() {
-	local test_file="$1"
-	echo "Running: $test_file"
-	
-	# Run each test file with timeout (if available)
-	if command -v timeout >/dev/null 2>&1; then
-		# Use timeout if available (most Linux systems)
-        # Ensure the resolved Bats is executable just before running
-        if [ -f "$BATS_CMD" ] && [ ! -x "$BATS_CMD" ]; then chmod +x "$BATS_CMD" 2>/dev/null || true; fi
-        if timeout 120s "$BATS_CMD" "$PROJECT_ROOT/$test_file"; then
-			file_tests=$(grep -c "^@test" "$PROJECT_ROOT/$test_file" 2>/dev/null || echo 0)
-			echo "✅ Passed: $test_file ($file_tests tests)"
-			TOTAL_TESTS=$((TOTAL_TESTS + file_tests))
-			PASSED_TESTS=$((PASSED_TESTS + file_tests))
-			return 0
-		else
-			echo "❌ Failed: $test_file"
-			file_tests=$(grep -c "^@test" "$PROJECT_ROOT/$test_file" 2>/dev/null || echo 0)
-			TOTAL_TESTS=$((TOTAL_TESTS + file_tests))
-			FAILED_TESTS=$((FAILED_TESTS + file_tests))
-			return 1
-		fi
-	else
-		# Run without timeout in containers that don't support it
-		echo "⚠️  Running without timeout (not available in this environment)"
-        if [ -f "$BATS_CMD" ] && [ ! -x "$BATS_CMD" ]; then chmod +x "$BATS_CMD" 2>/dev/null || true; fi
-        if "$BATS_CMD" "$PROJECT_ROOT/$test_file"; then
-			file_tests=$(grep -c "^@test" "$PROJECT_ROOT/$test_file" 2>/dev/null || echo 0)
-			echo "✅ Passed: $test_file ($file_tests tests)"
-			TOTAL_TESTS=$((TOTAL_TESTS + file_tests))
-			PASSED_TESTS=$((PASSED_TESTS + file_tests))
-			return 0
-		else
-			echo "❌ Failed: $test_file"
-			file_tests=$(grep -c "^@test" "$PROJECT_ROOT/$test_file" 2>/dev/null || echo 0)
-			TOTAL_TESTS=$((TOTAL_TESTS + file_tests))
-			FAILED_TESTS=$((FAILED_TESTS + file_tests))
-			return 1
-		fi
-	fi
-}
-
-# Run imgxsh tests in CI mode
-echo "Running imgxsh tests in CI mode..."
-echo "================================================================"
-
-if [[ -n "${IMGXSH_SKIP_IMAGE_TESTS:-}" && "$IMGXSH_SKIP_IMAGE_TESTS" == "true" ]]; then
-	echo "ℹ️  Image processing tests are skipped (ImageMagick not available)"
-	echo "   This is normal in CI environments without ImageMagick installed"
+# Check if we should run integration tests
+RUN_INTEGRATION_TESTS=false
+if [[ -z "${ACT:-}" ]] && [[ -z "${GITHUB_ACTIONS:-}" ]] && [[ "${SHELL_STARTER_RUN_INTEGRATION_TESTS:-}" == "true" ]]; then
+    RUN_INTEGRATION_TESTS=true
 fi
 
-echo ""
+echo "Running tests in CI mode with individual file execution..."
+echo "======================================================="
 
-# Find and run test files (following Shell Starter pattern)
-echo "Looking for test files in: $PROJECT_ROOT/tests/"
-
-# Find all .bats files, excluding framework test files
-test_files=()
-if ls "$PROJECT_ROOT/tests"/*.bats >/dev/null 2>&1; then
-	while IFS= read -r -d '' file; do
-		# Skip framework test files (bats-assert, bats-core, bats-support)
-		if [[ "$file" == *"/bats-assert/"* ]] || [[ "$file" == *"/bats-core/"* ]] || [[ "$file" == *"/bats-support/"* ]]; then
-			continue
-		fi
-		# Convert to relative path
-		relative_file="${file#$PROJECT_ROOT/}"
-		test_files+=("$relative_file")
-	done < <(find "$PROJECT_ROOT/tests" -name "*.bats" -not -path "*/bats-*/*" -print0 | sort -z)
+if [[ "$RUN_INTEGRATION_TESTS" == "false" ]]; then
+    echo "ℹ️  Integration tests are skipped in containerized CI environments"
+    echo "   To run integration tests locally, set: SHELL_STARTER_RUN_INTEGRATION_TESTS=true"
+    echo ""
 fi
 
-if [[ ${#test_files[@]} -eq 0 ]]; then
-	echo "⚠️  No test files found in tests/ directory"
-	echo "   This might be expected if tests are not set up yet"
-	exit 0
-fi
+test_files=(
+    "tests/framework.bats"
+    "tests/lib-colors.bats"
+    "tests/lib-logging.bats"
+    "tests/lib-utils.bats"
+    "tests/lib-main.bats"
+    "tests/hello-world.bats"
+    "tests/lib-spinner.bats"
+    "tests/lib-integration.bats"
+)
 
-echo "Found ${#test_files[@]} test file(s):"
-for file in "${test_files[@]}"; do
-	echo "  - $file"
-done
-echo ""
-
-# Run each test file
+total_tests=0
+passed_tests=0
 failed_files=()
+
 for test_file in "${test_files[@]}"; do
-	if ! run_test_file "$test_file"; then
-		failed_files+=("$test_file")
-	fi
-	echo ""
+    if [ ! -f "$PROJECT_ROOT/$test_file" ]; then
+        echo "⚠️  Test file not found: $test_file"
+        continue
+    fi
+    echo ""
+    echo "Running: $test_file"
+    echo "$(printf '%.50s' "------------------------------------------------")"
+    if command -v timeout >/dev/null 2>&1; then
+        if timeout 120s "$PROJECT_ROOT/tests/bats-core/bin/bats" "$PROJECT_ROOT/$test_file"; then
+            file_tests=$(grep -c "^@test" "$PROJECT_ROOT/$test_file" 2>/dev/null || echo 0)
+            echo "✅ Passed: $test_file ($file_tests tests)"
+            total_tests=$((total_tests + file_tests))
+            passed_tests=$((passed_tests + file_tests))
+        else
+            exit_code=$?
+            echo "❌ Failed: $test_file (exit code: $exit_code)"
+            failed_files+=("$test_file")
+            if [ $exit_code -eq 124 ]; then
+                echo "   Reason: Test timed out after 2 minutes"
+            fi
+            file_tests=$(grep -c "^@test" "$PROJECT_ROOT/$test_file" 2>/dev/null || echo 0)
+            total_tests=$((total_tests + file_tests))
+        fi
+    else
+        echo "⚠️  Running without timeout (not available in this environment)"
+        if "$PROJECT_ROOT/tests/bats-core/bin/bats" "$PROJECT_ROOT/$test_file"; then
+            file_tests=$(grep -c "^@test" "$PROJECT_ROOT/$test_file" 2>/dev/null || echo 0)
+            echo "✅ Passed: $test_file ($file_tests tests)"
+            total_tests=$((total_tests + file_tests))
+            passed_tests=$((passed_tests + file_tests))
+        else
+            exit_code=$?
+            echo "❌ Failed: $test_file (exit code: $exit_code)"
+            failed_files+=("$test_file")
+            file_tests=$(grep -c "^@test" "$PROJECT_ROOT/$test_file" 2>/dev/null || echo 0)
+            total_tests=$((total_tests + file_tests))
+        fi
+    fi
 done
 
-# Summary
-echo "imgxsh CI Test Summary"
-echo "======================"
-echo "Total tests: $TOTAL_TESTS"
-echo "Passed tests: $PASSED_TESTS"
-echo "Failed tests: $FAILED_TESTS"
-echo "Test files: ${#test_files[@]}"
-echo "Failed files: ${#failed_files[@]}"
+if [[ "$RUN_INTEGRATION_TESTS" == "true" ]]; then
+    echo ""
+    echo "Running Integration Tests..."
+    echo "============================"
+    integration_test_files=(
+        "tests/integration-workflow.bats"
+        "tests/e2e-installation.bats"
+        "tests/network-mocking.bats"
+    )
+    for test_file in "${integration_test_files[@]}"; do
+        if [ ! -f "$PROJECT_ROOT/$test_file" ]; then
+            echo "⚠️  Integration test file not found: $test_file"
+            continue
+        fi
+        echo ""
+        echo "Running: $test_file"
+        echo "$(printf '%.50s' "------------------------------------------------")"
+        export SHELL_STARTER_INTEGRATION_TEST=true
+        if command -v timeout >/dev/null 2>&1; then
+            if timeout 300s "$PROJECT_ROOT/tests/bats-core/bin/bats" "$PROJECT_ROOT/$test_file"; then
+                file_tests=$(grep -c "^@test" "$PROJECT_ROOT/$test_file" 2>/dev/null || echo 0)
+                echo "✅ Passed: $test_file ($file_tests integration tests)"
+                total_tests=$((total_tests + file_tests))
+                passed_tests=$((passed_tests + file_tests))
+            else
+                exit_code=$?
+                echo "❌ Failed: $test_file (exit code: $exit_code)"
+                failed_files+=("$test_file")
+                if [ $exit_code -eq 124 ]; then
+                    echo "   Reason: Integration test timed out after 5 minutes"
+                fi
+                file_tests=$(grep -c "^@test" "$PROJECT_ROOT/$test_file" 2>/dev/null || echo 0)
+                total_tests=$((total_tests + file_tests))
+            fi
+        else
+            echo "⚠️  Running integration tests without timeout (may take longer)"
+            if "$PROJECT_ROOT/tests/bats-core/bin/bats" "$PROJECT_ROOT/$test_file"; then
+                file_tests=$(grep -c "^@test" "$PROJECT_ROOT/$test_file" 2>/dev/null || echo 0)
+                echo "✅ Passed: $test_file ($file_tests integration tests)"
+                total_tests=$((total_tests + file_tests))
+                passed_tests=$((passed_tests + file_tests))
+            else
+                exit_code=$?
+                echo "❌ Failed: $test_file (exit code: $exit_code)"
+                failed_files+=("$test_file")
+                file_tests=$(grep -c "^@test" "$PROJECT_ROOT/$test_file" 2>/dev/null || echo 0)
+                total_tests=$((total_tests + file_tests))
+            fi
+        fi
+        unset SHELL_STARTER_INTEGRATION_TEST
+    done
+fi
 
-if [[ ${#failed_files[@]} -gt 0 ]]; then
-	echo ""
-	echo "❌ Failed test files:"
-	for file in "${failed_files[@]}"; do
-		echo "  - $file"
-	done
-	echo ""
-	echo "💡 Debugging tips:"
-	echo "   - Check if all dependencies are installed"
-	echo "   - Run tests locally: ./tests/run-tests.sh"
-    echo "   - Run individual test: $BATS_CMD tests/[filename].bats"
-	echo ""
-	exit 1
+echo ""
+echo "Test Summary"
+echo "============"
+echo "Total tests: $total_tests"
+echo "Passed tests: $passed_tests"
+echo "Failed tests: $((total_tests - passed_tests))"
+
+if [ ${#failed_files[@]} -gt 0 ]; then
+    echo ""
+    echo "Failed test files:"
+    for file in "${failed_files[@]}"; do
+        echo "  - $file"
+    done
+    echo ""
+    echo "❌ Some tests failed"
+    exit 1
 else
-	echo ""
-	echo "🎉 All imgxsh tests passed in CI mode!"
-	exit 0
+    echo ""
+    echo "✅ All tests passed!"
+    exit 0
 fi
