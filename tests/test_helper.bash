@@ -230,6 +230,17 @@ cleanup_test_images() {
     done
 }
 
+# Backward-compatible no-op wrappers for older tests that call these explicitly
+test_helper_setup() {
+    # Environment setup is handled by each test file's setup() and/or Bats defaults
+    return 0
+}
+
+test_helper_teardown() {
+    # Cleanup is handled by each test file's teardown() and helper functions above
+    return 0
+}
+
 # Helper function to run imgxsh scripts and capture output
 run_imgxsh() {
     local script_name="$1"
