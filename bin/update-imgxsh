@@ -89,7 +89,7 @@ github_curl() {
 		cmd+=(-H "Authorization: Bearer ${token}")
 	fi
 	if [[ ${#pre_args[@]} -gt 0 ]]; then
-		cmd+="${pre_args[@]}"
+		cmd+=("${pre_args[@]}")
 	fi
 	cmd+=("$url")
 
@@ -259,5 +259,3 @@ main() {
 }
 
 main "$@"
-
-
