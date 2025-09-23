@@ -451,8 +451,13 @@ extract_rasterized_pages() {
 	elif command -v convert >/dev/null 2>&1; then
 		magick_cmd="convert"
 	else
-		log::error "ImageMagick not found (magick/convert)"
-		return 1
+		if [[ "$DRY_RUN" == true ]]; then
+			# In dry-run mode, use a placeholder command for display purposes
+			magick_cmd="magick"
+		else
+			log::error "ImageMagick not found (magick/convert)"
+			return 1
+		fi
 	fi
 
 	local density=300

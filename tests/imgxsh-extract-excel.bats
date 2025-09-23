@@ -4,14 +4,7 @@ load 'bats-support/load'
 load 'bats-assert/load'
 load 'test_helper.bash'
 
-setup() {
-    # common setup from helper
-    test_helper_setup || true
-}
-
-teardown() {
-    test_helper_teardown || true
-}
+# setup() and teardown() are handled by test_helper.bash
 
 @test "imgxsh-extract-excel shows help" {
     run_imgxsh "imgxsh-extract-excel" --help
