@@ -70,6 +70,37 @@ curl -fsSL https://github.com/jeromecoloma/imgxsh/install.sh | bash
 ## 📂 Project Structure
 
 ```
+
+## ⬆️ Updating imgxsh
+
+You can update the imgxsh project itself using the built-in updater.
+
+```bash
+# Quick check for available updates (no changes)
+bin/update-imgxsh --check
+
+# Update to the latest release
+bin/update-imgxsh
+
+# Specify a target version
+bin/update-imgxsh --target-version 0.1.0
+
+# Dry run (show actions without applying changes)
+bin/update-imgxsh --dry-run
+
+# From any tool, check project version and latest release status
+imgxsh --check-version
+imgxsh-convert --check-version
+imgxsh-extract-pdf --check-version
+
+# From any tool, quickly check for updates
+imgxsh --update
+```
+
+Notes:
+- Project updates use `bin/update-imgxsh`. Shell Starter library updates remain available via `bin/update-shell-starter`.
+- `--check-version` reports the current imgxsh version and the latest GitHub release.
+- In CI or tests, `TEST_MODE=true` ensures update commands are no-ops for speed.
 imgxsh/
 ├── bin/                # imgxsh binaries (main tool and individual utilities)
 ├── tests/              # Comprehensive testing framework with CI integration

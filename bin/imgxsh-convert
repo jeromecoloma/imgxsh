@@ -293,6 +293,23 @@ main() {
 			dry_run=true
 			shift
 			;;
+		--update)
+			if [[ "${TEST_MODE:-}" == "true" ]]; then
+				echo "update-imgxsh (test-mode)"
+				exit 0
+			fi
+			if command -v update-imgxsh >/dev/null 2>&1; then
+				update-imgxsh --check
+			else
+				log::error "update-imgxsh not available"
+				exit 1
+			fi
+			;;
+		--check-version)
+			echo "imgxsh-convert $(get_version)"
+			IMGXSH_REPO="jeromecoloma/imgxsh" "${SHELL_STARTER_ROOT}/scripts/check-version.sh" status || true
+			exit 0
+			;;
 		-*)
 			log::error "Unknown option: $1"
 			show_help

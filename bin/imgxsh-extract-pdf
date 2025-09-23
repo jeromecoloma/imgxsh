@@ -467,22 +467,19 @@ main() {
 		--update)
 			# In test mode, avoid network calls and heavy operations
 			if [[ "${TEST_MODE:-}" == "true" ]]; then
-				echo "update-shell-starter (test-mode)"
+				echo "update-imgxsh (test-mode)"
 				exit 0
 			fi
-			if command -v update-shell-starter >/dev/null 2>&1; then
-				# Use --check to avoid full download and keep this fast
-				update-shell-starter --check
+			if command -v update-imgxsh >/dev/null 2>&1; then
+				update-imgxsh --check
 			else
-				log::error "update-shell-starter not available"
+				log::error "update-imgxsh not available"
 				exit 1
 			fi
 			;;
 		--check-version)
 			echo "imgxsh-extract-pdf $(get_version)"
-			if command -v update-shell-starter >/dev/null 2>&1; then
-				update-shell-starter --check
-			fi
+			IMGXSH_REPO="jeromecoloma/imgxsh" "${SHELL_STARTER_ROOT}/scripts/check-version.sh" status || true
 			exit 0
 			;;
 		-*)
