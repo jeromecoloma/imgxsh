@@ -1,0 +1,626 @@
+#!/bin/bash
+
+# imgxsh-extract-excel - Extract embedded images from Excel workbooks (.xlsx/.xls)
+# Scaffold: Shell Starter integration, CLI, dependency checks, and validation
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SHELL_STARTER_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+source "${SHELL_STARTER_ROOT}/lib/main.sh"
+
+# Globals (defaults)
+EXCEL_FILE=""
+OUTPUT_DIR=""
+VERBOSE=false
+QUIET=false
+DRY_RUN=false
+OVERWRITE=false
+BACKUP=false
+LIST_ONLY=false
+
+# Option defaults (aligned with PDF tool where sensible)
+readonly DEFAULT_QUALITY=85
+readonly DEFAULT_FORMAT="jpg"
+readonly DEFAULT_PREFIX="image"
+
+QUALITY="${DEFAULT_QUALITY}"
+FORMAT="${DEFAULT_FORMAT}"
+PREFIX="${DEFAULT_PREFIX}"
+KEEP_ORIGINAL_NAMES=false
+
+show_help() {
+	cat <<EOF
+Usage: $(basename "$0") [OPTIONS] EXCEL_FILE OUTPUT_DIR
+
+Extract embedded images from Excel files (.xlsx/.xls).
+
+ARGUMENTS:
+    EXCEL_FILE            Path to the Excel file to extract images from
+    OUTPUT_DIR            Directory to save extracted images
+
+OPTIONS:
+    -h, --help            Show this help message and exit
+    -v, --version         Show version information and exit
+    -q, --quiet           Suppress verbose output
+    --verbose             Enable detailed logging
+    --dry-run             Preview operations without execution
+    --overwrite           Overwrite existing files without prompting
+    --backup              Create backup of existing files before overwriting
+    --list-only           List embedded media without extracting
+
+    -f, --format FORMAT   Desired output format (jpg, png, tiff, bmp) [default: jpg]
+    --quality QUALITY     Quality for lossy formats (1-100) [default: 85]
+    -p, --prefix PREFIX   Prefix for extracted image names [default: image]
+    --keep-names          Keep original media names from workbook (when available)
+
+    --check-deps          Check for required dependencies and exit
+    --update              Check for imgxsh updates
+    --check-version       Check current version information
+
+EXAMPLES:
+    $(basename "$0") workbook.xlsx ./extracted/
+    $(basename "$0") --list-only workbook.xlsx ./temp/
+
+DEPENDENCIES:
+    unzip                 Required for .xlsx archive inspection/extraction
+    file                  Required for file type detection
+    (optional) ImageMagick for format conversion/verification
+
+For more information, visit: https://github.com/jeromecoloma/imgxsh
+EOF
+}
+
+check_dependencies() {
+	local missing_deps=()
+
+	if ! command -v unzip >/dev/null 2>&1; then
+		missing_deps+=("unzip")
+	fi
+	if ! command -v file >/dev/null 2>&1; then
+		missing_deps+=("file")
+	fi
+
+	if [[ ${#missing_deps[@]} -gt 0 ]]; then
+		log::error "Required dependencies missing: ${missing_deps[*]}"
+		log::info "Install unzip and file:"
+		log::info "  macOS: brew install unzip file-formula"
+		log::info "  Ubuntu/Debian: sudo apt-get install unzip file"
+		log::info "  CentOS/RHEL: sudo yum install unzip file"
+		log::info "  Arch Linux: sudo pacman -S unzip file"
+		return 1
+	fi
+
+	# Optional for .xls support
+	if ! command -v 7z >/dev/null 2>&1; then
+		log::info "Optional dependency not found: 7z (for .xls extraction). Install with:"
+		log::info "  macOS: brew install p7zip"
+		log::info "  Ubuntu/Debian: sudo apt-get install p7zip-full"
+		log::info "  CentOS/RHEL: sudo yum install p7zip"
+		log::info "  Arch Linux: sudo pacman -S p7zip"
+	fi
+
+	return 0
+}
+
+validate_excel_file() {
+	local excel_file="$1"
+
+	if [[ ! -f "$excel_file" ]]; then
+		log::error "Excel file does not exist: $excel_file"
+		return 1
+	fi
+	if [[ ! -r "$excel_file" ]]; then
+		log::error "Cannot read Excel file: $excel_file"
+		return 1
+	fi
+
+	# Detect basic type
+	local mime_output
+	mime_output=$(file "$excel_file" || true)
+	# Accept: Zip archive (xlsx) or Composite Document File V2 (xls)
+	if ! echo "$mime_output" | grep -Eqi "Zip archive|Composite Document File V2|Microsoft Excel"; then
+		log::error "File does not appear to be an Excel workbook: $excel_file"
+		return 1
+	fi
+
+	return 0
+}
+
+validate_output_dir() {
+	local output_dir="$1"
+
+	if [[ -f "$output_dir" ]]; then
+		log::error "Output path is a file, not a directory: $output_dir"
+		return 1
+	fi
+
+	if [[ ! -d "$output_dir" ]]; then
+		if [[ "$DRY_RUN" == true ]]; then
+			log::info "Would create output directory: $output_dir"
+		else
+			log::info "Creating output directory: $output_dir"
+			if ! mkdir -p "$output_dir"; then
+				log::error "Failed to create output directory: $output_dir"
+				return 1
+			fi
+		fi
+	fi
+
+	if [[ ! -w "$output_dir" ]] && [[ "$DRY_RUN" != true ]]; then
+		log::error "Cannot write to output directory: $output_dir"
+		return 1
+	fi
+
+	return 0
+}
+
+validate_format() {
+	local format="$1"
+	local valid_formats=("jpg" "jpeg" "png" "tiff" "bmp")
+
+	format=$(echo "$format" | tr '[:upper:]' '[:lower:]')
+
+	for valid_format in "${valid_formats[@]}"; do
+		if [[ "$format" == "$valid_format" ]]; then
+			echo "$format"
+			return 0
+		fi
+	done
+
+	log::error "Invalid format: $format"
+	log::info "Supported formats: ${valid_formats[*]}"
+	return 1
+}
+
+validate_quality() {
+	local quality="$1"
+
+	if ! [[ "$quality" =~ ^[0-9]+$ ]]; then
+		log::error "Quality must be a number: $quality"
+		return 1
+	fi
+
+	if [[ "$quality" -lt 1 || "$quality" -gt 100 ]]; then
+		log::error "Quality must be between 1 and 100: $quality"
+		return 1
+	fi
+
+	return 0
+}
+
+list_embedded_media() {
+	local excel_file="$1"
+	local output_dir="$2"
+
+	# Placeholder scaffold: For .xlsx, embedded media typically under xl/media/*
+	log::info "Listing embedded media in: $excel_file"
+	if command -v unzip >/dev/null 2>&1 && file "$excel_file" | grep -qi "Zip archive"; then
+		if unzip -Z -1 "$excel_file" 2>/dev/null | grep -E "^xl/media/" >"$output_dir/excel_media_list.txt" 2>/dev/null; then
+			local count
+			count=$(grep -c "." "$output_dir/excel_media_list.txt" 2>/dev/null || echo "0")
+			log::info "Found $count media file(s)"
+			if [[ "$VERBOSE" == true ]]; then
+				log::info "Media files:"
+				cat "$output_dir/excel_media_list.txt"
+			fi
+			return 0
+		else
+			log::warn "No media files found under xl/media/"
+			return 0
+		fi
+	else
+		log::warn "Listing unsupported (requires .xlsx Zip archive and unzip)"
+		return 0
+	fi
+}
+
+_detect_ext_from_mime() {
+	local file_path="$1"
+	local mime
+	mime=$(file -b --mime-type "$file_path" 2>/dev/null || echo "")
+	case "$mime" in
+	image/jpeg) echo "jpg" ;;
+	image/png) echo "png" ;;
+	image/tiff) echo "tiff" ;;
+	image/bmp) echo "bmp" ;;
+	*) echo "" ;;
+	esac
+}
+
+extract_embedded_media_xlsx() {
+	local excel_file="$1"
+	local output_dir="$2"
+
+	local list
+	list=$(unzip -Z -1 "$excel_file" 2>/dev/null | grep -E "^xl/media/" || true)
+	if [[ -z "$list" ]]; then
+		log::warn "No embedded media found in workbook"
+		return 0
+	fi
+
+	local index=0
+	local processed=0
+	local failed=0
+
+	local temp_dir
+	temp_dir=$(mktemp -d)
+
+	# Iterate media entries
+	while IFS= read -r entry; do
+		[[ -z "$entry" ]] && continue
+		index=$((index + 1))
+
+		local tmp_file="$temp_dir/media_$index"
+		# Extract specific entry to temp file
+		if [[ "$DRY_RUN" == true ]]; then
+			log::info "Would extract: $entry"
+			continue
+		fi
+		if ! unzip -p "$excel_file" "$entry" >"$tmp_file" 2>/dev/null; then
+			log::warn "Failed to extract: $entry"
+			failed=$((failed + 1))
+			continue
+		fi
+
+		# Determine output extension
+		local src_ext
+		src_ext=$(_detect_ext_from_mime "$tmp_file")
+		[[ -z "$src_ext" ]] && src_ext="bin"
+
+		local out_name
+		if [[ "$KEEP_ORIGINAL_NAMES" == true ]]; then
+			# Use original basename from archive path
+			out_name="$(basename "$entry")"
+		else
+			local num
+			num=$(printf "%03d" "$index")
+			local target_ext="$src_ext"
+			# If user requested a format, use it as target extension
+			if [[ -n "$FORMAT" ]]; then
+				target_ext="$FORMAT"
+			fi
+			out_name="${PREFIX}_${num}.${target_ext}"
+		fi
+
+		local out_path="$output_dir/$out_name"
+
+		# Convert if requested format differs and ImageMagick available
+		local need_convert="false"
+		if [[ "$KEEP_ORIGINAL_NAMES" == false ]]; then
+			# when not keeping names, we may have changed extension via FORMAT
+			if [[ -n "$FORMAT" && "$FORMAT" != "$src_ext" ]]; then
+				need_convert="true"
+			fi
+		fi
+
+		if [[ "$need_convert" == "true" ]]; then
+			# Prefer magick (v7) then convert (v6)
+			local im_cmd=""
+			if command -v magick >/dev/null 2>&1; then
+				im_cmd="magick"
+			elif command -v convert >/dev/null 2>&1; then
+				im_cmd="convert"
+			fi
+			if [[ -n "$im_cmd" ]]; then
+				if ! $im_cmd "$tmp_file" -quality "$QUALITY" "$out_path" 2>/dev/null; then
+					log::warn "Conversion failed for $entry; saving original"
+					cp "$tmp_file" "$output_dir/${PREFIX}_$(printf "%03d" "$index").$src_ext"
+				else
+					processed=$((processed + 1))
+					[[ "$VERBOSE" == true ]] && log::info "Extracted: $entry -> $(basename "$out_path")"
+				fi
+			else
+				log::warn "ImageMagick not available; saving original format"
+				cp "$tmp_file" "$output_dir/${PREFIX}_$(printf "%03d" "$index").$src_ext"
+				processed=$((processed + 1))
+			fi
+		else
+			# No conversion; decide destination path (keep name or prefixed with src_ext)
+			if [[ "$KEEP_ORIGINAL_NAMES" == true ]]; then
+				cp "$tmp_file" "$out_path"
+			else
+				cp "$tmp_file" "$output_dir/${PREFIX}_$(printf "%03d" "$index").$src_ext"
+				out_path="$output_dir/${PREFIX}_$(printf "%03d" "$index").$src_ext"
+			fi
+			processed=$((processed + 1))
+			[[ "$VERBOSE" == true ]] && log::info "Extracted: $entry -> $(basename "$out_path")"
+		fi
+	done <<<"$list"
+
+	rm -rf "$temp_dir"
+
+	if [[ "$processed" -eq 0 ]]; then
+		log::warn "No media files were extracted"
+		return 0
+	fi
+
+	log::success "Successfully extracted $processed media file(s); failures: $failed"
+	return 0
+}
+
+extract_embedded_media_xls() {
+	local excel_file="$1"
+	local output_dir="$2"
+
+	if ! command -v 7z >/dev/null 2>&1; then
+		log::warn ".xls extraction requires 7z; skipping extraction"
+		return 0
+	fi
+
+	local list
+	list=$(7z l -ba "$excel_file" 2>/dev/null | awk '{print $NF}' | grep -E '\\.(jpe?g|png|tiff?|bmp|gif)$' || true)
+	if [[ -z "$list" ]]; then
+		log::warn "No recognizable media files found in .xls"
+		return 0
+	fi
+
+	local index=0
+	local processed=0
+	local failed=0
+
+	while IFS= read -r entry; do
+		[[ -z "$entry" ]] && continue
+		index=$((index + 1))
+		if [[ "$DRY_RUN" == true ]]; then
+			log::info "Would extract (xls): $entry"
+			continue
+		fi
+
+		local tmp_file
+		tmp_file=$(mktemp)
+		if ! 7z x -so "$excel_file" "$entry" >"$tmp_file" 2>/dev/null; then
+			log::warn "Failed to extract: $entry"
+			failed=$((failed + 1))
+			rm -f "$tmp_file"
+			continue
+		fi
+
+		local src_ext
+		src_ext=$(_detect_ext_from_mime "$tmp_file")
+		[[ -z "$src_ext" ]] && src_ext="bin"
+
+		local out_name
+		if [[ "$KEEP_ORIGINAL_NAMES" == true ]]; then
+			out_name="$(basename "$entry")"
+		else
+			local num
+			num=$(printf "%03d" "$index")
+			local target_ext="$src_ext"
+			if [[ -n "$FORMAT" ]]; then
+				target_ext="$FORMAT"
+			fi
+			out_name="${PREFIX}_${num}.${target_ext}"
+		fi
+
+		local out_path="$output_dir/$out_name"
+
+		local need_convert="false"
+		if [[ "$KEEP_ORIGINAL_NAMES" == false ]]; then
+			if [[ -n "$FORMAT" && "$FORMAT" != "$src_ext" ]]; then
+				need_convert="true"
+			fi
+		fi
+
+		if [[ "$need_convert" == "true" ]]; then
+			local im_cmd=""
+			if command -v magick >/dev/null 2>&1; then
+				im_cmd="magick"
+			elif command -v convert >/dev/null 2>&1; then
+				im_cmd="convert"
+			fi
+			if [[ -n "$im_cmd" ]]; then
+				if ! $im_cmd "$tmp_file" -quality "$QUALITY" "$out_path" 2>/dev/null; then
+					log::warn "Conversion failed for $entry; saving original"
+					cp "$tmp_file" "$output_dir/${PREFIX}_$(printf "%03d" "$index").$src_ext"
+				else
+					processed=$((processed + 1))
+					[[ "$VERBOSE" == true ]] && log::info "Extracted: $entry -> $(basename "$out_path")"
+				fi
+			else
+				log::warn "ImageMagick not available; saving original format"
+				cp "$tmp_file" "$output_dir/${PREFIX}_$(printf "%03d" "$index").$src_ext"
+				processed=$((processed + 1))
+			fi
+		else
+			if [[ "$KEEP_ORIGINAL_NAMES" == true ]]; then
+				cp "$tmp_file" "$out_path"
+			else
+				cp "$tmp_file" "$output_dir/${PREFIX}_$(printf "%03d" "$index").$src_ext"
+				out_path="$output_dir/${PREFIX}_$(printf "%03d" "$index").$src_ext"
+			fi
+			processed=$((processed + 1))
+			[[ "$VERBOSE" == true ]] && log::info "Extracted: $entry -> $(basename "$out_path")"
+		fi
+
+		rm -f "$tmp_file"
+	done <<<"$list"
+
+	if [[ "$processed" -eq 0 ]]; then
+		log::warn "No media files were extracted from .xls"
+		return 0
+	fi
+
+	log::success "Successfully extracted $processed media file(s) from .xls; failures: $failed"
+	return 0
+}
+
+main() {
+	# Parse arguments
+	while [[ $# -gt 0 ]]; do
+		case $1 in
+		-h | --help)
+			show_help
+			exit 0
+			;;
+		-v | --version)
+			echo "$(basename "$0") $(get_version)"
+			exit 0
+			;;
+		-q | --quiet)
+			QUIET=true
+			shift
+			;;
+		--verbose)
+			VERBOSE=true
+			shift
+			;;
+		--dry-run)
+			DRY_RUN=true
+			shift
+			;;
+		--overwrite)
+			OVERWRITE=true
+			shift
+			;;
+		--backup)
+			BACKUP=true
+			shift
+			;;
+		--list-only)
+			LIST_ONLY=true
+			shift
+			;;
+		-f | --format)
+			FORMAT="$2"
+			shift 2
+			;;
+		--quality)
+			QUALITY="$2"
+			shift 2
+			;;
+		-p | --prefix)
+			PREFIX="$2"
+			shift 2
+			;;
+		--keep-names)
+			KEEP_ORIGINAL_NAMES=true
+			shift
+			;;
+		--check-deps)
+			check_dependencies
+			exit $?
+			;;
+		--update)
+			if [[ "${TEST_MODE:-}" == "true" ]]; then
+				echo "update-imgxsh (test-mode)"
+				exit 0
+			fi
+			if command -v update-imgxsh >/dev/null 2>&1; then
+				update-imgxsh --check
+			else
+				log::error "update-imgxsh not available"
+				exit 1
+			fi
+			;;
+		--check-version)
+			echo "imgxsh-extract-excel $(get_version)"
+			IMGXSH_REPO="jeromecoloma/imgxsh" "${SHELL_STARTER_ROOT}/scripts/check-version.sh" status || true
+			exit 0
+			;;
+		-*)
+			log::error "Unknown option: $1"
+			show_help
+			exit 1
+			;;
+		*)
+			if [[ -z "$EXCEL_FILE" ]]; then
+				EXCEL_FILE="$1"
+			elif [[ -z "$OUTPUT_DIR" ]]; then
+				OUTPUT_DIR="$1"
+			else
+				log::error "Too many arguments"
+				show_help
+				exit 1
+			fi
+			shift
+			;;
+		esac
+	done
+
+	# Required args
+	if [[ -z "$EXCEL_FILE" ]]; then
+		log::error "Excel file is required"
+		show_help
+		exit 1
+	fi
+	if [[ -z "$OUTPUT_DIR" ]]; then
+		log::error "Output directory is required"
+		show_help
+		exit 1
+	fi
+
+	# Validate
+	if ! check_dependencies; then
+		exit 1
+	fi
+	if ! validate_excel_file "$EXCEL_FILE"; then
+		exit 1
+	fi
+	if ! validate_output_dir "$OUTPUT_DIR"; then
+		exit 1
+	fi
+	# Validate format and quality early even if not applied yet (for consistent UX)
+	if ! FORMAT=$(validate_format "$FORMAT"); then
+		exit 1
+	fi
+	if ! validate_quality "$QUALITY"; then
+		exit 1
+	fi
+
+	# Quiet mode implies non-verbose
+	if [[ "$QUIET" == true ]]; then
+		VERBOSE=false
+	fi
+
+	if [[ "$QUIET" != true ]]; then
+		log::info "Starting Excel image extraction (scaffold)"
+		log::info "Excel: $EXCEL_FILE"
+		log::info "Output: $OUTPUT_DIR"
+		log::info "Format: $FORMAT"
+		log::info "Quality: $QUALITY"
+		log::info "Prefix: $PREFIX"
+		if [[ "$DRY_RUN" == true ]]; then
+			log::info "DRY RUN MODE - No files will be modified"
+		fi
+	fi
+
+	# List-only scaffold
+	if [[ "$LIST_ONLY" == true ]]; then
+		list_embedded_media "$EXCEL_FILE" "$OUTPUT_DIR" || true
+		exit 0
+	fi
+
+	# Extraction for .xlsx (Zip archive structure)
+	if file "$EXCEL_FILE" | grep -qi "Zip archive"; then
+		if ! extract_embedded_media_xlsx "$EXCEL_FILE" "$OUTPUT_DIR"; then
+			exit 1
+		fi
+		[[ "$QUIET" != true ]] && log::success "Excel media extraction completed successfully"
+		exit 0
+	fi
+
+	# Legacy .xls best-effort via 7z if available
+	if file "$EXCEL_FILE" | grep -Eqi "Composite Document File|CDF V2|Microsoft Excel"; then
+		if command -v 7z >/dev/null 2>&1; then
+			if ! extract_embedded_media_xls "$EXCEL_FILE" "$OUTPUT_DIR"; then
+				exit 1
+			fi
+			[[ "$QUIET" != true ]] && log::success "Excel (.xls) media extraction completed"
+			exit 0
+		else
+			log::warn ".xls detected but 7z not available; skipping .xls extraction"
+			log::info "Tip: Install 7z (p7zip) or resave as .xlsx"
+			exit 0
+		fi
+	fi
+
+	log::warn "Unknown Excel format; no extraction performed"
+	log::info "Tip: If this is an older .xls, install 7z or save as .xlsx"
+	exit 0
+}
+
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+	main "$@"
+fi

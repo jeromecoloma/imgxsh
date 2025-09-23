@@ -94,6 +94,55 @@ if ! command -v identify >/dev/null 2>&1; then
 	missing_imgxsh_deps+=("identify")
 fi
 
+# Ensure unzip for .xlsx extraction
+if ! command -v unzip >/dev/null 2>&1; then
+	echo "Installing unzip for .xlsx extraction..."
+	if command -v apt-get >/dev/null 2>&1; then
+		sudo apt-get update -qq
+		sudo apt-get install -y unzip
+	elif command -v yum >/dev/null 2>&1; then
+		sudo yum install -y unzip
+	elif command -v dnf >/dev/null 2>&1; then
+		sudo dnf install -y unzip
+	elif command -v pacman >/dev/null 2>&1; then
+		sudo pacman -S --noconfirm unzip
+	else
+		echo "⚠️  Cannot install unzip automatically on this system"
+		missing_imgxsh_deps+=("unzip")
+	fi
+fi
+
+if command -v unzip >/dev/null 2>&1; then
+	echo "✅ unzip available for .xlsx extraction"
+else
+	echo "⚠️  unzip not available - some Excel extraction tests will be limited"
+fi
+
+# Best-effort install for 7z (p7zip) to support .xls extraction
+if ! command -v 7z >/dev/null 2>&1; then
+	echo "Attempting to install 7z (p7zip) for .xls extraction..."
+	if command -v apt-get >/dev/null 2>&1; then
+		sudo apt-get update -qq
+		sudo apt-get install -y p7zip-full || true
+	elif command -v yum >/dev/null 2>&1; then
+		sudo yum install -y p7zip || true
+	elif command -v dnf >/dev/null 2>&1; then
+		sudo dnf install -y p7zip || true
+	elif command -v pacman >/dev/null 2>&1; then
+		sudo pacman -S --noconfirm p7zip || true
+	else
+		echo "⚠️  Cannot install 7z automatically on this system"
+	fi
+fi
+
+if command -v 7z >/dev/null 2>&1; then
+	echo "✅ 7z available for .xls extraction"
+	export IMGXSH_7Z_AVAILABLE=true
+else
+	echo "ℹ️  7z not available - .xls extraction will be skipped gracefully"
+	export IMGXSH_7Z_AVAILABLE=false
+fi
+
 # Set environment flags based on dependencies
 if [[ ${#missing_imgxsh_deps[@]} -gt 0 ]]; then
 	echo "⚠️  Missing imgxsh dependencies: ${missing_imgxsh_deps[*]}"

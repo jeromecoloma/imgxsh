@@ -64,6 +64,11 @@ curl -fsSL https://github.com/jeromecoloma/imgxsh/install.sh | bash
   - Page range selection, format conversion, metadata preservation
   - Template-based naming, quality control, dry-run mode
 - `imgxsh-extract-excel` - Extract images from Excel files
+  - .xlsx support via `unzip` (lists and extracts `xl/media/*`)
+  - `--list-only` to preview embedded media; verbose shows file list
+  - Naming: default `{prefix}_{NNN}.{ext}` or `--keep-names`
+  - Optional conversion with `-f/--format` and `--quality`
+  - Dry-run support with detailed logs
 - `imgxsh-watermark` - Add watermarks to images
 - `imgxsh-ocr` - Extract text from images using OCR
 
@@ -95,6 +100,27 @@ imgxsh-extract-pdf --check-version
 
 # From any tool, quickly check for updates
 imgxsh --update
+```
+
+## 📘 Usage Examples
+
+### Excel Extraction (`imgxsh-extract-excel`)
+
+```bash
+# List embedded media without extracting
+imgxsh-extract-excel --list-only workbook.xlsx ./out
+
+# Extract with default naming (image_001.png, ...)
+imgxsh-extract-excel workbook.xlsx ./extracted
+
+# Extract and convert to JPG with quality 85
+imgxsh-extract-excel -f jpg --quality 85 workbook.xlsx ./extracted
+
+# Keep original embedded media names
+imgxsh-extract-excel --keep-names workbook.xlsx ./extracted
+
+# Dry run (show planned actions only)
+imgxsh-extract-excel --dry-run --verbose workbook.xlsx ./extracted
 ```
 
 Notes:
