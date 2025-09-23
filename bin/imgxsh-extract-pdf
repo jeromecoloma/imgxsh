@@ -104,7 +104,12 @@ check_dependencies() {
 	# ImageMagick required for default raster extraction
 	if ! command -v convert >/dev/null 2>&1 && ! command -v magick >/dev/null 2>&1; then
 		if [[ "$EXTRACT_MODE" == "raster" ]]; then
-			missing_deps+=("ImageMagick")
+			# In dry-run or list-only modes, allow missing ImageMagick (we only print commands)
+			if [[ "$DRY_RUN" == true || "$LIST_ONLY" == true ]]; then
+				optional_deps+=("ImageMagick")
+			else
+				missing_deps+=("ImageMagick")
+			fi
 		else
 			optional_deps+=("ImageMagick")
 		fi
