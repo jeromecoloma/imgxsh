@@ -26,11 +26,11 @@ echo "Setting up CI environment for imgxsh tests..."
 # Ensure Bats library path is correctly set for 'load' statements in tests
 # Prefer system-installed bats libraries (from bats-action), fallback to vendored tests/ copies
 if [[ -d "/usr/lib/bats-support" ]] || [[ -d "/usr/lib/bats-assert" ]]; then
-    export BATS_LIB_PATH="/usr/lib"
+	export BATS_LIB_PATH="/usr/lib"
 elif [[ -d "/usr/local/lib/bats-support" ]] || [[ -d "/usr/local/lib/bats-assert" ]]; then
-    export BATS_LIB_PATH="/usr/local/lib"
+	export BATS_LIB_PATH="/usr/local/lib"
 elif [[ -d "${PROJECT_ROOT}/tests/bats-support" ]] || [[ -d "${PROJECT_ROOT}/tests/bats-assert" ]]; then
-    export BATS_LIB_PATH="${PROJECT_ROOT}/tests"
+	export BATS_LIB_PATH="${PROJECT_ROOT}/tests"
 fi
 
 # Check for required POSIX tools
