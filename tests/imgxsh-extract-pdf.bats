@@ -197,13 +197,16 @@ EOF
 
 @test "imgxsh-extract-pdf shows dependency check" {
     run_imgxsh "imgxsh-extract-pdf" --check-deps
-    # This should succeed if pdfimages is installed (no output when dependencies are available)
-    if command -v pdfimages >/dev/null 2>&1; then
+    # The check-deps command will fail if ImageMagick is missing (default mode is raster)
+    # This is expected behavior since raster mode requires ImageMagick
+    if command -v convert >/dev/null 2>&1 || command -v magick >/dev/null 2>&1; then
+        # ImageMagick is available, should succeed
         assert_success
-        # No output expected when dependencies are available
     else
+        # ImageMagick is missing, should fail with helpful message
         assert_failure
         assert_output --partial "Required dependencies missing"
+        assert_output --partial "ImageMagick"
     fi
 }
 
