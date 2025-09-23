@@ -61,7 +61,10 @@ curl -fsSL https://github.com/jeromecoloma/imgxsh/install.sh | bash
 - `imgxsh-resize` - Resize images with aspect ratio control
   - Pixel/percentage sizing, batch directories, smart no-upscale (`--allow-upscale` to override), `--max-file-size`
 - `imgxsh-extract-pdf` - Extract images from PDF documents
-  - Page range selection, format conversion, metadata preservation
+  - Default: rasterize one image per page (ImageMagick, density 300, quality 90)
+  - `--embedded-images` to extract original embedded raster images (pdfimages)
+  - `--list-only` shows both Pages (via `pdfinfo`) and Embedded images (via `pdfimages`)
+  - Page range selection (limited in raster mode), format conversion, metadata preservation
   - Template-based naming, quality control, dry-run mode
 - `imgxsh-extract-excel` - Extract images from Excel files
   - .xlsx support via `unzip` (lists and extracts `xl/media/*`)
@@ -103,6 +106,27 @@ imgxsh --update
 ```
 
 ## 📘 Usage Examples
+
+### PDF Extraction (`imgxsh-extract-pdf`)
+
+```bash
+# Show PDF summary (pages and embedded images)
+imgxsh-extract-pdf --list-only document.pdf ./out
+
+# Rasterize pages to JPG (default): page-00.jpg, page-01.jpg, ...
+imgxsh-extract-pdf document.pdf ./out
+
+# Extract embedded images instead of rasterizing pages
+imgxsh-extract-pdf --embedded-images document.pdf ./out
+
+# Dry run with verbose output
+imgxsh-extract-pdf --dry-run --verbose document.pdf ./out
+```
+
+Notes:
+- Raster mode uses `magick`/`convert -density 300 -quality 90` by default.
+- Complex page ranges like `1,3,7` are not fully supported in a single rasterization call; ranges like `1-5` are supported.
+- Embedded images mode uses `pdfimages` and may produce many images per page depending on the document.
 
 ### Excel Extraction (`imgxsh-extract-excel`)
 

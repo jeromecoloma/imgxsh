@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# imgxsh-extract-pdf - Extract images from PDF files using pdfimages/poppler-utils
-# Extracts embedded images from PDF documents with metadata preservation and flexible naming
+# imgxsh-extract-pdf - Extract images from PDF files
+# Default: rasterize pages to images using ImageMagick; Optional: extract embedded images via pdfimages
 
 set -euo pipefail
 
@@ -30,12 +30,13 @@ BACKUP=false
 LIST_ONLY=false
 EXTRACT_METADATA=true
 KEEP_ORIGINAL_NAMES=false
+EXTRACT_MODE="raster" # raster | embedded
 
 show_help() {
 	cat <<EOF
 Usage: $(basename "$0") [OPTIONS] PDF_FILE OUTPUT_DIR
 
-Extract images from PDF files using pdfimages/poppler-utils.
+Extract images from PDF files. By default, pages are rasterized to images using ImageMagick. Use --embedded-images to extract original embedded raster images via pdfimages.
 
 ARGUMENTS:
     PDF_FILE              Path to the PDF file to extract images from
@@ -54,7 +55,8 @@ OPTIONS:
     -q, --quality QUALITY Quality setting for lossy formats (1-100) [default: 85]
     -p, --prefix PREFIX   Prefix for extracted image names [default: page]
     --page-range RANGE    Extract specific pages (e.g., "1-5", "1,3,7", "2-")
-    --list-only           List available images without extracting
+    --list-only           Show summary of PDF (Pages and Embedded images) without extracting
+    --embedded-images     Extract embedded raster images (uses pdfimages); default is rasterized pages
     --no-metadata         Skip metadata extraction and preservation
     --keep-names          Keep original image names from PDF
     
@@ -64,7 +66,11 @@ OPTIONS:
 
 EXAMPLES:
     # Extract all images to output directory
+    # Default (rasterize one image per page at 300 DPI, JPG quality 90)
     $(basename "$0") document.pdf ./extracted/
+    
+    # Extract embedded images instead of rasterizing pages
+    $(basename "$0") --embedded-images document.pdf ./extracted/
     
     # Extract specific pages with custom naming
     $(basename "$0") --page-range "1-5" --prefix "chapter1" document.pdf ./images/
@@ -72,15 +78,16 @@ EXAMPLES:
     # Extract as PNG with high quality
     $(basename "$0") --format png --quality 95 document.pdf ./high-res/
     
-    # List available images without extracting
+    # List-only: show pages and embedded images count
     $(basename "$0") --list-only document.pdf ./temp/
     
     # Dry run to preview operations
     $(basename "$0") --dry-run --verbose document.pdf ./output/
 
 DEPENDENCIES:
-    pdfimages (poppler-utils) - Required for PDF image extraction
-    ImageMagick - Optional, for format conversion and quality control
+    ImageMagick (magick/convert) - Required for default rasterized page extraction
+    pdfinfo (poppler-utils)      - Recommended, for page counting in list-only and metadata
+    pdfimages (poppler-utils)    - Required for --embedded-images and embedded count in list-only
 
 FORMATS SUPPORTED:
     jpg, png, tiff, bmp - Output formats supported by ImageMagick
@@ -94,21 +101,34 @@ check_dependencies() {
 	local missing_deps=()
 	local optional_deps=()
 
-	# Check for pdfimages (required)
-	if ! command -v pdfimages >/dev/null 2>&1; then
-		missing_deps+=("pdfimages")
+	# ImageMagick required for default raster extraction
+	if ! command -v convert >/dev/null 2>&1 && ! command -v magick >/dev/null 2>&1; then
+		if [[ "$EXTRACT_MODE" == "raster" ]]; then
+			missing_deps+=("ImageMagick")
+		else
+			optional_deps+=("ImageMagick")
+		fi
 	fi
 
-	# Check for ImageMagick (optional for format conversion)
-	if ! command -v convert >/dev/null 2>&1 && ! command -v magick >/dev/null 2>&1; then
-		optional_deps+=("ImageMagick")
+	# pdfimages is required when extracting embedded images; optional for list-only summary
+	if ! command -v pdfimages >/dev/null 2>&1; then
+		if [[ "$EXTRACT_MODE" == "embedded" ]]; then
+			missing_deps+=("pdfimages")
+		else
+			optional_deps+=("pdfimages")
+		fi
+	fi
+
+	# pdfinfo recommended for page count and metadata
+	if ! command -v pdfinfo >/dev/null 2>&1; then
+		optional_deps+=("pdfinfo")
 	fi
 
 	if [[ ${#missing_deps[@]} -gt 0 ]]; then
 		log::error "Required dependencies missing: ${missing_deps[*]}"
-		log::info "Install pdfimages:"
+		log::info "Install dependencies:"
 		log::info "  macOS: brew install poppler"
-		log::info "  Ubuntu/Debian: sudo apt-get install poppler-utils"
+		log::info "  Ubuntu/Debian: sudo apt-get install imagemagick poppler-utils"
 		log::info "  CentOS/RHEL: sudo yum install poppler-utils"
 		log::info "  Arch Linux: sudo pacman -S poppler"
 		return 1
@@ -116,12 +136,11 @@ check_dependencies() {
 
 	if [[ ${#optional_deps[@]} -gt 0 ]]; then
 		log::warn "Optional dependencies missing: ${optional_deps[*]}"
-		log::info "ImageMagick is recommended for format conversion and quality control"
-		log::info "Install ImageMagick:"
-		log::info "  macOS: brew install imagemagick"
-		log::info "  Ubuntu/Debian: sudo apt-get install imagemagick"
-		log::info "  CentOS/RHEL: sudo yum install ImageMagick"
-		log::info "  Arch Linux: sudo pacman -S imagemagick"
+		log::info "Install suggestions:"
+		log::info "  macOS: brew install imagemagick poppler"
+		log::info "  Ubuntu/Debian: sudo apt-get install imagemagick poppler-utils"
+		log::info "  CentOS/RHEL: sudo yum install ImageMagick poppler-utils"
+		log::info "  Arch Linux: sudo pacman -S imagemagick poppler"
 	fi
 
 	return 0
@@ -260,6 +279,41 @@ list_pdf_images() {
 	return 0
 }
 
+list_pdf_summary() {
+	local pdf_file="$1"
+	local output_dir="$2"
+
+	log::info "Analyzing PDF: $pdf_file"
+
+	local pages="unknown"
+	if command -v pdfinfo >/dev/null 2>&1; then
+		pages=$(pdfinfo "$pdf_file" 2>/dev/null | awk -F': *' '/^Pages/ {print $2; exit}')
+		pages=${pages:-unknown}
+	else
+		log::warn "pdfinfo not available; cannot determine page count"
+	fi
+
+	local embedded_images="0"
+	if command -v pdfimages >/dev/null 2>&1; then
+		if pdfimages -list "$pdf_file" >"$output_dir/pdf_images_list.txt" 2>/dev/null; then
+			embedded_images=$(grep -c "^[[:space:]]*[0-9]" "$output_dir/pdf_images_list.txt" 2>/dev/null || echo "0")
+			embedded_images=$(echo "$embedded_images" | tr -d '\n')
+		else
+			log::warn "Failed to list embedded images via pdfimages"
+		fi
+	else
+		log::warn "pdfimages not available; embedded image count unavailable"
+	fi
+
+	log::info "Pages: ${pages}"
+	log::info "Embedded images: ${embedded_images}"
+
+	if [[ "$VERBOSE" == true && -f "$output_dir/pdf_images_list.txt" ]]; then
+		log::info "Embedded image details:"
+		cat "$output_dir/pdf_images_list.txt"
+	fi
+}
+
 extract_pdf_images() {
 	local pdf_file="$1"
 	local output_dir="$2"
@@ -273,7 +327,7 @@ extract_pdf_images() {
 	local temp_dir
 	temp_dir=$(mktemp -d)
 
-	# Extract images using pdfimages
+	# Extract images using pdfimages (embedded mode)
 	local pdfimages_cmd="pdfimages"
 	local pdfimages_args=()
 
@@ -377,6 +431,71 @@ extract_pdf_images() {
 	return 0
 }
 
+extract_rasterized_pages() {
+	local pdf_file="$1"
+	local output_dir="$2"
+
+	if [[ "$QUIET" != true ]]; then
+		log::info "Rasterizing pages from PDF: $pdf_file"
+		log::info "Output directory: $output_dir"
+	fi
+
+	local magick_cmd=""
+	if command -v magick >/dev/null 2>&1; then
+		magick_cmd="magick"
+	elif command -v convert >/dev/null 2>&1; then
+		magick_cmd="convert"
+	else
+		log::error "ImageMagick not found (magick/convert)"
+		return 1
+	fi
+
+	local density=300
+	local output_pattern="$output_dir/${PREFIX}-%02d.$FORMAT"
+
+	local range_input="$pdf_file"
+	if [[ -n "$PAGE_RANGE" ]]; then
+		# Convert simple "a-b" to [a-b], otherwise leave to ImageMagick default
+		# Note: Complex ranges like 1,3,7 aren't directly supported by IM in one call
+		if [[ "$PAGE_RANGE" =~ ^[0-9]+-[0-9]+$ ]]; then
+			range_input="${pdf_file}[$PAGE_RANGE]"
+		else
+			log::warn "Complex page ranges are not fully supported for raster mode; rendering full document"
+		fi
+	fi
+
+	if [[ "$DRY_RUN" == true ]]; then
+		log::info "Would run: $magick_cmd -density $density \"$range_input\" -quality $QUALITY \"$output_pattern\""
+		return 0
+	fi
+
+	if ! $magick_cmd -density $density "$range_input" -quality "$QUALITY" "$output_pattern" 2>/dev/null; then
+		log::error "Failed to rasterize PDF pages"
+		return 1
+	fi
+
+	# Count generated files
+	local count=0
+	shopt -s nullglob
+	for f in "$output_dir"/"${PREFIX}-"*."$FORMAT"; do
+		[[ -f "$f" ]] && ((count++))
+	done
+	shopt -u nullglob
+
+	if [[ "$count" -eq 0 ]]; then
+		log::warn "No pages were rasterized (no output files created)"
+		return 0
+	fi
+
+	log::success "Successfully rendered $count page images"
+
+	if [[ "$EXTRACT_METADATA" == true ]]; then
+		extract_pdf_metadata "$pdf_file" "$output_dir"
+	fi
+
+	return 0
+}
+
 extract_pdf_metadata() {
 	local pdf_file="$1"
 	local output_dir="$2"
@@ -458,6 +577,10 @@ main() {
 			;;
 		--keep-names)
 			KEEP_ORIGINAL_NAMES=true
+			shift
+			;;
+		--embedded-images)
+			EXTRACT_MODE="embedded"
 			shift
 			;;
 		--check-deps)
@@ -567,15 +690,19 @@ main() {
 
 	# List only mode
 	if [[ "$LIST_ONLY" == true ]]; then
-		if ! list_pdf_images "$PDF_FILE" "$OUTPUT_DIR"; then
-			exit 1
-		fi
+		list_pdf_summary "$PDF_FILE" "$OUTPUT_DIR" || true
 		exit 0
 	fi
 
-	# Extract images
-	if ! extract_pdf_images "$PDF_FILE" "$OUTPUT_DIR"; then
-		exit 1
+	# Extract
+	if [[ "$EXTRACT_MODE" == "embedded" ]]; then
+		if ! extract_pdf_images "$PDF_FILE" "$OUTPUT_DIR"; then
+			exit 1
+		fi
+	else
+		if ! extract_rasterized_pages "$PDF_FILE" "$OUTPUT_DIR"; then
+			exit 1
+		fi
 	fi
 
 	if [[ "$QUIET" != true ]]; then

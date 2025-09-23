@@ -230,8 +230,28 @@ EOF
     
     run_imgxsh "imgxsh-extract-pdf" "$test_pdf" "$BATS_TMPDIR/output" --list-only
     assert_success
-    assert_output --partial "Listing images in PDF"
-    assert_output --partial "Found"
+    assert_output --partial "Analyzing PDF"
+    assert_output --partial "Pages:"
+    assert_output --partial "Embedded images:"
+}
+
+@test "imgxsh-extract-pdf rasterizes pages by default (dry run)" {
+    # ImageMagick required for raster mode; if not present, skip
+    if ! command -v convert >/dev/null 2>&1 && ! command -v magick >/dev/null 2>&1; then
+        skip "ImageMagick not available"
+    fi
+    run_imgxsh "imgxsh-extract-pdf" "$BATS_TMPDIR/test.pdf" "$BATS_TMPDIR/output" --dry-run --verbose
+    assert_success
+    assert_output --partial "Rasterizing pages from PDF"
+    assert_output --partial "Would run:"
+}
+
+@test "imgxsh-extract-pdf supports --embedded-images (dry run)" {
+    require_pdfimages
+    run_imgxsh "imgxsh-extract-pdf" --embedded-images "$BATS_TMPDIR/test.pdf" "$BATS_TMPDIR/output" --dry-run --verbose
+    assert_success
+    assert_output --partial "Extracting images from PDF"
+    assert_output --partial "Would run:"
 }
 
 @test "imgxsh-extract-pdf verbose mode shows detailed output" {
@@ -336,7 +356,7 @@ EOF
     
     run_imgxsh "imgxsh-extract-pdf" "$BATS_TMPDIR/empty.pdf" "$BATS_TMPDIR/output" --list-only
     # This should handle the case gracefully, either succeeding or failing appropriately
-    assert_output --partial "Listing images in PDF"
+    assert_output --partial "Analyzing PDF"
 }
 
 @test "imgxsh-extract-pdf validates file type correctly" {
@@ -402,7 +422,7 @@ EOF
     assert_output --partial "Extract all images to output directory"
     assert_output --partial "Extract specific pages with custom naming"
     assert_output --partial "Extract as PNG with high quality"
-    assert_output --partial "List available images without extracting"
+    assert_output --partial "List-only: show pages and embedded images count"
     assert_output --partial "Dry run to preview operations"
 }
 
