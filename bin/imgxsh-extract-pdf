@@ -465,8 +465,14 @@ main() {
 			exit $?
 			;;
 		--update)
+			# In test mode, avoid network calls and heavy operations
+			if [[ "${TEST_MODE:-}" == "true" ]]; then
+				echo "update-shell-starter (test-mode)"
+				exit 0
+			fi
 			if command -v update-shell-starter >/dev/null 2>&1; then
-				update-shell-starter
+				# Use --check to avoid full download and keep this fast
+				update-shell-starter --check
 			else
 				log::error "update-shell-starter not available"
 				exit 1

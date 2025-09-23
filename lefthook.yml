@@ -8,7 +8,12 @@ pre-push:
         echo "🔍 Running ShellCheck..."
         if command -v shellcheck >/dev/null 2>&1; then
           # POSIX-safe: run shellcheck once on all files; non-zero if issues
-          if ! find . -name "*.sh" -not -path "./tests/bats-*/*" -not -path "./shell-starter-tests/*" -exec shellcheck {} +; then
+          if ! find . \( -name "*.sh" -o -path "./bin/*" \) \
+            -not -path "./tests/bats-*/*" \
+            -not -path "./shell-starter-tests/*" \
+            -not -path "./.development/*" \
+            -not -path "./.ai-workflow/*" \
+            -exec shellcheck {} +; then
             echo "✖ ShellCheck found issues. Please fix them before pushing."
             echo "  Tip: run 'shellcheck <file>' to see details, or install an editor plugin."
             exit 1
@@ -24,11 +29,16 @@ pre-push:
         echo "🎨 Checking code formatting with shfmt..."
         if command -v shfmt >/dev/null 2>&1; then
           # Check formatting on all shell files and fail if diffs are produced
-          diff_output=$(find . -name "*.sh" -not -path "./tests/bats-*/*" -not -path "./shell-starter-tests/*" -exec shfmt -d {} +)
+          diff_output=$(find . \( -name "*.sh" -o -path "./bin/*" \) \
+            -not -path "./tests/bats-*/*" \
+            -not -path "./shell-starter-tests/*" \
+            -not -path "./.development/*" \
+            -not -path "./.ai-workflow/*" \
+            -exec shfmt -d {} +)
           if [ -n "$diff_output" ]; then
             echo "$diff_output"
             echo "✖ shfmt detected formatting issues. Fix them with:"
-            echo "  find . -name '*.sh' -not -path './tests/bats-*/*' -not -path './shell-starter-tests/*' -exec shfmt -w {} +"
+            echo "  find . \\( -name '*.sh' -o -path './bin/*' \\) -not -path './tests/bats-*/*' -not -path './shell-starter-tests/*' -not -path './.development/*' -not -path './.ai-workflow/*' -exec shfmt -w {} +"
             exit 1
           fi
         else
