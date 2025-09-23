@@ -307,9 +307,9 @@ EOF
 
 @test "imgxsh-extract-pdf shows update information" {
     run_imgxsh "imgxsh-extract-pdf" --update
-    # This may fail if update-shell-starter is not available, which is expected
-    # We just want to make sure the command is recognized
-    assert_output --partial "update-shell-starter" || assert_failure
+    # In TEST_MODE, the script should emit a fast-path message and succeed
+    assert_success
+    assert_output --partial "update-imgxsh"
 }
 
 @test "imgxsh-extract-pdf shows version check information" {
