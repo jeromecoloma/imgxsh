@@ -1,0 +1,40 @@
+# Lefthook configuration for imgxsh
+# This runs validation checks before pushing to prevent CI failures
+
+pre-push:
+  commands:
+    shellcheck:
+      run: |
+        echo "🔍 Running ShellCheck..."
+        if command -v shellcheck >/dev/null 2>&1; then
+          # Run shellcheck on all shell files
+          find . -name "*.sh" -not -path "./tests/bats-*/*" -not -path "./shell-starter-tests/*" -exec shellcheck {} \;
+        else
+          echo "⚠️  ShellCheck not found. Install with: brew install shellcheck"
+          exit 1
+        fi
+      glob: "*.sh"
+      
+    shfmt:
+      run: |
+        echo "🎨 Checking code formatting with shfmt..."
+        if command -v shfmt >/dev/null 2>&1; then
+          # Check formatting on all shell files
+          find . -name "*.sh" -not -path "./tests/bats-*/*" -not -path "./shell-starter-tests/*" -exec shfmt -d {} \;
+        else
+          echo "⚠️  shfmt not found. Install with: brew install shfmt"
+          exit 1
+        fi
+      glob: "*.sh"
+      
+    tests:
+      run: |
+        echo "🧪 Running tests..."
+        if [ -f "./tests/run-tests.sh" ]; then
+          chmod +x ./tests/run-tests.sh
+          ./tests/run-tests.sh --ci
+        else
+          echo "⚠️  Test runner not found: ./tests/run-tests.sh"
+          exit 1
+        fi
+      glob: "*.{sh,bats}"

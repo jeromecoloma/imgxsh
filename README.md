@@ -82,6 +82,8 @@ imgxsh/
 │   ├── fixtures/      # Test data (images, PDFs, Excel files)
 │   └── bats-*/        # Bats testing framework and libraries
 ├── .github/workflows/  # GitHub Actions CI/CD workflows
+├── docs/               # Project documentation
+│   └── SETUP-HOOKS.md  # Git hooks setup guide
 ├── demo/               # Shell Starter example scripts (for reference)
 ├── lib/                # Shell Starter library (colors, logging, spinners)
 ├── shell-starter-tests/# Shell Starter framework tests (temporary)
@@ -176,18 +178,59 @@ We welcome contributions to imgxsh! The project follows Shell Starter convention
 2. **Install development tools**:
    ```bash
    # macOS (using Homebrew)
-   brew install shellcheck shfmt imagemagick poppler tesseract
+   brew install lefthook shellcheck shfmt imagemagick poppler tesseract
 
    # Ubuntu/Debian
    sudo apt-get install shellcheck imagemagick poppler-utils tesseract-ocr
+   # For lefthook: https://github.com/evilmartians/lefthook#installation
    ```
 
-3. **Explore Shell Starter patterns**:
+3. **Set up pre-push validation** (recommended):
+   ```bash
+   # Install Git hooks to catch issues before pushing
+   ./scripts/setup-hooks.sh
+   
+   # Check if everything is set up correctly
+   ./scripts/setup-hooks.sh --check
+   ```
+
+4. **Explore Shell Starter patterns**:
    ```bash
    # Study the framework patterns
    ./demo/hello-world --help
    ./demo/my-cli --help
    ```
+
+### Pre-Push Validation
+
+imgxsh uses Lefthook to run validation checks before pushing, preventing CI failures:
+
+#### What Runs on Push
+- **ShellCheck**: Validates shell script syntax and best practices
+- **shfmt**: Checks code formatting consistency
+- **Tests**: Runs the comprehensive test suite (84+ tests)
+
+#### For Developers
+```bash
+# Set up validation (one-time)
+./scripts/setup-hooks.sh
+
+# Check status
+./scripts/setup-hooks.sh --check
+
+# Manual validation
+./tests/run-tests.sh        # Run tests
+shellcheck lib/*.sh bin/*   # Run ShellCheck
+shfmt -d lib/*.sh bin/*     # Check formatting
+```
+
+#### Bypass (if needed)
+```bash
+git push --no-verify  # Skip validation (not recommended)
+```
+
+#### Detailed Setup Guide
+For comprehensive setup instructions, troubleshooting, and advanced configuration, see [**docs/SETUP-HOOKS.md**](docs/SETUP-HOOKS.md).
 
 ### Development Guidelines
 
@@ -283,6 +326,7 @@ See `tests/README.md` for detailed testing documentation and CI integration less
 
 - **[Shell Starter Framework](https://github.com/jeromecoloma/shell-starter)** - The underlying framework
 - **[Testing Documentation](tests/README.md)** - Comprehensive test setup and CI integration guide
+- **[Git Hooks Setup](docs/SETUP-HOOKS.md)** - Pre-push validation setup and troubleshooting
 
 ## 🤝 Support
 
