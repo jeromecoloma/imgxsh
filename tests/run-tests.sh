@@ -94,15 +94,15 @@ setup_bats() {
 check_dependencies() {
 	local missing_deps=()
 
-    # Check for Bats (vendored or system)
-    local bats_executable="${PROJECT_ROOT}/tests/bats-core/bin/bats"
-    if [[ -x "$bats_executable" ]]; then
-        true
-    elif command -v bats >/dev/null 2>&1; then
-        bats_executable="$(command -v bats)"
-    else
-        missing_deps+=("Bats testing framework")
-    fi
+	# Check for Bats (vendored or system)
+	local bats_executable="${PROJECT_ROOT}/tests/bats-core/bin/bats"
+	if [[ -x "$bats_executable" ]]; then
+		true
+	elif command -v bats >/dev/null 2>&1; then
+		bats_executable="$(command -v bats)"
+	else
+		missing_deps+=("Bats testing framework")
+	fi
 
 	if [[ ${#missing_deps[@]} -gt 0 ]]; then
 		log::error "Missing dependencies: ${missing_deps[*]}"
@@ -115,10 +115,10 @@ check_dependencies() {
 
 run_tests() {
 	local test_files=("$@")
-    local bats_executable="${PROJECT_ROOT}/tests/bats-core/bin/bats"
-    if [[ ! -x "$bats_executable" ]] && command -v bats >/dev/null 2>&1; then
-        bats_executable="$(command -v bats)"
-    fi
+	local bats_executable="${PROJECT_ROOT}/tests/bats-core/bin/bats"
+	if [[ ! -x "$bats_executable" ]] && command -v bats >/dev/null 2>&1; then
+		bats_executable="$(command -v bats)"
+	fi
 	local bats_args=()
 
 	# Add common Bats arguments
@@ -185,14 +185,17 @@ run_tests() {
 	if [[ "${CI_MODE:-false}" == "true" && -n "$output_file" ]]; then
 		# Run with output capture for CI
 		if [[ ${#bats_args[@]} -gt 0 ]]; then
-			"${bats_executable}" "${bats_args[@]}" "${test_files[@]}" >"$output_file" 2>&1
+			if "${bats_executable}" "${bats_args[@]}" "${test_files[@]}" >"$output_file" 2>&1; then
+				test_result=0
+			else
+				test_result=1
+			fi
 		else
-			"${bats_executable}" "${test_files[@]}" >"$output_file" 2>&1
-		fi
-		if [[ $? -eq 0 ]]; then
-			test_result=0
-		else
-			test_result=1
+			if "${bats_executable}" "${test_files[@]}" >"$output_file" 2>&1; then
+				test_result=0
+			else
+				test_result=1
+			fi
 		fi
 
 		# Display results even in CI mode
@@ -205,14 +208,17 @@ run_tests() {
 	else
 		# Normal interactive run
 		if [[ ${#bats_args[@]} -gt 0 ]]; then
-			"${bats_executable}" "${bats_args[@]}" "${test_files[@]}"
+			if "${bats_executable}" "${bats_args[@]}" "${test_files[@]}"; then
+				test_result=0
+			else
+				test_result=1
+			fi
 		else
-			"${bats_executable}" "${test_files[@]}"
-		fi
-		if [[ $? -eq 0 ]]; then
-			test_result=0
-		else
-			test_result=1
+			if "${bats_executable}" "${test_files[@]}"; then
+				test_result=0
+			else
+				test_result=1
+			fi
 		fi
 	fi
 

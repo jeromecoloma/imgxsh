@@ -115,7 +115,7 @@ fi
 
 # Create isolated shell configuration for tests
 SHELL_CONFIG_FILE="$CI_TEMP_DIR/shell_config"
-cat > "$SHELL_CONFIG_FILE" << EOF
+cat >"$SHELL_CONFIG_FILE" <<EOF
 # Isolated shell configuration for CI tests
 export PS1='$ '
 export PATH="$PROJECT_ROOT/bin:\$PATH"

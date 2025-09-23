@@ -9,6 +9,10 @@ _scripts
 *.tmp
 *.swp
 
+# Backup directories for bin and lib
+bin.backup-*
+lib.backup-*
+
 # OS-specific files
 .DS_Store
 Thumbs.db

@@ -7,8 +7,12 @@ pre-push:
       run: |
         echo "🔍 Running ShellCheck..."
         if command -v shellcheck >/dev/null 2>&1; then
-          # Run shellcheck on all shell files
-          find . -name "*.sh" -not -path "./tests/bats-*/*" -not -path "./shell-starter-tests/*" -exec shellcheck {} \;
+          # POSIX-safe: run shellcheck once on all files; non-zero if issues
+          if ! find . -name "*.sh" -not -path "./tests/bats-*/*" -not -path "./shell-starter-tests/*" -exec shellcheck {} +; then
+            echo "✖ ShellCheck found issues. Please fix them before pushing."
+            echo "  Tip: run 'shellcheck <file>' to see details, or install an editor plugin."
+            exit 1
+          fi
         else
           echo "⚠️  ShellCheck not found. Install with: brew install shellcheck"
           exit 1
@@ -19,8 +23,14 @@ pre-push:
       run: |
         echo "🎨 Checking code formatting with shfmt..."
         if command -v shfmt >/dev/null 2>&1; then
-          # Check formatting on all shell files
-          find . -name "*.sh" -not -path "./tests/bats-*/*" -not -path "./shell-starter-tests/*" -exec shfmt -d {} \;
+          # Check formatting on all shell files and fail if diffs are produced
+          diff_output=$(find . -name "*.sh" -not -path "./tests/bats-*/*" -not -path "./shell-starter-tests/*" -exec shfmt -d {} +)
+          if [ -n "$diff_output" ]; then
+            echo "$diff_output"
+            echo "✖ shfmt detected formatting issues. Fix them with:"
+            echo "  find . -name '*.sh' -not -path './tests/bats-*/*' -not -path './shell-starter-tests/*' -exec shfmt -w {} +"
+            exit 1
+          fi
         else
           echo "⚠️  shfmt not found. Install with: brew install shfmt"
           exit 1
