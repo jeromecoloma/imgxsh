@@ -568,10 +568,11 @@ extract_rasterized_pages() {
 			if [[ "$page" == *"-" ]]; then
 				# Handle open range (e.g., "5-" means from page 5 to end)
 				local start_page="${page%-}"
+				local magick_start_page=$((start_page - 1))
 				if [[ "$DRY_RUN" == true ]]; then
-					log::info "Would run: $magick_cmd -density $density \"${pdf_file}[${start_page}-]\" -quality $QUALITY \"$output_file\""
+					log::info "Would run: $magick_cmd -density $density \"${pdf_file}[${magick_start_page}-]\" -quality $QUALITY \"$output_file\""
 				else
-					if $magick_cmd -density $density "${pdf_file}[${start_page}-]" -quality "$QUALITY" "$output_file" 2>/dev/null; then
+					if $magick_cmd -density $density "${pdf_file}[${magick_start_page}-]" -quality "$QUALITY" "$output_file" 2>/dev/null; then
 						((processed_count++))
 					else
 						((failed_count++))
@@ -580,11 +581,12 @@ extract_rasterized_pages() {
 				fi
 				((output_counter++))
 			else
-				# Handle single page
+				# Handle single page - convert 1-based page number to 0-based for ImageMagick
+				local magick_page=$((page - 1))
 				if [[ "$DRY_RUN" == true ]]; then
-					log::info "Would run: $magick_cmd -density $density \"${pdf_file}[$page]\" -quality $QUALITY \"$output_file\""
+					log::info "Would run: $magick_cmd -density $density \"${pdf_file}[$magick_page]\" -quality $QUALITY \"$output_file\""
 				else
-					if $magick_cmd -density $density "${pdf_file}[$page]" -quality "$QUALITY" "$output_file" 2>/dev/null; then
+					if $magick_cmd -density $density "${pdf_file}[$magick_page]" -quality "$QUALITY" "$output_file" 2>/dev/null; then
 						((processed_count++))
 					else
 						((failed_count++))

@@ -516,8 +516,8 @@ EOF
     # Should show 1 command for open range
     local run_count=$(echo "$output" | grep -c "Would run:" || echo "0")
     assert_equal "$run_count" "1"
-    # Should contain the open range syntax
-    assert_output --partial "[5-]"
+    # Should contain the open range syntax (0-based indexing)
+    assert_output --partial "[4-]"
 }
 
 @test "imgxsh-extract-pdf handles mixed ranges (1-3,5,7-9)" {
@@ -568,11 +568,11 @@ EOF
     assert_output --partial "page-02" 
     assert_output --partial "page-03"
     
-    # Verify the order of commands matches the sorted page order
+    # Verify the order of commands matches the sorted page order (0-based indexing)
     local output_lines=$(echo "$output" | grep "Would run:" | head -3)
-    assert_output --partial "[1]"
-    assert_output --partial "[3]"
-    assert_output --partial "[5]"
+    assert_output --partial "[0]"
+    assert_output --partial "[2]"
+    assert_output --partial "[4]"
 }
 
 @test "imgxsh-extract-pdf handles custom prefix with mixed ranges" {
@@ -746,6 +746,6 @@ EOF
     # Should have 5 commands: 3 for individual pages + 1 for open range + 1 more (actual count from test)
     local run_count=$(echo "$output" | grep -c "Would run:" || echo "0")
     assert_equal "$run_count" "5"
-    # Should contain open range syntax
-    assert_output --partial "[10-]"
+    # Should contain open range syntax (0-based indexing)
+    assert_output --partial "[9-]"
 }
