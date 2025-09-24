@@ -5,21 +5,41 @@
 [[ -n "${IMGXSH_CORE_LOADED:-}" ]] && return 0
 readonly IMGXSH_CORE_LOADED=1
 
+# Resolve Shell Starter root/lib dirs if not provided and source dependencies robustly
+# Determine repo root based on this file when SHELL_STARTER_ROOT is unset
+if [[ -z "${SHELL_STARTER_ROOT:-}" ]]; then
+	# core.sh is at <repo>/lib/imgxsh/core.sh → go up two directories to reach <repo>
+	SHELL_STARTER_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+fi
+
+# Prefer explicit lib dir; fall back to <root>/lib
+SHELL_STARTER_LIB_DIR="${SHELL_STARTER_LIB_DIR:-${SHELL_STARTER_ROOT}/lib}"
+
 # Source Shell Starter dependencies
-source "${SHELL_STARTER_ROOT}/lib/colors.sh"
-source "${SHELL_STARTER_ROOT}/lib/logging.sh"
-source "${SHELL_STARTER_ROOT}/lib/spinner.sh"
+if [[ -f "${SHELL_STARTER_LIB_DIR}/colors.sh" ]]; then
+	source "${SHELL_STARTER_LIB_DIR}/colors.sh"
+fi
+if [[ -f "${SHELL_STARTER_LIB_DIR}/logging.sh" ]]; then
+	source "${SHELL_STARTER_LIB_DIR}/logging.sh"
+fi
+if [[ -f "${SHELL_STARTER_LIB_DIR}/spinner.sh" ]]; then
+	source "${SHELL_STARTER_LIB_DIR}/spinner.sh"
+fi
 
 # Source imgxsh YAML parser and validation
-source "${SHELL_STARTER_ROOT}/lib/imgxsh/yaml.sh"
-source "${SHELL_STARTER_ROOT}/lib/imgxsh/validation.sh"
+if [[ -f "${SHELL_STARTER_LIB_DIR}/imgxsh/yaml.sh" ]]; then
+	source "${SHELL_STARTER_LIB_DIR}/imgxsh/yaml.sh"
+fi
+if [[ -f "${SHELL_STARTER_LIB_DIR}/imgxsh/validation.sh" ]]; then
+	source "${SHELL_STARTER_LIB_DIR}/imgxsh/validation.sh"
+fi
 
-# Core imgxsh configuration and constants
-readonly IMGXSH_CONFIG_DIR="${HOME}/.imgxsh"
-readonly IMGXSH_CONFIG_FILE="${IMGXSH_CONFIG_DIR}/config.yaml"
-readonly IMGXSH_PLUGINS_DIR="${IMGXSH_CONFIG_DIR}/plugins"
-readonly IMGXSH_PRESETS_DIR="${IMGXSH_CONFIG_DIR}/presets"
-readonly IMGXSH_TEMP_DIR="${TMPDIR:-/tmp}/imgxsh"
+# Core imgxsh configuration and constants (allow override via environment)
+IMGXSH_CONFIG_DIR="${IMGXSH_CONFIG_DIR:-${HOME}/.imgxsh}"
+IMGXSH_CONFIG_FILE="${IMGXSH_CONFIG_FILE:-${IMGXSH_CONFIG_DIR}/config.yaml}"
+IMGXSH_PLUGINS_DIR="${IMGXSH_PLUGINS_DIR:-${IMGXSH_CONFIG_DIR}/plugins}"
+IMGXSH_PRESETS_DIR="${IMGXSH_PRESETS_DIR:-${IMGXSH_CONFIG_DIR}/presets}"
+IMGXSH_TEMP_DIR="${IMGXSH_TEMP_DIR:-${TMPDIR:-/tmp}/imgxsh}"
 
 # Internal state for error tracking
 IMGXSH_ERROR_COUNT=${IMGXSH_ERROR_COUNT:-0}
@@ -505,7 +525,7 @@ imgxsh::validate_yaml_basic() {
 		return 1
 	fi
 
-	log::debug "Basic YAML validation passed"
+	log::info "Basic YAML validation passed"
 	return 0
 }
 
