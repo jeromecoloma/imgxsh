@@ -1,8 +1,9 @@
 #!/usr/bin/env bats
 
-load 'bats-support/load'
-load 'bats-assert/load'
-load 'test_helper.bash'
+# Load test helpers
+load test_helper
+bats_load_library bats-support
+bats_load_library bats-assert
 
 # setup() and teardown() are handled by test_helper.bash
 
