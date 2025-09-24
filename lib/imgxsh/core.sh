@@ -481,11 +481,72 @@ imgxsh::validate_yaml_basic() {
 	local -i error_count=0
 
 	# Check for common YAML syntax issues
-	# 1. Check for basic YAML structure issues
-	# Check for lines that look like they should have values but don't
-	# Exclude section headers (top-level keys) which are valid without values
-	# Handle comments by checking if line ends with colon and optional whitespace/comment
-	if grep -q '^[[:space:]]\+[a-zA-Z_][a-zA-Z0-9_]*:[[:space:]]*\(#.*\)\?$' "$config_file"; then
+	# 1. Check for keys without values that are not followed by a nested block
+	#    Allow known block headers (settings, workflows, presets, steps, params,
+	#    quality, notifications, overrides, hooks) and any line where the next
+	#    significant line is more indented (valid YAML map start).
+	local kv_errors
+	kv_errors=$(awk '
+		BEGIN { IGNORECASE=0 }
+		# Utility: trim trailing comments and whitespace
+		function clean(line,   x){
+			# remove comments starting with # and trailing spaces
+			sub(/[[:space:]]*#.*/, "", line)
+			sub(/[[:space:]]+$/, "", line)
+			return line
+		}
+		# Compute indentation (spaces only; tabs counted as 1 char but we check mixed tabs separately)
+		function indent_of(line,   m, n){
+			m = match(line, /[^ ]/)
+			if (m == 0) return length(line)
+			return m-1
+		}
+		{
+			orig=$0
+			line=clean($0)
+			lines[NR]=line
+			ind[NR]=indent_of($0)
+		}
+		END {
+			allowed["settings"]=1
+			allowed["workflows"]=1
+			allowed["presets"]=1
+			allowed["steps"]=1
+			allowed["params"]=1
+			allowed["quality"]=1
+			allowed["notifications"]=1
+			allowed["overrides"]=1
+			allowed["hooks"]=1
+			errs=0
+			for (i=1; i<=NR; i++) {
+				line=lines[i]
+				if (line ~ /^[[:space:]]*$/) continue
+				# skip full-line comments
+				if (match(line, /^[[:space:]]*#/)) continue
+				# top-level section headers are fine
+				if (ind[i] == 0 && line ~ /^[a-zA-Z_][a-zA-Z0-9_]*:[[:space:]]*$/) continue
+				# detect key with no value (ends with colon and nothing after)
+				if (match(line, /^[[:space:]]*[a-zA-Z_][a-zA-Z0-9_]*:[[:space:]]*$/)) {
+					# if key is one of allowed block headers anywhere, allow
+					split(line, parts, ":")
+					key=parts[1]
+					gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+					if (key in allowed) continue
+					# look ahead to next significant line
+					j=i+1
+					while (j<=NR && (lines[j] ~ /^[[:space:]]*$/ || lines[j] ~ /^[[:space:]]*#/)) j++
+					if (j<=NR && ind[j] > ind[i]) {
+						# next line is more indented → valid block
+						continue
+					}
+					# otherwise, this is a key without value
+					errs++
+				}
+			}
+			print errs
+		}
+	' "$config_file")
+	if [[ "${kv_errors:-0}" -gt 0 ]]; then
 		log::error "Found key without value (missing colon or value)"
 		((error_count++))
 	fi
@@ -514,11 +575,19 @@ imgxsh::validate_yaml_basic() {
 	# 5. Check for basic settings
 	local required_settings=("output_dir:" "temp_dir:" "parallel_jobs:")
 	for setting in "${required_settings[@]}"; do
-		if ! grep -q "^\s*$setting" "$config_file"; then
+		if ! grep -q "^[[:space:]]*$setting" "$config_file"; then
 			log::error "Missing required setting: $setting"
 			((error_count++))
 		fi
 	done
+
+	# 6. Validate that settings.parallel_jobs is numeric (basic check)
+	local parallel_jobs
+	parallel_jobs=$(grep -E "^[[:space:]]*parallel_jobs:" "$config_file" | head -1 | sed 's/.*parallel_jobs:[[:space:]]*//' | sed 's/#.*$//' | tr -d '"' | tr -d "'" | tr -d ' \t')
+	if [[ -n "$parallel_jobs" ]] && ! [[ "$parallel_jobs" =~ ^[0-9]+$ ]]; then
+		log::error "settings.parallel_jobs must be a number, got: $parallel_jobs"
+		((error_count++))
+	fi
 
 	if [[ $error_count -gt 0 ]]; then
 		log::error "Basic YAML validation failed with $error_count errors"
