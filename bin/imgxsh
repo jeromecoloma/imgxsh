@@ -39,6 +39,10 @@ OPTIONS:
     --validate-workflow FILE  Validate workflow file and exit
     --list-workflows      List available workflows and exit
     --list-presets        List available presets and exit
+    --create-preset NAME WORKFLOW [DESC]  Create new preset and exit
+    --delete-preset NAME  Delete user preset and exit
+    --export-preset NAME FILE  Export preset to file and exit
+    --import-preset FILE NAME  Import preset from file and exit
 
 BUILT-IN WORKFLOWS:
     pdf-to-thumbnails     Extract PDF images and create thumbnails
@@ -1049,6 +1053,74 @@ execute_custom_step() {
 	fi
 }
 
+# Apply configuration overrides from config file
+apply_config_overrides() {
+	# Set up logging level from config
+	local config_log_level
+	config_log_level=$(imgxsh::get_config "settings.log_level" 2>/dev/null)
+	if [[ -n "$config_log_level" ]]; then
+		case "$config_log_level" in
+		"debug")
+			export DEBUG=1
+			;;
+		"info")
+			# Default level, no change needed
+			;;
+		"warn")
+			# Could implement warning-only mode
+			;;
+		"error")
+			# Could implement error-only mode
+			;;
+		esac
+	fi
+
+	# Set up backup policy from config
+	local config_backup_policy
+	config_backup_policy=$(imgxsh::get_config "settings.backup_policy" 2>/dev/null)
+	if [[ -n "$config_backup_policy" ]]; then
+		export IMGXSH_BACKUP_POLICY="$config_backup_policy"
+	fi
+
+	# Set up quality settings from config
+	local config_quality_jpg
+	local config_quality_webp
+	local config_quality_png
+
+	config_quality_jpg=$(imgxsh::get_config "settings.quality.jpg" 2>/dev/null)
+	config_quality_webp=$(imgxsh::get_config "settings.quality.webp" 2>/dev/null)
+	config_quality_png=$(imgxsh::get_config "settings.quality.png" 2>/dev/null)
+
+	[[ -n "$config_quality_jpg" ]] && export IMGXSH_QUALITY_JPG="$config_quality_jpg"
+	[[ -n "$config_quality_webp" ]] && export IMGXSH_QUALITY_WEBP="$config_quality_webp"
+	[[ -n "$config_quality_png" ]] && export IMGXSH_QUALITY_PNG="$config_quality_png"
+
+	# Set up size constraints from config
+	local config_max_file_size
+	local config_max_dimensions
+
+	config_max_file_size=$(imgxsh::get_config "settings.max_file_size" 2>/dev/null)
+	config_max_dimensions=$(imgxsh::get_config "settings.max_dimensions" 2>/dev/null)
+
+	[[ -n "$config_max_file_size" ]] && export IMGXSH_MAX_FILE_SIZE="$config_max_file_size"
+	[[ -n "$config_max_dimensions" ]] && export IMGXSH_MAX_DIMENSIONS="$config_max_dimensions"
+
+	# Set up notification settings from config
+	local config_notifications_enabled
+	local config_webhook_url
+	local config_desktop_notifications
+
+	config_notifications_enabled=$(imgxsh::get_config "settings.notifications.enabled" 2>/dev/null)
+	config_webhook_url=$(imgxsh::get_config "settings.notifications.webhook_url" 2>/dev/null)
+	config_desktop_notifications=$(imgxsh::get_config "settings.notifications.desktop_notifications" 2>/dev/null)
+
+	[[ -n "$config_notifications_enabled" ]] && export IMGXSH_NOTIFICATIONS_ENABLED="$config_notifications_enabled"
+	[[ -n "$config_webhook_url" ]] && export IMGXSH_WEBHOOK_URL="$config_webhook_url"
+	[[ -n "$config_desktop_notifications" ]] && export IMGXSH_DESKTOP_NOTIFICATIONS="$config_desktop_notifications"
+
+	log::debug "Applied configuration overrides from config file"
+}
+
 main() {
 	# Default values
 	local workflow=""
@@ -1064,6 +1136,14 @@ main() {
 	local validate_workflow_file=""
 	local list_workflows=false
 	local list_presets=false
+	local create_preset_name=""
+	local create_preset_workflow=""
+	local create_preset_description=""
+	local delete_preset_name=""
+	local export_preset_name=""
+	local export_preset_file=""
+	local import_preset_file=""
+	local import_preset_name=""
 	local inputs=()
 
 	# Parse command line arguments
@@ -1150,6 +1230,26 @@ main() {
 			list_presets=true
 			shift
 			;;
+		--create-preset)
+			create_preset_name="$2"
+			create_preset_workflow="$3"
+			create_preset_description="$4"
+			shift 4
+			;;
+		--delete-preset)
+			delete_preset_name="$2"
+			shift 2
+			;;
+		--export-preset)
+			export_preset_name="$2"
+			export_preset_file="$3"
+			shift 3
+			;;
+		--import-preset)
+			import_preset_file="$2"
+			import_preset_name="$3"
+			shift 3
+			;;
 		-*)
 			log::error "Unknown option: $1"
 			show_help
@@ -1187,7 +1287,7 @@ main() {
 		# Initialize to load config
 		imgxsh::init
 		imgxsh::load_config
-		
+
 		log::info "Available workflows:"
 		imgxsh::list_workflows "$IMGXSH_CONFIG_FILE" | while read -r workflow_name; do
 			if [[ -n "$workflow_name" ]]; then
@@ -1201,7 +1301,7 @@ main() {
 		# Initialize to load config
 		imgxsh::init
 		imgxsh::load_config
-		
+
 		log::info "Available presets:"
 		imgxsh::list_presets "$IMGXSH_CONFIG_FILE" | while read -r preset_name; do
 			if [[ -n "$preset_name" ]]; then
@@ -1209,6 +1309,73 @@ main() {
 			fi
 		done
 		exit 0
+	fi
+
+	if [[ -n "$create_preset_name" ]]; then
+		# Initialize to load config
+		imgxsh::init
+		imgxsh::load_config
+
+		if [[ -z "$create_preset_workflow" ]]; then
+			log::error "Usage: --create-preset PRESET_NAME BASE_WORKFLOW [DESCRIPTION]"
+			exit 1
+		fi
+
+		if imgxsh::create_preset "$create_preset_name" "$create_preset_workflow" "$create_preset_description"; then
+			log::success "Preset '$create_preset_name' created successfully"
+			exit 0
+		else
+			exit 1
+		fi
+	fi
+
+	if [[ -n "$delete_preset_name" ]]; then
+		# Initialize to load config
+		imgxsh::init
+		imgxsh::load_config
+
+		if imgxsh::delete_preset "$delete_preset_name"; then
+			log::success "Preset '$delete_preset_name' deleted successfully"
+			exit 0
+		else
+			exit 1
+		fi
+	fi
+
+	if [[ -n "$export_preset_name" ]]; then
+		# Initialize to load config
+		imgxsh::init
+		imgxsh::load_config
+
+		if [[ -z "$export_preset_file" ]]; then
+			log::error "Usage: --export-preset PRESET_NAME OUTPUT_FILE"
+			exit 1
+		fi
+
+		if imgxsh::export_preset "$export_preset_name" "$export_preset_file"; then
+			log::success "Preset '$export_preset_name' exported to: $export_preset_file"
+			exit 0
+		else
+			exit 1
+		fi
+	fi
+
+	if [[ -n "$import_preset_file" ]]; then
+		# Initialize to load config
+		imgxsh::init
+		imgxsh::load_config
+
+		if [[ -z "$import_preset_name" ]]; then
+			log::error "Usage: --import-preset INPUT_FILE PRESET_NAME"
+			exit 1
+		fi
+
+		if imgxsh::import_preset "$import_preset_file" "$import_preset_name"; then
+			log::success "Preset '$import_preset_name' imported from: $import_preset_file"
+			exit 0
+		else
+			exit 1
+		fi
 	fi
 
 	# Initialize imgxsh environment
@@ -1251,6 +1418,9 @@ main() {
 		fi
 	fi
 
+	# Apply config overrides for other settings
+	apply_config_overrides
+
 	# Check dependencies if not in dry-run mode
 	if [[ "$dry_run" == false ]] && ! imgxsh::check_dependencies; then
 		log::error "Required dependencies are missing"
@@ -1283,11 +1453,11 @@ main() {
 				# Fallback parsing - more efficient approach
 				base_workflow=$(sed -n "/^  $preset:/,/^  [a-zA-Z]/p" "$IMGXSH_ACTIVE_CONFIG" | grep "base_workflow:" | sed 's/.*base_workflow:\s*//' | tr -d '"' | tr -d "'" | tr -d ' \t')
 			fi
-			
+
 			if [[ -n "$base_workflow" ]]; then
 				workflow="$base_workflow"
 				log::info "Using preset '$preset' with workflow '$workflow'"
-				
+
 				# Apply preset overrides
 				if command -v yq >/dev/null 2>&1; then
 					# Get parallel jobs override from preset

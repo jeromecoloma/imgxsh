@@ -184,38 +184,152 @@ Notes:
 - `--check-version` reports the current imgxsh version and the latest GitHub release.
 - In CI or tests, `TEST_MODE=true` ensures update commands are no-ops for speed.
 
-## 🔧 Configuration
+## 🔧 Configuration & Workflows
 
-imgxsh uses YAML-based workflow configuration files:
+imgxsh uses a powerful YAML-based workflow system for complex image processing tasks. Workflows allow you to define multi-step processing pipelines with conditional logic, template variables, and hooks.
 
-### Default Config Location
-- `~/.imgxsh.yaml` - Main configuration file
-- Override with `--workflow-config` parameter
+### Quick Start with Workflows
+
+```bash
+# Use built-in workflow
+imgxsh --workflow pdf-to-web document.pdf
+
+# Use preset for quick processing
+imgxsh --preset quick-thumbnails document.pdf
+
+# Preview workflow without execution
+imgxsh --workflow pdf-to-web --dry-run document.pdf
+```
+
+### Configuration Files
+
+- **Workflows**: `config/workflows/` - Complete processing pipelines
+- **Presets**: `config/presets/` - Workflow variations and shortcuts
+- **User Config**: `~/.imgxsh.yaml` - Global settings and custom workflows
 
 ### Example Workflow
+
 ```yaml
-workflows:
-  pdf-to-web:
-    description: "Extract PDF images and optimize for web"
-    steps:
-      - name: extract_images
-        type: pdf_extract
-        params:
-          input: "{workflow_input}"
-          output_dir: "{temp_dir}/extracted"
-          
-      - name: conditional_resize
-        type: resize
-        condition: "image_count > 10"
-        params:
-          width: 800
-          height: 600
-          quality: 85
-        else:
-          width: 1200
-          height: 900
-          quality: 90
+name: pdf-to-web
+description: "Extract PDF images and optimize for web"
+version: "1.0"
+
+settings:
+  output_dir: "./output/pdf-web"
+  parallel_jobs: 4
+
+steps:
+  - name: extract_images
+    type: pdf_extract
+    description: "Extract all images from PDF"
+    params:
+      input: "{workflow_input}"
+      output_dir: "{temp_dir}/extracted"
+      format: "png"
+      
+  - name: create_thumbnails
+    type: resize
+    description: "Create thumbnail versions"
+    condition: "extracted_count > 0"
+    params:
+      input_dir: "{temp_dir}/extracted"
+      width: 300
+      height: 200
+      maintain_aspect: true
+      quality: 80
+      output_template: "{output_dir}/thumbs/{pdf_name}_thumb_{counter:03d}.jpg"
+      
+  - name: create_full_size
+    type: convert
+    description: "Create full-size web-optimized versions"
+    condition: "extracted_count > 0"
+    params:
+      input_dir: "{temp_dir}/extracted"
+      format: "webp"
+      quality: 85
+      max_width: 1200
+      max_height: 800
+      output_template: "{output_dir}/full/{pdf_name}_full_{counter:03d}.webp"
+
+hooks:
+  on_success:
+    - echo "Gallery created successfully at: {output_dir}"
+    - echo "Thumbnails: {output_dir}/thumbs/"
+    - echo "Full images: {output_dir}/full/"
 ```
+
+### Available Step Types
+
+- **`pdf_extract`** - Extract images from PDF documents
+- **`excel_extract`** - Extract embedded images from Excel files
+- **`convert`** - Convert images between formats (PNG, JPG, WebP, TIFF, BMP)
+- **`resize`** - Resize images with aspect ratio control
+- **`watermark`** - Add watermarks to images
+- **`ocr`** - Extract text from images using OCR
+- **`custom`** - Execute custom shell scripts
+
+### Template Variables
+
+Use dynamic variables in file paths and commands:
+
+- `{workflow_input}` - Input file or directory path
+- `{output_dir}` - Configured output directory
+- `{pdf_name}` - Base name of PDF file (without extension)
+- `{counter:03d}` - Sequential counter with zero padding (001, 002, 003...)
+- `{timestamp}` - Current timestamp (YYYYMMDD_HHMMSS)
+- `{extracted_count}` - Number of images extracted
+
+### Conditional Logic
+
+Execute steps based on context:
+
+```yaml
+- name: smart_resize
+  type: resize
+  condition: "image_count > 10"
+  params:
+    width: 800
+    height: 600
+    quality: 80
+  else:
+    width: 1200
+    height: 900
+    quality: 90
+```
+
+### Built-in Presets
+
+- **`quick-thumbnails`** - Fast thumbnail generation for previews
+- **`web-optimization`** - Optimize images for web with aggressive compression
+- **`high-quality`** - Generate high-quality images for print or archival
+
+### Hooks System
+
+Execute commands at workflow events:
+
+```yaml
+hooks:
+  pre_workflow:
+    - echo "Starting workflow for: {workflow_input}"
+    
+  post_step:
+    - echo "Completed step: {step_name}"
+    
+  on_success:
+    - echo "Workflow completed successfully!"
+    - notify-send "imgxsh" "Processing complete"
+    
+  on_failure:
+    - echo "Workflow failed at step: {failed_step}"
+```
+
+### Comprehensive Documentation
+
+For detailed workflow configuration, see:
+- **[Workflow Quick Reference](docs/WORKFLOW-QUICK-REFERENCE.md)** - Quick reference for workflow syntax and patterns
+- **[Workflow Configuration Guide](docs/WORKFLOW-CONFIGURATION.md)** - Complete workflow system documentation
+- **[Presets System Guide](docs/PRESETS-SYSTEM.md)** - Creating and using presets
+- **[Examples Gallery](docs/EXAMPLES-GALLERY.md)** - Real-world use cases and examples
 
 ## 📖 Development Status
 
@@ -411,11 +525,22 @@ imgxsh includes comprehensive test coverage with CI/CD integration:
 
 See `tests/README.md` for detailed testing documentation and CI integration lessons learned.
 
-## 📚 Resources
+## 📚 Documentation
 
-- **[Shell Starter Framework](https://github.com/jeromecoloma/shell-starter)** - The underlying framework
+### Core Documentation
+- **[Workflow Quick Reference](docs/WORKFLOW-QUICK-REFERENCE.md)** - Quick reference for workflow syntax and patterns
+- **[Workflow Configuration Guide](docs/WORKFLOW-CONFIGURATION.md)** - Complete workflow system documentation
+- **[Presets System Guide](docs/PRESETS-SYSTEM.md)** - Creating and using presets
+- **[Examples Gallery](docs/EXAMPLES-GALLERY.md)** - Real-world use cases and examples
+
+### Development Documentation
 - **[Testing Documentation](tests/README.md)** - Comprehensive test setup and CI integration guide
 - **[Git Hooks Setup](docs/SETUP-HOOKS.md)** - Pre-push validation setup and troubleshooting
+
+### Framework Resources
+- **[Shell Starter Framework](https://github.com/jeromecoloma/shell-starter)** - The underlying framework
+- **[Shell Starter AI Guide](shell-starter-docs/ai-guide.md)** - AI development patterns
+- **[Shell Starter Conventions](shell-starter-docs/conventions.md)** - Coding standards
 
 ## 🤝 Support
 

@@ -1,0 +1,595 @@
+# Presets System Guide
+
+The imgxsh presets system allows you to create reusable workflow configurations with customizable overrides. Presets are based on existing workflows but can modify settings, parameters, and step behavior to create specialized variants.
+
+## Table of Contents
+
+- [Preset Overview](#preset-overview)
+- [Preset Structure](#preset-structure)
+- [Built-in Presets](#built-in-presets)
+- [Creating Custom Presets](#creating-custom-presets)
+- [Preset Usage](#preset-usage)
+- [Advanced Preset Features](#advanced-preset-features)
+- [Examples](#examples)
+
+## Preset Overview
+
+Presets are YAML files that extend or modify existing workflows. They provide:
+
+- **Quick access** to common workflow variations
+- **Parameter overrides** for different use cases
+- **Step modifications** without duplicating entire workflows
+- **User customization** while maintaining base workflow structure
+
+### Preset vs Workflow
+
+- **Workflow**: Complete, self-contained processing pipeline
+- **Preset**: Configuration that modifies an existing workflow for specific needs
+
+## Preset Structure
+
+### Basic Preset Structure
+
+```yaml
+# Preset metadata
+name: preset-name
+description: "Human-readable description of what this preset does"
+base_workflow: workflow-name  # The workflow this preset extends
+
+# Override settings
+overrides:
+  settings:
+    # Override global settings
+    parallel_jobs: 8
+    output_dir: "./custom-output"
+    
+  steps:
+    # Override specific step parameters
+    step_name:
+      params:
+        # Override step parameters
+        quality: 70
+        width: 200
+      enabled: true  # Enable/disable steps
+```
+
+### Preset Properties
+
+- **`name`**: Unique identifier for the preset (required)
+- **`description`**: Human-readable description of the preset's purpose
+- **`base_workflow`**: Name of the workflow this preset extends (required)
+- **`overrides`**: Configuration overrides to apply
+
+## Built-in Presets
+
+imgxsh comes with several built-in presets for common use cases.
+
+### Quick Thumbnails Preset
+
+**File**: `config/presets/quick-thumbnails.yaml`
+
+```yaml
+name: quick-thumbnails
+description: "Generate small thumbnails quickly for preview purposes"
+base_workflow: pdf-to-web
+
+# Override settings for speed and smaller size
+overrides:
+  settings:
+    parallel_jobs: 8  # More parallel processing for speed
+    
+  steps:
+    create_thumbnails:
+      params:
+        width: 150
+        height: 100
+        quality: 70
+        
+    create_full_size:
+      # Skip full-size creation for quick mode
+      enabled: false
+```
+
+**Use Cases**:
+- Quick PDF preview generation
+- Batch processing where speed is priority over quality
+- Initial content review before full processing
+
+### Web Optimization Preset
+
+**File**: `config/presets/web-optimization.yaml`
+
+```yaml
+name: web-optimization
+description: "Optimize images for web with aggressive compression"
+base_workflow: pdf-to-web
+
+overrides:
+  settings:
+    parallel_jobs: 6
+    
+  steps:
+    create_thumbnails:
+      params:
+        width: 400
+        height: 300
+        quality: 75
+        format: "webp"
+        
+    create_full_size:
+      params:
+        format: "webp"
+        quality: 80
+        max_width: 800
+        max_height: 600
+```
+
+**Use Cases**:
+- Web gallery creation with optimized file sizes
+- Mobile-friendly image generation
+- Bandwidth-conscious image processing
+
+### High Quality Preset
+
+**File**: `config/presets/high-quality.yaml`
+
+```yaml
+name: high-quality
+description: "Generate high-quality images for print or archival"
+base_workflow: pdf-to-web
+
+overrides:
+  settings:
+    parallel_jobs: 2  # Fewer parallel jobs for quality
+    
+  steps:
+    create_thumbnails:
+      params:
+        width: 600
+        height: 400
+        quality: 95
+        format: "png"
+        
+    create_full_size:
+      params:
+        format: "tiff"
+        quality: 100
+        preserve_metadata: true
+```
+
+**Use Cases**:
+- Print-ready image generation
+- Archival quality preservation
+- Professional document processing
+
+## Creating Custom Presets
+
+### Step 1: Choose Base Workflow
+
+Select an existing workflow that closely matches your needs:
+
+```bash
+# List available workflows
+imgxsh --list-workflows
+
+# View workflow details
+imgxsh --workflow-info pdf-to-web
+```
+
+### Step 2: Create Preset File
+
+Create a new preset file in the presets directory:
+
+```bash
+# Create preset directory if it doesn't exist
+mkdir -p ~/.imgxsh/presets
+
+# Create your preset file
+touch ~/.imgxsh/presets/my-custom-preset.yaml
+```
+
+### Step 3: Define Preset Configuration
+
+```yaml
+name: my-custom-preset
+description: "Custom preset for my specific needs"
+base_workflow: pdf-to-web
+
+overrides:
+  settings:
+    output_dir: "./my-output"
+    parallel_jobs: 4
+    
+  steps:
+    create_thumbnails:
+      params:
+        width: 250
+        height: 180
+        quality: 85
+        
+    create_full_size:
+      params:
+        format: "jpg"
+        quality: 90
+        max_width: 1000
+```
+
+### Step 4: Test Your Preset
+
+```bash
+# Test with dry run
+imgxsh --preset my-custom-preset --dry-run document.pdf
+
+# Run the preset
+imgxsh --preset my-custom-preset document.pdf
+```
+
+## Preset Usage
+
+### Command Line Usage
+
+```bash
+# Use a built-in preset
+imgxsh --preset quick-thumbnails document.pdf
+
+# Use a custom preset
+imgxsh --preset my-custom-preset document.pdf
+
+# List available presets
+imgxsh --list-presets
+
+# Get preset information
+imgxsh --preset-info quick-thumbnails
+```
+
+### Programmatic Usage
+
+```bash
+# Use preset in scripts
+for pdf in *.pdf; do
+    imgxsh --preset web-optimization "$pdf"
+done
+
+# Combine with other options
+imgxsh --preset quick-thumbnails --output ./batch-output *.pdf
+```
+
+## Advanced Preset Features
+
+### Conditional Step Overrides
+
+Override steps conditionally based on context:
+
+```yaml
+name: adaptive-preset
+description: "Adaptive preset that changes based on input"
+base_workflow: pdf-to-web
+
+overrides:
+  steps:
+    create_thumbnails:
+      condition: "image_count <= 10"
+      params:
+        width: 300
+        height: 200
+        quality: 85
+      else:
+        width: 200
+        height: 150
+        quality: 75
+```
+
+### Step Addition and Removal
+
+Add new steps or remove existing ones:
+
+```yaml
+name: extended-preset
+description: "Extended preset with additional steps"
+base_workflow: pdf-to-web
+
+overrides:
+  steps:
+    # Disable existing step
+    create_full_size:
+      enabled: false
+      
+    # Add new step
+    add_watermark:
+      type: watermark
+      description: "Add watermark to thumbnails"
+      params:
+        input_dir: "{temp_dir}/extracted"
+        watermark_image: "/path/to/watermark.png"
+        position: "bottom-right"
+        opacity: 0.5
+        output_template: "{output_dir}/watermarked/{counter:03d}.jpg"
+```
+
+### Hook Overrides
+
+Override or extend workflow hooks:
+
+```yaml
+name: notification-preset
+description: "Preset with custom notifications"
+base_workflow: pdf-to-web
+
+overrides:
+  hooks:
+    on_success:
+      - echo "Custom preset completed successfully!"
+      - notify-send "imgxsh" "Processing complete: {workflow_input}"
+      
+    on_failure:
+      - echo "Custom preset failed!"
+      - mail -s "imgxsh Error" admin@example.com < /tmp/imgxsh-error.log
+```
+
+### Multiple Base Workflows
+
+Create presets that combine multiple workflows:
+
+```yaml
+name: multi-workflow-preset
+description: "Preset that combines multiple workflows"
+base_workflow: pdf-to-web
+
+overrides:
+  # First run pdf-to-web workflow
+  steps:
+    # ... pdf-to-web steps ...
+    
+  # Then add excel processing
+  additional_workflows:
+    - name: excel-extract
+      condition: "has_excel_files"
+      params:
+        input_dir: "{workflow_input}"
+        output_dir: "{output_dir}/excel"
+```
+
+## Examples
+
+### Social Media Preset
+
+Create thumbnails optimized for different social media platforms:
+
+```yaml
+name: social-media
+description: "Generate images for social media platforms"
+base_workflow: pdf-to-web
+
+overrides:
+  settings:
+    output_dir: "./social-media"
+    
+  steps:
+    # Instagram square format
+    create_thumbnails:
+      params:
+        width: 1080
+        height: 1080
+        quality: 85
+        format: "jpg"
+        output_template: "{output_dir}/instagram/{counter:03d}.jpg"
+        
+    # Twitter header format
+    create_twitter_header:
+      type: resize
+      description: "Create Twitter header format"
+      params:
+        input_dir: "{temp_dir}/extracted"
+        width: 1500
+        height: 500
+        quality: 85
+        format: "jpg"
+        output_template: "{output_dir}/twitter/{counter:03d}.jpg"
+        
+    # Facebook post format
+    create_facebook_post:
+      type: resize
+      description: "Create Facebook post format"
+      params:
+        input_dir: "{temp_dir}/extracted"
+        width: 1200
+        height: 630
+        quality: 85
+        format: "jpg"
+        output_template: "{output_dir}/facebook/{counter:03d}.jpg"
+
+hooks:
+  on_success:
+    - echo "Social media images created:"
+    - echo "  Instagram: {output_dir}/instagram/"
+    - echo "  Twitter: {output_dir}/twitter/"
+    - echo "  Facebook: {output_dir}/facebook/"
+```
+
+### Batch Processing Preset
+
+Optimize for processing large batches of files:
+
+```yaml
+name: batch-processing
+description: "Optimized for large batch processing"
+base_workflow: pdf-to-web
+
+overrides:
+  settings:
+    parallel_jobs: 8
+    output_dir: "./batch-output"
+    
+  steps:
+    create_thumbnails:
+      params:
+        width: 200
+        height: 150
+        quality: 70
+        parallel: true
+        max_parallel: 8
+        
+    create_full_size:
+      params:
+        format: "webp"
+        quality: 75
+        parallel: true
+        max_parallel: 4
+
+hooks:
+  pre_workflow:
+    - echo "Starting batch processing: {workflow_input}"
+    - echo "Using {parallel_jobs} parallel jobs"
+    
+  post_step:
+    - echo "Step {step_name} completed: {processed_count} files processed"
+    
+  on_success:
+    - echo "Batch processing completed: {processed_count} files"
+    - echo "Output directory: {output_dir}"
+```
+
+### Quality Control Preset
+
+Add quality control and validation steps:
+
+```yaml
+name: quality-control
+description: "Preset with quality control and validation"
+base_workflow: pdf-to-web
+
+overrides:
+  steps:
+    # Add quality check step
+    quality_check:
+      type: custom
+      description: "Check image quality and dimensions"
+      params:
+        script: |
+          #!/bin/bash
+          echo "Checking image quality..."
+          for img in {temp_dir}/extracted/*; do
+            if [ -f "$img" ]; then
+              # Check file size
+              size=$(stat -f%z "$img" 2>/dev/null || stat -c%s "$img" 2>/dev/null)
+              if [ "$size" -lt 10000 ]; then
+                echo "WARNING: $img is too small ($size bytes)"
+              fi
+              
+              # Check dimensions
+              dimensions=$(identify -format "%wx%h" "$img" 2>/dev/null)
+              echo "Image $img: $dimensions"
+            fi
+          done
+          
+    # Modify existing steps
+    create_thumbnails:
+      params:
+        width: 300
+        height: 200
+        quality: 85
+        min_quality: 70  # Ensure minimum quality
+        
+    create_full_size:
+      params:
+        format: "webp"
+        quality: 90
+        max_file_size: "2MB"  # Limit file size
+
+hooks:
+  on_failure:
+    - echo "Quality control failed - check logs for details"
+    - echo "Failed step: {failed_step}"
+```
+
+## Best Practices
+
+### Preset Design
+
+1. **Single Purpose**: Each preset should have a clear, single purpose
+2. **Descriptive Names**: Use clear, descriptive names that indicate the preset's use case
+3. **Documentation**: Always include descriptions explaining when to use the preset
+4. **Minimal Overrides**: Only override what's necessary to avoid complexity
+
+### Performance Considerations
+
+1. **Parallel Processing**: Adjust parallel_jobs based on your system capabilities
+2. **Quality vs Speed**: Balance quality settings with processing speed
+3. **Memory Usage**: Consider memory usage for large batch operations
+4. **Disk Space**: Monitor output directory sizes for large batches
+
+### Maintenance
+
+1. **Version Control**: Keep preset files in version control
+2. **Testing**: Test presets with various input types
+3. **Documentation**: Keep preset documentation up to date
+4. **Sharing**: Share useful presets with your team
+
+### Error Handling
+
+1. **Validation**: Validate preset configurations before use
+2. **Fallbacks**: Provide fallback options for failed operations
+3. **Logging**: Enable appropriate logging levels for debugging
+4. **Cleanup**: Ensure proper cleanup of temporary files
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Preset Not Found**: Ensure the preset file is in the correct directory
+2. **Base Workflow Missing**: Verify the base workflow exists and is accessible
+3. **Invalid Overrides**: Check that override parameters match the base workflow
+4. **Permission Issues**: Ensure proper file permissions for preset files
+
+### Debug Mode
+
+Enable debug mode to troubleshoot preset issues:
+
+```bash
+# Run preset with debug output
+imgxsh --preset my-preset --verbose --dry-run input.pdf
+
+# Check preset configuration
+imgxsh --preset-info my-preset --verbose
+```
+
+### Validation
+
+Validate preset configurations:
+
+```bash
+# Validate preset syntax
+imgxsh --validate-preset my-preset.yaml
+
+# Test preset with sample data
+imgxsh --preset my-preset --test-mode sample.pdf
+```
+
+## Preset Management
+
+### Organizing Presets
+
+```
+~/.imgxsh/presets/
+├── built-in/           # Built-in presets (read-only)
+├── custom/            # User-created presets
+├── shared/            # Team-shared presets
+└── templates/         # Preset templates
+```
+
+### Preset Sharing
+
+```bash
+# Export preset for sharing
+imgxsh --export-preset my-preset > my-preset.yaml
+
+# Import shared preset
+imgxsh --import-preset my-preset.yaml
+
+# Share preset with team
+git add ~/.imgxsh/presets/custom/my-preset.yaml
+git commit -m "Add custom preset for social media processing"
+git push
+```
+
+This comprehensive presets system allows you to create reusable, customizable workflow configurations that can be easily shared and maintained across different use cases and teams.

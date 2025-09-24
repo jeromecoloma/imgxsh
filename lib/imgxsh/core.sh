@@ -50,10 +50,24 @@ imgxsh::init() {
 
 # Create default configuration file
 imgxsh::create_default_config() {
-	cat >"$IMGXSH_CONFIG_FILE" <<EOF
+	local config_file="${1:-$IMGXSH_CONFIG_FILE}"
+	local backup_existing="${2:-true}"
+
+	# Create backup of existing config if it exists
+	if [[ -f "$config_file" ]] && [[ "$backup_existing" == true ]]; then
+		local backup_file="${config_file}.backup.$(date +%Y%m%d_%H%M%S)"
+		if cp "$config_file" "$backup_file"; then
+			log::info "Backed up existing config to: $backup_file"
+		else
+			log::warn "Failed to backup existing config"
+		fi
+	fi
+
+	cat >"$config_file" <<EOF
 # imgxsh Configuration File
 # This file controls global settings and default workflows
 # Generated on: $(date)
+# Version: $(imgxsh::version)
 
 # Global settings
 settings:
@@ -246,7 +260,17 @@ presets:
 # {error_count} - Number of errors encountered
 EOF
 
-	log::success "Created default configuration at $IMGXSH_CONFIG_FILE"
+	log::success "Created default configuration at $config_file"
+
+	# Validate the created config
+	if imgxsh::validate_config "$config_file"; then
+		log::info "Configuration validation passed"
+	else
+		log::warn "Configuration validation failed - please check the file"
+		return 1
+	fi
+
+	return 0
 }
 
 # Validate that required dependencies are available
@@ -343,8 +367,8 @@ imgxsh::ensure_output_dir() {
 # Basic YAML validation without external tools
 imgxsh::validate_yaml_basic() {
 	local config_file="$1"
-	local errors=0
-	
+	local -i error_count=0
+
 	# Check for common YAML syntax issues
 	# 1. Check for basic YAML structure issues
 	# Check for lines that look like they should have values but don't
@@ -352,44 +376,44 @@ imgxsh::validate_yaml_basic() {
 	# Handle comments by checking if line ends with colon and optional whitespace/comment
 	if grep -q '^[[:space:]]\+[a-zA-Z_][a-zA-Z0-9_]*:[[:space:]]*\(#.*\)\?$' "$config_file"; then
 		log::error "Found key without value (missing colon or value)"
-		((errors++))
+		((error_count++))
 	fi
-	
+
 	# 2. Check for invalid indentation (mixed tabs and spaces)
 	if grep -q $'\t' "$config_file" && grep -q '^[ ]' "$config_file"; then
 		log::error "Mixed tabs and spaces in indentation"
-		((errors++))
+		((error_count++))
 	fi
-	
+
 	# 3. Check for basic structure (must have at least one key-value pair)
 	if ! grep -q '^[a-zA-Z_][a-zA-Z0-9_]*:' "$config_file"; then
 		log::error "No valid YAML keys found"
-		((errors++))
+		((error_count++))
 	fi
-	
+
 	# 4. Check for required sections (basic grep check)
 	local required_sections=("settings:" "workflows:" "presets:")
 	for section in "${required_sections[@]}"; do
 		if ! grep -q "^$section" "$config_file"; then
 			log::error "Missing required section: $section"
-			((errors++))
+			((error_count++))
 		fi
 	done
-	
+
 	# 5. Check for basic settings
 	local required_settings=("output_dir:" "temp_dir:" "parallel_jobs:")
 	for setting in "${required_settings[@]}"; do
 		if ! grep -q "^\s*$setting" "$config_file"; then
 			log::error "Missing required setting: $setting"
-			((errors++))
+			((error_count++))
 		fi
 	done
-	
-	if [[ $errors -gt 0 ]]; then
-		log::error "Basic YAML validation failed with $errors errors"
+
+	if [[ $error_count -gt 0 ]]; then
+		log::error "Basic YAML validation failed with $error_count errors"
 		return 1
 	fi
-	
+
 	log::debug "Basic YAML validation passed"
 	return 0
 }
@@ -397,20 +421,20 @@ imgxsh::validate_yaml_basic() {
 # Load configuration from file
 imgxsh::load_config() {
 	local config_file="${1:-$IMGXSH_CONFIG_FILE}"
-	
+
 	if [[ ! -f "$config_file" ]]; then
 		log::error "Configuration file not found: $config_file"
 		return 1
 	fi
-	
+
 	if [[ ! -r "$config_file" ]]; then
 		log::error "Cannot read configuration file: $config_file"
 		return 1
 	fi
-	
+
 	# Export config file path for other functions
 	export IMGXSH_ACTIVE_CONFIG="$config_file"
-	
+
 	log::debug "Loaded configuration from: $config_file"
 	return 0
 }
@@ -418,47 +442,47 @@ imgxsh::load_config() {
 # Validate configuration file
 imgxsh::validate_config() {
 	local config_file="${1:-$IMGXSH_CONFIG_FILE}"
-	local errors=0
-	
+	local -i error_count=0
+
 	if [[ ! -f "$config_file" ]]; then
 		log::error "Configuration file not found: $config_file"
 		return 1
 	fi
-	
+
 	# Check if file is valid YAML (basic check)
 	if ! command -v yq >/dev/null 2>&1; then
 		log::warn "yq not available - using basic YAML validation"
-		
+
 		# Basic YAML syntax validation using grep patterns
 		if ! imgxsh::validate_yaml_basic "$config_file"; then
 			log::error "Basic YAML validation failed"
-			((errors++))
+			((error_count++))
 		fi
 	else
 		# Use yq for robust YAML validation
 		if ! yq eval '.' "$config_file" >/dev/null 2>&1; then
 			log::error "Invalid YAML syntax in configuration file: $config_file"
-			((errors++))
+			((error_count++))
 		fi
 	fi
-	
+
 	# Validate required sections
 	local required_sections=("settings" "workflows" "presets")
 	for section in "${required_sections[@]}"; do
 		if command -v yq >/dev/null 2>&1; then
 			if ! yq eval ".$section" "$config_file" >/dev/null 2>&1; then
 				log::error "Missing required section: $section"
-				((errors++))
+				((error_count++))
 			fi
 		else
 			# Fallback: check if section exists in file
 			if ! grep -q "^$section:" "$config_file"; then
 				log::error "Missing required section: $section"
-				((errors++))
+				((error_count++))
 			fi
 		fi
 	done
-	
+
 	# Validate settings section
 	if command -v yq >/dev/null 2>&1; then
 		if yq eval '.settings' "$config_file" >/dev/null 2>&1; then
@@ -467,16 +491,16 @@ imgxsh::validate_config() {
 			for setting in "${required_settings[@]}"; do
 				if ! yq eval ".settings.$setting" "$config_file" >/dev/null 2>&1; then
 					log::error "Missing required setting: settings.$setting"
-					((errors++))
+					((error_count++))
 				fi
 			done
-			
+
 			# Validate parallel_jobs is a number
 			local parallel_jobs
 			parallel_jobs=$(yq eval '.settings.parallel_jobs' "$config_file" 2>/dev/null)
 			if [[ -n "$parallel_jobs" ]] && ! [[ "$parallel_jobs" =~ ^[0-9]+$ ]]; then
 				log::error "settings.parallel_jobs must be a number, got: $parallel_jobs"
-				((errors++))
+				((error_count++))
 			fi
 		fi
 	else
@@ -485,24 +509,24 @@ imgxsh::validate_config() {
 		for setting in "${required_settings[@]}"; do
 			if ! grep -q "^\s*$setting" "$config_file"; then
 				log::error "Missing required setting: $setting"
-				((errors++))
+				((error_count++))
 			fi
 		done
-		
+
 		# Validate parallel_jobs is a number (basic check)
 		local parallel_jobs
 		parallel_jobs=$(grep "^\s*parallel_jobs:" "$config_file" | head -1 | sed 's/.*parallel_jobs:\s*//' | sed 's/#.*$//' | tr -d '"' | tr -d "'" | tr -d ' \t')
 		if [[ -n "$parallel_jobs" ]] && ! [[ "$parallel_jobs" =~ ^[0-9]+$ ]]; then
 			log::error "settings.parallel_jobs must be a number, got: $parallel_jobs"
-			((errors++))
+			((error_count++))
 		fi
 	fi
-	
-	if [[ $errors -gt 0 ]]; then
-		log::error "Configuration validation failed with $errors errors"
+
+	if [[ $error_count -gt 0 ]]; then
+		log::error "Configuration validation failed with $error_count errors"
 		return 1
 	fi
-	
+
 	log::success "Configuration validation passed"
 	return 0
 }
@@ -511,12 +535,12 @@ imgxsh::validate_config() {
 imgxsh::get_config() {
 	local key="$1"
 	local config_file="${2:-$IMGXSH_CONFIG_FILE}"
-	
+
 	if [[ ! -f "$config_file" ]]; then
 		log::error "Configuration file not found: $config_file"
 		return 1
 	fi
-	
+
 	if command -v yq >/dev/null 2>&1; then
 		yq eval ".$key" "$config_file" 2>/dev/null
 	else
@@ -542,12 +566,12 @@ imgxsh::get_config() {
 # List available workflows from config
 imgxsh::list_workflows() {
 	local config_file="${1:-$IMGXSH_CONFIG_FILE}"
-	
+
 	if [[ ! -f "$config_file" ]]; then
 		log::error "Configuration file not found: $config_file"
 		return 1
 	fi
-	
+
 	if command -v yq >/dev/null 2>&1; then
 		yq eval '.workflows | keys[]' "$config_file" 2>/dev/null
 	else
@@ -560,12 +584,12 @@ imgxsh::list_workflows() {
 # List available presets from config
 imgxsh::list_presets() {
 	local config_file="${1:-$IMGXSH_CONFIG_FILE}"
-	
+
 	if [[ ! -f "$config_file" ]]; then
 		log::error "Configuration file not found: $config_file"
 		return 1
 	fi
-	
+
 	if command -v yq >/dev/null 2>&1; then
 		yq eval '.presets | keys[]' "$config_file" 2>/dev/null
 	else
@@ -579,35 +603,385 @@ imgxsh::list_presets() {
 imgxsh::create_preset() {
 	local preset_name="$1"
 	local base_workflow="$2"
-	local config_file="${3:-$IMGXSH_CONFIG_FILE}"
-	
+	local description="$3"
+	local config_file="${4:-$IMGXSH_CONFIG_FILE}"
+
 	if [[ -z "$preset_name" ]] || [[ -z "$base_workflow" ]]; then
-		log::error "Usage: imgxsh::create_preset PRESET_NAME BASE_WORKFLOW [CONFIG_FILE]"
+		log::error "Usage: imgxsh::create_preset PRESET_NAME BASE_WORKFLOW [DESCRIPTION] [CONFIG_FILE]"
 		return 1
 	fi
-	
+
 	if [[ ! -f "$config_file" ]]; then
 		log::error "Configuration file not found: $config_file"
 		return 1
 	fi
-	
+
 	# Check if preset already exists
 	if imgxsh::list_presets "$config_file" | grep -q "^$preset_name$"; then
 		log::error "Preset '$preset_name' already exists"
 		return 1
 	fi
-	
+
 	# Check if base workflow exists
 	if ! imgxsh::list_workflows "$config_file" | grep -q "^$base_workflow$"; then
 		log::error "Base workflow '$base_workflow' not found"
 		return 1
 	fi
-	
-	# Create preset entry (this would need yq for proper YAML manipulation)
+
+	# Create preset entry
 	log::info "Creating preset '$preset_name' based on workflow '$base_workflow'"
-	log::warn "Manual YAML editing required - preset creation not fully automated without yq"
-	
-	return 0
+
+	# Use yq if available for proper YAML manipulation
+	if command -v yq >/dev/null 2>&1; then
+		# Create temporary preset definition
+		local temp_preset_file="${IMGXSH_TEMP_DIR}/preset_${preset_name}.yaml"
+		cat >"$temp_preset_file" <<EOF
+  $preset_name:
+    name: "$preset_name"
+    description: "${description:-User-created preset based on $base_workflow}"
+    base_workflow: "$base_workflow"
+    overrides:
+      settings:
+        # Add custom settings here
+      steps:
+        # Add step overrides here
+EOF
+
+		# Insert preset into config file
+		if yq eval-all 'select(fileIndex == 0) * select(fileIndex == 1)' "$config_file" "$temp_preset_file" >"${config_file}.tmp" 2>/dev/null; then
+			mv "${config_file}.tmp" "$config_file"
+			rm -f "$temp_preset_file"
+			log::success "Preset '$preset_name' created successfully"
+			return 0
+		else
+			log::error "Failed to add preset to configuration file"
+			rm -f "$temp_preset_file" "${config_file}.tmp"
+			return 1
+		fi
+	else
+		# Fallback: append to presets section (basic approach)
+		log::warn "yq not available - using basic preset creation"
+
+		# Find the end of the presets section and add the new preset
+		local temp_config="${config_file}.tmp"
+		local in_presets=false
+		local preset_added=false
+		local line_count=0
+		local total_lines
+		total_lines=$(wc -l <"$config_file")
+
+		while IFS= read -r line; do
+			((line_count++))
+
+			if [[ "$line" =~ ^presets:$ ]]; then
+				in_presets=true
+				echo "$line" >>"$temp_config"
+			elif [[ "$in_presets" == true ]] && [[ "$line" =~ ^[a-zA-Z] ]] && [[ ! "$line" =~ ^[[:space:]] ]]; then
+				# End of presets section, add our preset before this line
+				if [[ "$preset_added" == false ]]; then
+					cat >>"$temp_config" <<EOF
+  $preset_name:
+    name: "$preset_name"
+    description: "${description:-User-created preset based on $base_workflow}"
+    base_workflow: "$base_workflow"
+    overrides:
+      settings:
+        # Add custom settings here
+      steps:
+        # Add step overrides here
+
+EOF
+					preset_added=true
+				fi
+				in_presets=false
+				echo "$line" >>"$temp_config"
+			elif [[ "$in_presets" == true ]] && [[ $line_count -eq $total_lines ]]; then
+				# End of file while in presets section, add our preset
+				if [[ "$preset_added" == false ]]; then
+					cat >>"$temp_config" <<EOF
+  $preset_name:
+    name: "$preset_name"
+    description: "${description:-User-created preset based on $base_workflow}"
+    base_workflow: "$base_workflow"
+    overrides:
+      settings:
+        # Add custom settings here
+      steps:
+        # Add step overrides here
+
+EOF
+					preset_added=true
+				fi
+				echo "$line" >>"$temp_config"
+			else
+				echo "$line" >>"$temp_config"
+			fi
+		done <"$config_file"
+
+		if [[ "$preset_added" == true ]]; then
+			mv "$temp_config" "$config_file"
+			log::success "Preset '$preset_name' created successfully (basic mode)"
+			return 0
+		else
+			log::error "Failed to add preset to configuration file"
+			rm -f "$temp_config"
+			return 1
+		fi
+	fi
+}
+
+# Delete user preset
+imgxsh::delete_preset() {
+	local preset_name="$1"
+	local config_file="${2:-$IMGXSH_CONFIG_FILE}"
+
+	if [[ -z "$preset_name" ]]; then
+		log::error "Usage: imgxsh::delete_preset PRESET_NAME [CONFIG_FILE]"
+		return 1
+	fi
+
+	if [[ ! -f "$config_file" ]]; then
+		log::error "Configuration file not found: $config_file"
+		return 1
+	fi
+
+	# Check if preset exists
+	if ! imgxsh::list_presets "$config_file" | grep -q "^$preset_name$"; then
+		log::error "Preset '$preset_name' not found"
+		return 1
+	fi
+
+	# Check if it's a built-in preset
+	local builtin_presets=("quick-thumbnails" "web-gallery-prep" "high-quality")
+	for builtin in "${builtin_presets[@]}"; do
+		if [[ "$preset_name" == "$builtin" ]]; then
+			log::error "Cannot delete built-in preset: $preset_name"
+			return 1
+		fi
+	done
+
+	log::info "Deleting preset: $preset_name"
+
+	# Use yq if available for proper YAML manipulation
+	if command -v yq >/dev/null 2>&1; then
+		if yq eval "del(.presets.$preset_name)" "$config_file" >"${config_file}.tmp" 2>/dev/null; then
+			mv "${config_file}.tmp" "$config_file"
+			log::success "Preset '$preset_name' deleted successfully"
+			return 0
+		else
+			log::error "Failed to delete preset from configuration file"
+			rm -f "${config_file}.tmp"
+			return 1
+		fi
+	else
+		# Fallback: basic deletion using sed
+		log::warn "yq not available - using basic preset deletion"
+
+		local temp_config="${config_file}.tmp"
+		local in_preset=false
+		local preset_deleted=false
+
+		while IFS= read -r line; do
+			if [[ "$line" =~ ^[[:space:]]*$preset_name:$ ]]; then
+				in_preset=true
+				preset_deleted=true
+				# Skip this line and all indented lines that follow
+				continue
+			elif [[ "$in_preset" == true ]] && [[ "$line" =~ ^[[:space:]]*[a-zA-Z] ]]; then
+				# End of preset section
+				in_preset=false
+				echo "$line" >>"$temp_config"
+			elif [[ "$in_preset" == false ]]; then
+				echo "$line" >>"$temp_config"
+			fi
+		done <"$config_file"
+
+		if [[ "$preset_deleted" == true ]]; then
+			mv "$temp_config" "$config_file"
+			log::success "Preset '$preset_name' deleted successfully (basic mode)"
+			return 0
+		else
+			log::error "Failed to delete preset from configuration file"
+			rm -f "$temp_config"
+			return 1
+		fi
+	fi
+}
+
+# Export preset to file
+imgxsh::export_preset() {
+	local preset_name="$1"
+	local output_file="$2"
+	local config_file="${3:-$IMGXSH_CONFIG_FILE}"
+
+	if [[ -z "$preset_name" ]] || [[ -z "$output_file" ]]; then
+		log::error "Usage: imgxsh::export_preset PRESET_NAME OUTPUT_FILE [CONFIG_FILE]"
+		return 1
+	fi
+
+	if [[ ! -f "$config_file" ]]; then
+		log::error "Configuration file not found: $config_file"
+		return 1
+	fi
+
+	# Check if preset exists
+	if ! imgxsh::list_presets "$config_file" | grep -q "^$preset_name$"; then
+		log::error "Preset '$preset_name' not found"
+		return 1
+	fi
+
+	log::info "Exporting preset '$preset_name' to: $output_file"
+
+	# Use yq if available for proper YAML extraction
+	if command -v yq >/dev/null 2>&1; then
+		if yq eval ".presets.$preset_name" "$config_file" >"$output_file" 2>/dev/null; then
+			log::success "Preset exported successfully"
+			return 0
+		else
+			log::error "Failed to export preset"
+			return 1
+		fi
+	else
+		# Fallback: basic extraction using sed
+		log::warn "yq not available - using basic preset export"
+
+		local in_preset=false
+		local preset_found=false
+
+		while IFS= read -r line; do
+			if [[ "$line" =~ ^[[:space:]]*$preset_name:$ ]]; then
+				in_preset=true
+				preset_found=true
+				echo "$line" >"$output_file"
+			elif [[ "$in_preset" == true ]] && [[ "$line" =~ ^[[:space:]]*[a-zA-Z] ]] && [[ ! "$line" =~ ^[[:space:]] ]]; then
+				# End of preset section
+				break
+			elif [[ "$in_preset" == true ]]; then
+				echo "$line" >>"$output_file"
+			fi
+		done <"$config_file"
+
+		if [[ "$preset_found" == true ]]; then
+			log::success "Preset exported successfully (basic mode)"
+			return 0
+		else
+			log::error "Failed to export preset"
+			return 1
+		fi
+	fi
+}
+
+# Import preset from file
+imgxsh::import_preset() {
+	local input_file="$1"
+	local preset_name="$2"
+	local config_file="${3:-$IMGXSH_CONFIG_FILE}"
+
+	if [[ -z "$input_file" ]] || [[ -z "$preset_name" ]]; then
+		log::error "Usage: imgxsh::import_preset INPUT_FILE PRESET_NAME [CONFIG_FILE]"
+		return 1
+	fi
+
+	if [[ ! -f "$input_file" ]]; then
+		log::error "Input file not found: $input_file"
+		return 1
+	fi
+
+	if [[ ! -f "$config_file" ]]; then
+		log::error "Configuration file not found: $config_file"
+		return 1
+	fi
+
+	# Check if preset already exists
+	if imgxsh::list_presets "$config_file" | grep -q "^$preset_name$"; then
+		log::error "Preset '$preset_name' already exists"
+		return 1
+	fi
+
+	log::info "Importing preset '$preset_name' from: $input_file"
+
+	# Use yq if available for proper YAML manipulation
+	if command -v yq >/dev/null 2>&1; then
+		# Read the preset content and add it to the config
+		local preset_content
+		preset_content=$(yq eval '.' "$input_file" 2>/dev/null)
+
+		if [[ -n "$preset_content" ]]; then
+			# Create temporary file with the preset
+			local temp_preset_file="${IMGXSH_TEMP_DIR}/import_${preset_name}.yaml"
+			echo "presets:" >"$temp_preset_file"
+			echo "  $preset_name:" >>"$temp_preset_file"
+			echo "$preset_content" | sed 's/^/    /' >>"$temp_preset_file"
+
+			# Merge with existing config
+			if yq eval-all 'select(fileIndex == 0) * select(fileIndex == 1)' "$config_file" "$temp_preset_file" >"${config_file}.tmp" 2>/dev/null; then
+				mv "${config_file}.tmp" "$config_file"
+				rm -f "$temp_preset_file"
+				log::success "Preset imported successfully"
+				return 0
+			else
+				log::error "Failed to import preset to configuration file"
+				rm -f "$temp_preset_file" "${config_file}.tmp"
+				return 1
+			fi
+		else
+			log::error "Invalid preset file format"
+			return 1
+		fi
+	else
+		# Fallback: basic import using file concatenation
+		log::warn "yq not available - using basic preset import"
+
+		# Find the end of the presets section and add the new preset
+		local temp_config="${config_file}.tmp"
+		local in_presets=false
+		local preset_added=false
+		local line_count=0
+		local total_lines
+		total_lines=$(wc -l <"$config_file")
+
+		while IFS= read -r line; do
+			((line_count++))
+
+			if [[ "$line" =~ ^presets:$ ]]; then
+				in_presets=true
+				echo "$line" >>"$temp_config"
+			elif [[ "$in_presets" == true ]] && [[ "$line" =~ ^[a-zA-Z] ]] && [[ ! "$line" =~ ^[[:space:]] ]]; then
+				# End of presets section, add our preset before this line
+				if [[ "$preset_added" == false ]]; then
+					echo "  $preset_name:" >>"$temp_config"
+					# Add the preset content with proper indentation, skipping the first line (preset name)
+					tail -n +2 "$input_file" | sed 's/^/    /' >>"$temp_config"
+					echo >>"$temp_config"
+					preset_added=true
+				fi
+				in_presets=false
+				echo "$line" >>"$temp_config"
+			elif [[ "$in_presets" == true ]] && [[ $line_count -eq $total_lines ]]; then
+				# End of file while in presets section, add our preset
+				if [[ "$preset_added" == false ]]; then
+					echo "  $preset_name:" >>"$temp_config"
+					# Add the preset content with proper indentation, skipping the first line (preset name)
+					tail -n +2 "$input_file" | sed 's/^/    /' >>"$temp_config"
+					echo >>"$temp_config"
+					preset_added=true
+				fi
+				echo "$line" >>"$temp_config"
+			else
+				echo "$line" >>"$temp_config"
+			fi
+		done <"$config_file"
+
+		if [[ "$preset_added" == true ]]; then
+			mv "$temp_config" "$config_file"
+			log::success "Preset imported successfully (basic mode)"
+			return 0
+		else
+			log::error "Failed to import preset to configuration file"
+			rm -f "$temp_config"
+			return 1
+		fi
+	fi
 }
 
 # Template variable substitution
