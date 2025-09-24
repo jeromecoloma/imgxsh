@@ -2,12 +2,3 @@
 ./shell-starter-tests/*
 ./.development/*
 ./.ai-workflow/*
-./bin/update-shell-starter
-./bin/generate-ai-workflow
-./lib/colors.sh
-./lib/logging.sh
-./lib/spinner.sh
-./lib/update.sh
-./lib/utils.sh
-./lib/main.sh
-./bin/bump-version

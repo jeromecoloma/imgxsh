@@ -26,109 +26,109 @@ LIB_DIR="$(dirname "$SCRIPT_DIR")/lib"
 
 # Try to source lib/main.sh with error handling
 if [[ -f "$LIB_DIR/main.sh" ]]; then
-  # shellcheck source=../lib/main.sh
-  source "$LIB_DIR/main.sh"
+	# shellcheck source=../lib/main.sh
+	source "$LIB_DIR/main.sh"
 else
-  # Enhanced fallback functionality when lib/main.sh is not available
-  colors_has_color() {
-    [[ ${NO_COLOR:-} == "" ]] && {
-      [[ ${TERM:-} != "dumb" ]] \
-        && [[ ${TERM:-} != "" ]] \
-        && [[ -t 1 ]]
-    }
-  }
+	# Enhanced fallback functionality when lib/main.sh is not available
+	colors_has_color() {
+		[[ ${NO_COLOR:-} == "" ]] && {
+			[[ ${TERM:-} != "dumb" ]] &&
+				[[ ${TERM:-} != "" ]] &&
+				[[ -t 1 ]]
+		}
+	}
 
-  # Enhanced color variables with fallback support (guard against redefinition)
-  if ! declare -p COLOR_RESET >/dev/null 2>&1; then
-    if colors_has_color; then
-      readonly COLOR_INFO='\033[0;34m'    # Blue
-      readonly COLOR_SUCCESS='\033[0;32m' # Green
-      readonly COLOR_WARNING='\033[1;33m' # Yellow
-      readonly COLOR_ERROR='\033[0;31m'   # Red
-      readonly COLOR_RESET='\033[0m'
-      readonly COLOR_BOLD='\033[1m'
-    else
-      readonly COLOR_INFO=''
-      readonly COLOR_SUCCESS=''
-      readonly COLOR_WARNING=''
-      readonly COLOR_ERROR=''
-      readonly COLOR_RESET=''
-      readonly COLOR_BOLD=''
-    fi
-  fi
+	# Enhanced color variables with fallback support (guard against redefinition)
+	if ! declare -p COLOR_RESET >/dev/null 2>&1; then
+		if colors_has_color; then
+			readonly COLOR_INFO='\033[0;34m'    # Blue
+			readonly COLOR_SUCCESS='\033[0;32m' # Green
+			readonly COLOR_WARNING='\033[1;33m' # Yellow
+			readonly COLOR_ERROR='\033[0;31m'   # Red
+			readonly COLOR_RESET='\033[0m'
+			readonly COLOR_BOLD='\033[1m'
+		else
+			readonly COLOR_INFO=''
+			readonly COLOR_SUCCESS=''
+			readonly COLOR_WARNING=''
+			readonly COLOR_ERROR=''
+			readonly COLOR_RESET=''
+			readonly COLOR_BOLD=''
+		fi
+	fi
 
-  # Enhanced logging functions with visual indicators
-  log::info() {
-    printf '%bℹ%b %s\n' "${COLOR_INFO}" "${COLOR_RESET}" "$*"
-  }
+	# Enhanced logging functions with visual indicators
+	log::info() {
+		printf '%bℹ%b %s\n' "${COLOR_INFO}" "${COLOR_RESET}" "$*"
+	}
 
-  log::warn() {
-    printf '%b⚠%b %s\n' "${COLOR_WARNING}" "${COLOR_RESET}" "$*"
-  }
+	log::warn() {
+		printf '%b⚠%b %s\n' "${COLOR_WARNING}" "${COLOR_RESET}" "$*"
+	}
 
-  log::error() {
-    printf '%b✗%b %s\n' "${COLOR_ERROR}" "${COLOR_RESET}" "$*" >&2
-  }
+	log::error() {
+		printf '%b✗%b %s\n' "${COLOR_ERROR}" "${COLOR_RESET}" "$*" >&2
+	}
 
-  log::success() {
-    printf '%b✓%b %s\n' "${COLOR_SUCCESS}" "${COLOR_RESET}" "$*"
-  }
+	log::success() {
+		printf '%b✓%b %s\n' "${COLOR_SUCCESS}" "${COLOR_RESET}" "$*"
+	}
 
-  # Section header and divider functions
-  section_header() {
-    printf '\n%b─── %s ───%b\n' "${COLOR_BOLD}" "$*" "${COLOR_RESET}"
-  }
+	# Section header and divider functions
+	section_header() {
+		printf '\n%b─── %s ───%b\n' "${COLOR_BOLD}" "$*" "${COLOR_RESET}"
+	}
 
-  section_divider() {
-    printf '%b%s%b\n' "${COLOR_INFO}" "$(printf '%.50s' "──────────────────────────────────────────────────")" "${COLOR_RESET}"
-  }
+	section_divider() {
+		printf '%b%s%b\n' "${COLOR_INFO}" "$(printf '%.50s' "──────────────────────────────────────────────────")" "${COLOR_RESET}"
+	}
 
-  # Minimal banner support
-  banner_minimal() {
-    if colors_has_color; then
-      printf '%b• AI Workflow Generator •%b\n' "${COLOR_INFO}" "${COLOR_RESET}"
-    else
-      echo "• AI Workflow Generator •"
-    fi
-  }
+	# Minimal banner support
+	banner_minimal() {
+		if colors_has_color; then
+			printf '%b• AI Workflow Generator •%b\n' "${COLOR_INFO}" "${COLOR_RESET}"
+		else
+			echo "• AI Workflow Generator •"
+		fi
+	}
 fi
 
 # Ensure banner_minimal function is available regardless of lib loading
 if ! declare -f banner_minimal >/dev/null 2>&1; then
-  banner_minimal() {
-    if [[ ${NO_COLOR:-} == "" ]] && [[ ${TERM:-} != "dumb" ]] && [[ -t 1 ]]; then
-      printf '\033[0;34m• AI Workflow Generator •\033[0m\n'
-    else
-      echo "• AI Workflow Generator •"
-    fi
-  }
+	banner_minimal() {
+		if [[ ${NO_COLOR:-} == "" ]] && [[ ${TERM:-} != "dumb" ]] && [[ -t 1 ]]; then
+			printf '\033[0;34m• AI Workflow Generator •\033[0m\n'
+		else
+			echo "• AI Workflow Generator •"
+		fi
+	}
 
-  # Basic spinner fallback (no-op for simplicity)
-  spinner::start() { echo "$*"; }
-  spinner::stop() { :; }
+	# Basic spinner fallback (no-op for simplicity)
+	spinner::start() { echo "$*"; }
+	spinner::stop() { :; }
 
-  # Basic argument parsing fallback
-  parse_common_args() {
-    local script_name="$1"
-    shift
-    case "$1" in
-      --version | -v)
-        printf '%bAI Workflow Generator%b v1.0.0\n' "${COLOR_BOLD}" "${COLOR_RESET}"
-        exit 0
-        ;;
-      --help | -h)
-        show_help
-        exit 0
-        ;;
-      *)
-        log::error "Fallback mode: limited functionality without lib/main.sh"
-        exit 1
-        ;;
-    esac
-  }
+	# Basic argument parsing fallback
+	parse_common_args() {
+		local script_name="$1"
+		shift
+		case "$1" in
+		--version | -v)
+			printf '%bAI Workflow Generator%b v1.0.0\n' "${COLOR_BOLD}" "${COLOR_RESET}"
+			exit 0
+			;;
+		--help | -h)
+			show_help
+			exit 0
+			;;
+		*)
+			log::error "Fallback mode: limited functionality without lib/main.sh"
+			exit 1
+			;;
+		esac
+	}
 
-  # No-op for update functions in fallback mode
-  enable_background_updates() { :; }
+	# No-op for update functions in fallback mode
+	enable_background_updates() { :; }
 fi
 
 # Script metadata
@@ -136,13 +136,13 @@ SCRIPT_NAME="generate-ai-workflow"
 SCRIPT_DESCRIPTION="Generate multi-agent AI development workflow"
 
 show_help() {
-  echo
-  if command -v banner::shell_starter >/dev/null 2>&1; then
-    banner::shell_starter minimal
-  else
-    banner_minimal
-  fi
-  cat <<EOF
+	echo
+	if command -v banner::shell_starter >/dev/null 2>&1; then
+		banner::shell_starter minimal
+	else
+		banner_minimal
+	fi
+	cat <<EOF
 
 $SCRIPT_NAME - $SCRIPT_DESCRIPTION
 
@@ -208,17 +208,17 @@ EOF
 }
 
 generate_state_files() {
-  local project_name="$1"
+	local project_name="$1"
 
-  section_header "Creating State Management Files"
-  log::info "Project: $project_name"
+	section_header "Creating State Management Files"
+	log::info "Project: $project_name"
 
-  mkdir -p .ai-workflow/state
-  log::success "Created directory: .ai-workflow/state"
+	mkdir -p .ai-workflow/state
+	log::success "Created directory: .ai-workflow/state"
 
-  # Generate tasks.md
-  local project_upper=$(echo "$project_name" | tr '[:lower:]' '[:upper:]')
-  cat >.ai-workflow/state/tasks.md <<EOF
+	# Generate tasks.md
+	local project_upper=$(echo "$project_name" | tr '[:lower:]' '[:upper:]')
+	cat >.ai-workflow/state/tasks.md <<EOF
 # $project_name - Development Tasks
 
 This document tracks the implementation progress of the $project_name project using autonomous AI development.
@@ -364,8 +364,8 @@ After each task completion:
 - Mark task as [x] only when verification passes
 EOF
 
-  # Generate requirements.md (Product Requirements Document)
-  cat >.ai-workflow/state/requirements.md <<EOF
+	# Generate requirements.md (Product Requirements Document)
+	cat >.ai-workflow/state/requirements.md <<EOF
 # $project_name - Product Requirements Document
 
 ## Product Overview
@@ -461,8 +461,8 @@ $project_name --help                        # Show help
 - [ ] Progress indicators show during long operations
 EOF
 
-  # Generate progress.log
-  cat >.ai-workflow/state/progress.log <<EOF
+	# Generate progress.log
+	cat >.ai-workflow/state/progress.log <<EOF
 # $project_name - Development Progress Log
 
 ## $(date '+%Y-%m-%d %H:%M:%S') - Workflow Generated
@@ -471,27 +471,27 @@ EOF
 - Ready to start development with /dev start
 
 EOF
-  log::success "Created file: .ai-workflow/state/tasks.md"
-  log::success "Created file: .ai-workflow/state/requirements.md"
-  log::success "Created file: .ai-workflow/state/progress.log"
+	log::success "Created file: .ai-workflow/state/tasks.md"
+	log::success "Created file: .ai-workflow/state/requirements.md"
+	log::success "Created file: .ai-workflow/state/progress.log"
 }
 
 generate_specific_tasks() {
-  local project_name="$1"
+	local project_name="$1"
 
-  if [[ ! -f ".ai-workflow/state/requirements.md" ]]; then
-    log::error "requirements.md not found. Run '$SCRIPT_NAME $project_name' first."
-    exit 1
-  fi
+	if [[ ! -f ".ai-workflow/state/requirements.md" ]]; then
+		log::error "requirements.md not found. Run '$SCRIPT_NAME $project_name' first."
+		exit 1
+	fi
 
-  log::info "Analyzing requirements.md and generating specific tasks..."
+	log::info "Analyzing requirements.md and generating specific tasks..."
 
-  # Use AI to generate specific tasks directly
-  spinner::start "Generating project-specific tasks from PRD"
+	# Use AI to generate specific tasks directly
+	spinner::start "Generating project-specific tasks from PRD"
 
-  # Create temporary file with AI instructions
-  local ai_prompt=$(mktemp)
-  cat >"$ai_prompt" <<EOF
+	# Create temporary file with AI instructions
+	local ai_prompt=$(mktemp)
+	cat >"$ai_prompt" <<EOF
 Analyze the following PRD and generate a specific tasks.md file for the "$project_name" project.
 
 Create detailed, actionable tasks based on the actual features and requirements in the PRD.
@@ -510,148 +510,148 @@ Generate a complete tasks.md file with:
 Output the complete markdown content for tasks.md:
 EOF
 
-  # Generate specific tasks using AI (this would call an AI service)
-  # For now, we'll create a more intelligent template based on the PRD
-  analyze_prd_and_generate_tasks "$project_name" "$ai_prompt"
+	# Generate specific tasks using AI (this would call an AI service)
+	# For now, we'll create a more intelligent template based on the PRD
+	analyze_prd_and_generate_tasks "$project_name" "$ai_prompt"
 
-  spinner::stop
-  rm "$ai_prompt"
+	spinner::stop
+	rm "$ai_prompt"
 
-  log::success "Generated specific tasks based on your PRD"
-  log::info "→ Review .ai-workflow/state/tasks.md to see project-specific implementation steps"
+	log::success "Generated specific tasks based on your PRD"
+	log::info "→ Review .ai-workflow/state/tasks.md to see project-specific implementation steps"
 }
 
 analyze_prd_and_generate_tasks() {
-  local project_name="$1"
-  local ai_prompt="$2"
-  local project_upper=$(echo "$project_name" | tr '[:lower:]' '[:upper:]')
+	local project_name="$1"
+	local ai_prompt="$2"
+	local project_upper=$(echo "$project_name" | tr '[:lower:]' '[:upper:]')
 
-  # Read and analyze the PRD content
-  local prd_content=$(cat ".ai-workflow/state/requirements.md")
+	# Read and analyze the PRD content
+	local prd_content=$(cat ".ai-workflow/state/requirements.md")
 
-  # Extract key features and create specific tasks
-  # This is a simplified version - in production this would use actual AI
-  create_intelligent_tasks "$project_name" "$project_upper" "$prd_content"
+	# Extract key features and create specific tasks
+	# This is a simplified version - in production this would use actual AI
+	create_intelligent_tasks "$project_name" "$project_upper" "$prd_content"
 }
 
 # Helper function to detect tool purpose from PRD
 detect_tool_purpose() {
-  local prd_content="$1"
+	local prd_content="$1"
 
-  # Analyze the PRD to determine what the tool actually does
-  if echo "$prd_content" | grep -qi "convert.*markdown.*pdf\|markdown.*to.*pdf"; then
-    echo "markdown to PDF converter"
-  elif echo "$prd_content" | grep -qi "convert.*\|transformation\|format"; then
-    echo "file converter"
-  elif echo "$prd_content" | grep -qi "process.*image\|resize.*image\|image.*manipulation"; then
-    echo "image processor"
-  elif echo "$prd_content" | grep -qi "analyze.*\|analysis\|report"; then
-    echo "analyzer tool"
-  elif echo "$prd_content" | grep -qi "generate.*\|generator\|create.*file"; then
-    echo "file generator"
-  elif echo "$prd_content" | grep -qi "backup\|sync\|copy"; then
-    echo "file management tool"
-  else
-    echo "CLI utility"
-  fi
+	# Analyze the PRD to determine what the tool actually does
+	if echo "$prd_content" | grep -qi "convert.*markdown.*pdf\|markdown.*to.*pdf"; then
+		echo "markdown to PDF converter"
+	elif echo "$prd_content" | grep -qi "convert.*\|transformation\|format"; then
+		echo "file converter"
+	elif echo "$prd_content" | grep -qi "process.*image\|resize.*image\|image.*manipulation"; then
+		echo "image processor"
+	elif echo "$prd_content" | grep -qi "analyze.*\|analysis\|report"; then
+		echo "analyzer tool"
+	elif echo "$prd_content" | grep -qi "generate.*\|generator\|create.*file"; then
+		echo "file generator"
+	elif echo "$prd_content" | grep -qi "backup\|sync\|copy"; then
+		echo "file management tool"
+	else
+		echo "CLI utility"
+	fi
 }
 
 # Helper function to extract primary dependency from PRD
 extract_primary_dependency() {
-  local prd_content="$1"
+	local prd_content="$1"
 
-  # Look for explicit dependency mentions
-  if echo "$prd_content" | grep -qi "pandoc"; then
-    echo "pandoc"
-  elif echo "$prd_content" | grep -qi "imagemagick\|convert"; then
-    echo "imagemagick"
-  elif echo "$prd_content" | grep -qi "ffmpeg"; then
-    echo "ffmpeg"
-  elif echo "$prd_content" | grep -qi "python"; then
-    echo "python"
-  elif echo "$prd_content" | grep -qi "node\|npm"; then
-    echo "nodejs"
-  else
-    echo ""
-  fi
+	# Look for explicit dependency mentions
+	if echo "$prd_content" | grep -qi "pandoc"; then
+		echo "pandoc"
+	elif echo "$prd_content" | grep -qi "imagemagick\|convert"; then
+		echo "imagemagick"
+	elif echo "$prd_content" | grep -qi "ffmpeg"; then
+		echo "ffmpeg"
+	elif echo "$prd_content" | grep -qi "python"; then
+		echo "python"
+	elif echo "$prd_content" | grep -qi "node\|npm"; then
+		echo "nodejs"
+	else
+		echo ""
+	fi
 }
 
 # Helper function to extract input/output pattern from PRD
 extract_io_pattern() {
-  local prd_content="$1"
+	local prd_content="$1"
 
-  # Look for input/output patterns
-  if echo "$prd_content" | grep -qi "markdown.*pdf\|\.md.*\.pdf"; then
-    echo "markdown_to_pdf"
-  elif echo "$prd_content" | grep -qi "image.*resize\|\.jpg.*\.jpg"; then
-    echo "image_processing"
-  elif echo "$prd_content" | grep -qi "directory.*file\|multiple.*files"; then
-    echo "batch_processing"
-  else
-    echo "single_file"
-  fi
+	# Look for input/output patterns
+	if echo "$prd_content" | grep -qi "markdown.*pdf\|\.md.*\.pdf"; then
+		echo "markdown_to_pdf"
+	elif echo "$prd_content" | grep -qi "image.*resize\|\.jpg.*\.jpg"; then
+		echo "image_processing"
+	elif echo "$prd_content" | grep -qi "directory.*file\|multiple.*files"; then
+		echo "batch_processing"
+	else
+		echo "single_file"
+	fi
 }
 
 # Helper function to generate primary action based on tool analysis
 generate_primary_action() {
-  local tool_purpose="$1"
-  local primary_dependency="$2"
-  local input_output_pattern="$3"
+	local tool_purpose="$1"
+	local primary_dependency="$2"
+	local input_output_pattern="$3"
 
-  case "$tool_purpose" in
-    "markdown to PDF converter")
-      # shellcheck disable=SC2016
-      echo 'Call pandoc with proper arguments: pandoc "$input_file" -o "$output_file" --pdf-engine=xelatex'
-      ;;
-    "file converter")
-      if [[ $primary_dependency == "pandoc" ]]; then
-        echo "Execute pandoc conversion command with error handling and progress feedback"
-      elif [[ $primary_dependency == "imagemagick" ]]; then
-        echo "Execute ImageMagick convert command with proper error handling"
-      else
-        echo "Execute the primary conversion command for the target format"
-      fi
-      ;;
-    "image processor")
-      echo "Execute image processing commands (resize, format, optimize) using appropriate tools"
-      ;;
-    "analyzer tool")
-      echo "Run analysis algorithm on input data and generate structured report output"
-      ;;
-    "file generator")
-      echo "Generate output files based on input parameters and templates"
-      ;;
-    "file management tool")
-      echo "Execute file operations (copy, move, sync) with progress tracking and verification"
-      ;;
-    *)
-      echo "Execute the primary functionality that solves the user's core problem"
-      ;;
-  esac
+	case "$tool_purpose" in
+	"markdown to PDF converter")
+		# shellcheck disable=SC2016
+		echo 'Call pandoc with proper arguments: pandoc "$input_file" -o "$output_file" --pdf-engine=xelatex'
+		;;
+	"file converter")
+		if [[ $primary_dependency == "pandoc" ]]; then
+			echo "Execute pandoc conversion command with error handling and progress feedback"
+		elif [[ $primary_dependency == "imagemagick" ]]; then
+			echo "Execute ImageMagick convert command with proper error handling"
+		else
+			echo "Execute the primary conversion command for the target format"
+		fi
+		;;
+	"image processor")
+		echo "Execute image processing commands (resize, format, optimize) using appropriate tools"
+		;;
+	"analyzer tool")
+		echo "Run analysis algorithm on input data and generate structured report output"
+		;;
+	"file generator")
+		echo "Generate output files based on input parameters and templates"
+		;;
+	"file management tool")
+		echo "Execute file operations (copy, move, sync) with progress tracking and verification"
+		;;
+	*)
+		echo "Execute the primary functionality that solves the user's core problem"
+		;;
+	esac
 }
 
 create_intelligent_tasks() {
-  local project_name="$1"
-  local project_upper="$2"
-  local prd_content="$3"
+	local project_name="$1"
+	local project_upper="$2"
+	local prd_content="$3"
 
-  # Analyze PRD content for tool type and core functionality
-  local tool_purpose=$(detect_tool_purpose "$prd_content")
-  local primary_dependency=$(extract_primary_dependency "$prd_content")
-  local input_output_pattern=$(extract_io_pattern "$prd_content")
+	# Analyze PRD content for tool type and core functionality
+	local tool_purpose=$(detect_tool_purpose "$prd_content")
+	local primary_dependency=$(extract_primary_dependency "$prd_content")
+	local input_output_pattern=$(extract_io_pattern "$prd_content")
 
-  # Feature detection (keeping existing logic)
-  local has_interactive_mode=$(echo "$prd_content" | grep -i "interactive" && echo "true" || echo "false")
-  local has_themes=$(echo "$prd_content" | grep -i "theme" && echo "true" || echo "false")
-  local has_preview=$(echo "$prd_content" | grep -i "preview\|dry-run" && echo "true" || echo "false")
-  local has_file_processing=$(echo "$prd_content" | grep -i "file\|convert\|process" && echo "true" || echo "false")
-  local dependencies=$(echo "$prd_content" | grep -i "pandoc\|dependency" | head -1)
+	# Feature detection (keeping existing logic)
+	local has_interactive_mode=$(echo "$prd_content" | grep -i "interactive" && echo "true" || echo "false")
+	local has_themes=$(echo "$prd_content" | grep -i "theme" && echo "true" || echo "false")
+	local has_preview=$(echo "$prd_content" | grep -i "preview\|dry-run" && echo "true" || echo "false")
+	local has_file_processing=$(echo "$prd_content" | grep -i "file\|convert\|process" && echo "true" || echo "false")
+	local dependencies=$(echo "$prd_content" | grep -i "pandoc\|dependency" | head -1)
 
-  # Use dynamic task counter to ensure sequential numbering
-  local task_counter=1
+	# Use dynamic task counter to ensure sequential numbering
+	local task_counter=1
 
-  # Generate specific tasks based on detected features
-  cat >".ai-workflow/state/tasks.md" <<EOF
+	# Generate specific tasks based on detected features
+	cat >".ai-workflow/state/tasks.md" <<EOF
 # $project_name - Development Tasks
 
 This document tracks the implementation progress of the $project_name project using autonomous AI development.
@@ -670,12 +670,12 @@ This document tracks the implementation progress of the $project_name project us
 
 EOF
 
-  # Increment counter
-  ((task_counter++))
+	# Increment counter
+	((task_counter++))
 
-  # Add dependency checking if detected
-  if [[ $dependencies != "" ]] || [[ $primary_dependency != "" ]]; then
-    cat >>".ai-workflow/state/tasks.md" <<EOF
+	# Add dependency checking if detected
+	if [[ $dependencies != "" ]] || [[ $primary_dependency != "" ]]; then
+		cat >>".ai-workflow/state/tasks.md" <<EOF
 - [ ] **$project_upper-$task_counter:** Implement dependency checking and validation
   **Goal:** Verify all required dependencies and system requirements
   **Actions:**
@@ -686,11 +686,11 @@ EOF
   **Verification:** Graceful handling of missing dependencies with actionable error messages
 
 EOF
-    ((task_counter++))
-  fi
+		((task_counter++))
+	fi
 
-  # CRITICAL: Always add core implementation task - this was missing!
-  cat >>".ai-workflow/state/tasks.md" <<EOF
+	# CRITICAL: Always add core implementation task - this was missing!
+	cat >>".ai-workflow/state/tasks.md" <<EOF
 ## Phase 2: Core Implementation
 
 - [ ] **$project_upper-$task_counter:** Implement primary functionality - $tool_purpose
@@ -703,11 +703,11 @@ EOF
   **Verification:** Tool successfully completes its primary purpose with test data - MUST ACTUALLY WORK
 
 EOF
-  ((task_counter++))
+	((task_counter++))
 
-  # Add interactive mode if detected
-  if [[ $has_interactive_mode == "true" ]]; then
-    cat >>".ai-workflow/state/tasks.md" <<EOF
+	# Add interactive mode if detected
+	if [[ $has_interactive_mode == "true" ]]; then
+		cat >>".ai-workflow/state/tasks.md" <<EOF
 - [ ] **$project_upper-$task_counter:** Implement interactive mode functionality
   **Goal:** Create user-friendly interactive prompts for all required inputs
   **Actions:**
@@ -718,12 +718,12 @@ EOF
   **Verification:** Interactive mode guides users through complete workflows
 
 EOF
-    ((task_counter++))
-  fi
+		((task_counter++))
+	fi
 
-  # Add file processing if detected (but make it specific, not generic)
-  if [[ $has_file_processing == "true" ]]; then
-    cat >>".ai-workflow/state/tasks.md" <<EOF
+	# Add file processing if detected (but make it specific, not generic)
+	if [[ $has_file_processing == "true" ]]; then
+		cat >>".ai-workflow/state/tasks.md" <<EOF
 - [ ] **$project_upper-$task_counter:** Implement advanced file handling
   **Goal:** Add robust file processing capabilities beyond basic functionality
   **Actions:**
@@ -734,12 +734,12 @@ EOF
   **Verification:** Advanced file handling works with various file types and scenarios
 
 EOF
-    ((task_counter++))
-  fi
+		((task_counter++))
+	fi
 
-  # Add theme system if detected
-  if [[ $has_themes == "true" ]]; then
-    cat >>".ai-workflow/state/tasks.md" <<EOF
+	# Add theme system if detected
+	if [[ $has_themes == "true" ]]; then
+		cat >>".ai-workflow/state/tasks.md" <<EOF
 - [ ] **$project_upper-$task_counter:** Implement theme system
   **Goal:** Create theme selection and application functionality
   **Actions:**
@@ -750,12 +750,12 @@ EOF
   **Verification:** All themes work correctly and can be selected/applied
 
 EOF
-    ((task_counter++))
-  fi
+		((task_counter++))
+	fi
 
-  # Add preview mode if detected
-  if [[ $has_preview == "true" ]]; then
-    cat >>".ai-workflow/state/tasks.md" <<EOF
+	# Add preview mode if detected
+	if [[ $has_preview == "true" ]]; then
+		cat >>".ai-workflow/state/tasks.md" <<EOF
 - [ ] **$project_upper-$task_counter:** Implement preview/dry-run mode
   **Goal:** Allow users to see what would happen without executing
   **Actions:**
@@ -766,11 +766,11 @@ EOF
   **Verification:** Preview mode shows accurate representation of actual execution
 
 EOF
-    ((task_counter++))
-  fi
+		((task_counter++))
+	fi
 
-  # Add final phases
-  cat >>".ai-workflow/state/tasks.md" <<EOF
+	# Add final phases
+	cat >>".ai-workflow/state/tasks.md" <<EOF
 ## Phase 3: Quality & Polish
 
 - [ ] **$project_upper-$task_counter:** Add comprehensive error handling
@@ -783,9 +783,9 @@ EOF
   **Verification:** All error scenarios produce helpful messages, no crashes
 
 EOF
-  ((task_counter++))
+	((task_counter++))
 
-  cat >>".ai-workflow/state/tasks.md" <<EOF
+	cat >>".ai-workflow/state/tasks.md" <<EOF
 - [ ] **$project_upper-$task_counter:** Polish user experience and Shell Starter integration
   **Goal:** Ensure professional CLI experience with Shell Starter patterns
   **Actions:**
@@ -796,9 +796,9 @@ EOF
   **Verification:** Professional CLI experience matching Shell Starter conventions
 
 EOF
-  ((task_counter++))
+	((task_counter++))
 
-  cat >>".ai-workflow/state/tasks.md" <<EOF
+	cat >>".ai-workflow/state/tasks.md" <<EOF
 ## Phase 4: Testing & Documentation
 
 - [ ] **$project_upper-$task_counter:** Create comprehensive test suite
@@ -811,9 +811,9 @@ EOF
   **Verification:** All tests pass, good coverage of functionality and edge cases
 
 EOF
-  ((task_counter++))
+	((task_counter++))
 
-  cat >>".ai-workflow/state/tasks.md" <<EOF
+	cat >>".ai-workflow/state/tasks.md" <<EOF
 - [ ] **$project_upper-$task_counter:** Final quality assurance and distribution preparation
   **Goal:** Ensure production-ready quality and Shell Starter integration
   **Actions:**
@@ -847,8 +847,8 @@ After each task completion:
 - Mark task as [x] only when verification passes
 EOF
 
-  # Generate requirements.md (Product Requirements Document)
-  cat >.ai-workflow/state/requirements.md <<EOF
+	# Generate requirements.md (Product Requirements Document)
+	cat >.ai-workflow/state/requirements.md <<EOF
 # $project_name - Product Requirements Document
 
 ## Product Overview
@@ -944,8 +944,8 @@ $project_name --help                        # Show help
 - [ ] Progress indicators show during long operations
 EOF
 
-  # Generate progress.log
-  cat >.ai-workflow/state/progress.log <<EOF
+	# Generate progress.log
+	cat >.ai-workflow/state/progress.log <<EOF
 # $project_name - Development Progress Log
 
 ## $(date '+%Y-%m-%d %H:%M:%S') - Workflow Generated
@@ -957,14 +957,14 @@ EOF
 }
 
 generate_claude_commands() {
-  local project_name="$1"
+	local project_name="$1"
 
-  section_header "Generating Claude Code Commands"
-  mkdir -p .ai-workflow/commands/.claude/commands
-  log::success "Created directory: .ai-workflow/commands/.claude/commands"
+	section_header "Generating Claude Code Commands"
+	mkdir -p .ai-workflow/commands/.claude/commands
+	log::success "Created directory: .ai-workflow/commands/.claude/commands"
 
-  # /dev command
-  cat >.ai-workflow/commands/.claude/commands/dev.md <<'EOF'
+	# /dev command
+	cat >.ai-workflow/commands/.claude/commands/dev.md <<'EOF'
 ---
 description: Autonomous development cycle for current project
 argument-hint: [start|status]
@@ -1024,8 +1024,8 @@ Next: [next task or completion status]
 Begin autonomous development now.
 EOF
 
-  # /qa command
-  cat >.ai-workflow/commands/.claude/commands/qa.md <<'EOF'
+	# /qa command
+	cat >.ai-workflow/commands/.claude/commands/qa.md <<'EOF'
 ---
 description: Quality assurance for AI-developed project
 ---
@@ -1062,8 +1062,8 @@ Status: [PASS/FAIL with next steps]
 Begin QA analysis now.
 EOF
 
-  # /status command
-  cat >.ai-workflow/commands/.claude/commands/status.md <<'EOF'
+	# /status command
+	cat >.ai-workflow/commands/.claude/commands/status.md <<'EOF'
 ---
 description: Show current project development status
 ---
@@ -1085,8 +1085,8 @@ Ready for: [/dev, /qa, or completion]
 ```
 EOF
 
-  # /deps command
-  cat >.ai-workflow/commands/.claude/commands/deps.md <<'EOF'
+	# /deps command
+	cat >.ai-workflow/commands/.claude/commands/deps.md <<'EOF'
 ---
 description: Manage Shell Starter library dependencies for current project
 argument-hint: [check|update|status]
@@ -1158,29 +1158,29 @@ Next Steps: [any follow-up actions needed]
 
 Begin dependency management now.
 EOF
-  log::success "Created file: .ai-workflow/commands/.claude/commands/dev.md"
-  log::success "Created file: .ai-workflow/commands/.claude/commands/qa.md"
-  log::success "Created file: .ai-workflow/commands/.claude/commands/status.md"
-  log::success "Created file: .ai-workflow/commands/.claude/commands/deps.md"
+	log::success "Created file: .ai-workflow/commands/.claude/commands/dev.md"
+	log::success "Created file: .ai-workflow/commands/.claude/commands/qa.md"
+	log::success "Created file: .ai-workflow/commands/.claude/commands/status.md"
+	log::success "Created file: .ai-workflow/commands/.claude/commands/deps.md"
 }
 
 generate_other_agent_commands() {
-  local project_name="$1"
+	local project_name="$1"
 
-  section_header "Generating Other Agent Commands"
+	section_header "Generating Other Agent Commands"
 
-  # Cursor commands (markdown format)
-  mkdir -p .ai-workflow/commands/.cursor/commands
-  log::success "Created directory: .ai-workflow/commands/.cursor/commands"
-  cp .ai-workflow/commands/.claude/commands/dev.md .ai-workflow/commands/.cursor/commands/
-  cp .ai-workflow/commands/.claude/commands/qa.md .ai-workflow/commands/.cursor/commands/
-  cp .ai-workflow/commands/.claude/commands/status.md .ai-workflow/commands/.cursor/commands/
-  cp .ai-workflow/commands/.claude/commands/deps.md .ai-workflow/commands/.cursor/commands/
+	# Cursor commands (markdown format)
+	mkdir -p .ai-workflow/commands/.cursor/commands
+	log::success "Created directory: .ai-workflow/commands/.cursor/commands"
+	cp .ai-workflow/commands/.claude/commands/dev.md .ai-workflow/commands/.cursor/commands/
+	cp .ai-workflow/commands/.claude/commands/qa.md .ai-workflow/commands/.cursor/commands/
+	cp .ai-workflow/commands/.claude/commands/status.md .ai-workflow/commands/.cursor/commands/
+	cp .ai-workflow/commands/.claude/commands/deps.md .ai-workflow/commands/.cursor/commands/
 
-  # OpenCode commands (markdown format with frontmatter)
-  mkdir -p .ai-workflow/commands/.opencode/command
+	# OpenCode commands (markdown format with frontmatter)
+	mkdir -p .ai-workflow/commands/.opencode/command
 
-  cat >.ai-workflow/commands/.opencode/command/dev.md <<'EOF'
+	cat >.ai-workflow/commands/.opencode/command/dev.md <<'EOF'
 ---
 description: Autonomous development cycle for current project
 agent: build
@@ -1240,7 +1240,7 @@ Next: [next task or completion status]
 Begin autonomous development now.
 EOF
 
-  cat >.ai-workflow/commands/.opencode/command/qa.md <<'EOF'
+	cat >.ai-workflow/commands/.opencode/command/qa.md <<'EOF'
 ---
 description: Quality assurance for AI-developed project
 agent: build
@@ -1278,7 +1278,7 @@ Status: [PASS/FAIL with next steps]
 Begin QA analysis now.
 EOF
 
-  cat >.ai-workflow/commands/.opencode/command/status.md <<'EOF'
+	cat >.ai-workflow/commands/.opencode/command/status.md <<'EOF'
 ---
 description: Show current project development status
 agent: plan
@@ -1301,7 +1301,7 @@ Ready for: [/dev, /qa, or completion]
 ```
 EOF
 
-  cat >.ai-workflow/commands/.opencode/command/deps.md <<'EOF'
+	cat >.ai-workflow/commands/.opencode/command/deps.md <<'EOF'
 ---
 description: Manage Shell Starter library dependencies for current project
 agent: build
@@ -1374,10 +1374,10 @@ Next Steps: [any follow-up actions needed]
 Begin dependency management now.
 EOF
 
-  # Gemini commands (TOML format)
-  mkdir -p .ai-workflow/commands/.gemini/commands
+	# Gemini commands (TOML format)
+	mkdir -p .ai-workflow/commands/.gemini/commands
 
-  cat >.ai-workflow/commands/.gemini/commands/dev.toml <<'EOF'
+	cat >.ai-workflow/commands/.gemini/commands/dev.toml <<'EOF'
 description = "Autonomous development cycle for current project"
 prompt = """
 You are managing autonomous development for the current project. Follow this protocol exactly.
@@ -1435,7 +1435,7 @@ Begin autonomous development now.
 """
 EOF
 
-  cat >.ai-workflow/commands/.gemini/commands/qa.toml <<'EOF'
+	cat >.ai-workflow/commands/.gemini/commands/qa.toml <<'EOF'
 description = "Quality assurance for AI-developed project"
 prompt = """
 You are a Quality Assurance engineer for the current AI-developed project.
@@ -1471,7 +1471,7 @@ Begin QA analysis now.
 """
 EOF
 
-  cat >.ai-workflow/commands/.gemini/commands/status.toml <<'EOF'
+	cat >.ai-workflow/commands/.gemini/commands/status.toml <<'EOF'
 description = "Show current project development status" 
 prompt = """
 You are a project manager. Show the current development status.
@@ -1492,7 +1492,7 @@ Ready for: [/dev, /qa, or completion]
 """
 EOF
 
-  cat >.ai-workflow/commands/.gemini/commands/deps.toml <<'EOF'
+	cat >.ai-workflow/commands/.gemini/commands/deps.toml <<'EOF'
 description = "Manage Shell Starter library dependencies for current project"
 prompt = """
 You are managing Shell Starter library dependencies for the current project.
@@ -1562,99 +1562,99 @@ Next Steps: [any follow-up actions needed]
 Begin dependency management now.
 """
 EOF
-  log::success "Created directory: .ai-workflow/commands/.opencode/command"
-  log::success "Created directory: .ai-workflow/commands/.gemini/commands"
-  log::success "Generated command files for Cursor, OpenCode, and Gemini CLI"
+	log::success "Created directory: .ai-workflow/commands/.opencode/command"
+	log::success "Created directory: .ai-workflow/commands/.gemini/commands"
+	log::success "Generated command files for Cursor, OpenCode, and Gemini CLI"
 }
 
 main() {
-  local project_name=""
-  local update_tasks=false
+	local project_name=""
+	local update_tasks=false
 
-  # Enable optional background update notifications
-  enable_background_updates
+	# Enable optional background update notifications
+	enable_background_updates
 
-  while [[ $# -gt 0 ]]; do
-    case $1 in
-      --help | -h | --version | -v | --update | --check-version | --notify-config | --uninstall)
-        parse_common_args "$SCRIPT_NAME" "$@"
-        ;;
-      --update-tasks)
-        update_tasks=true
-        shift
-        ;;
-      -*)
-        log::error "Unknown option: $1"
-        echo "Use --help for usage information."
-        exit 1
-        ;;
-      *)
-        project_name="$1"
-        shift
-        ;;
-    esac
-  done
+	while [[ $# -gt 0 ]]; do
+		case $1 in
+		--help | -h | --version | -v | --update | --check-version | --notify-config | --uninstall)
+			parse_common_args "$SCRIPT_NAME" "$@"
+			;;
+		--update-tasks)
+			update_tasks=true
+			shift
+			;;
+		-*)
+			log::error "Unknown option: $1"
+			echo "Use --help for usage information."
+			exit 1
+			;;
+		*)
+			project_name="$1"
+			shift
+			;;
+		esac
+	done
 
-  if [[ -z $project_name ]]; then
-    log::error "Project name is required"
-    log::info "Usage: $SCRIPT_NAME <project-name>"
-    exit 1
-  fi
+	if [[ -z $project_name ]]; then
+		log::error "Project name is required"
+		log::info "Usage: $SCRIPT_NAME <project-name>"
+		exit 1
+	fi
 
-  # Validate project name (alphanumeric, hyphens, underscores)
-  if [[ ! $project_name =~ ^[a-zA-Z0-9_-]+$ ]]; then
-    log::error "Project name must contain only letters, numbers, hyphens, and underscores"
-    exit 1
-  fi
+	# Validate project name (alphanumeric, hyphens, underscores)
+	if [[ ! $project_name =~ ^[a-zA-Z0-9_-]+$ ]]; then
+		log::error "Project name must contain only letters, numbers, hyphens, and underscores"
+		exit 1
+	fi
 
-  if [[ $update_tasks == true ]]; then
-    # Update tasks mode
-    if [[ ! -d ".ai-workflow" ]]; then
-      log::error "No existing .ai-workflow directory found"
-      log::info "Run '$SCRIPT_NAME $project_name' first to generate initial templates"
-      exit 1
-    fi
+	if [[ $update_tasks == true ]]; then
+		# Update tasks mode
+		if [[ ! -d ".ai-workflow" ]]; then
+			log::error "No existing .ai-workflow directory found"
+			log::info "Run '$SCRIPT_NAME $project_name' first to generate initial templates"
+			exit 1
+		fi
 
-    log::info "Updating tasks for project: $project_name"
-    generate_specific_tasks "$project_name"
+		log::info "Updating tasks for project: $project_name"
+		generate_specific_tasks "$project_name"
 
-    log::success "Updated tasks.md with project-specific implementation steps"
-    log::info "→ Ready to start development with: /dev start"
-  else
-    # Initial generation mode
-    log::info "Generating AI workflow for project: $project_name"
+		log::success "Updated tasks.md with project-specific implementation steps"
+		log::info "→ Ready to start development with: /dev start"
+	else
+		# Initial generation mode
+		log::info "Generating AI workflow for project: $project_name"
 
-    # Check if .ai-workflow already exists
-    if [[ -d ".ai-workflow" ]]; then
-      log::warn "Existing .ai-workflow directory found"
-      log::info "This will overwrite existing workflow files"
-      read -p "Continue? (y/N): " -n 1 -r
-      echo
-      if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        log::info "Cancelled"
-        exit 0
-      fi
-    fi
+		# Check if .ai-workflow already exists
+		if [[ -d ".ai-workflow" ]]; then
+			log::warn "Existing .ai-workflow directory found"
+			log::info "This will overwrite existing workflow files"
+			read -p "Continue? (y/N): " -n 1 -r
+			echo
+			if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+				log::info "Cancelled"
+				exit 0
+			fi
+		fi
 
-    # Generate all components
-    generate_state_files "$project_name"
-    generate_claude_commands "$project_name"
-    generate_other_agent_commands "$project_name"
+		# Generate all components
+		generate_state_files "$project_name"
+		generate_claude_commands "$project_name"
+		generate_other_agent_commands "$project_name"
 
-    log::success "AI workflow generated successfully!"
-    echo
-    log::info "Next steps:"
-    printf '%b→%b 1. Edit .ai-workflow/state/requirements.md with your project details\n' "${COLOR_INFO}" "${COLOR_RESET}"
-    printf '%b  •%b Use docs/prompting-guide.md for help generating comprehensive PRDs\n' "${COLOR_INFO}" "${COLOR_RESET}"
-    printf '%b→%b 2. Generate specific tasks: %b%s --update-tasks %s%b\n' "${COLOR_INFO}" "${COLOR_RESET}" "${COLOR_BOLD}" "$SCRIPT_NAME" "$project_name" "${COLOR_RESET}"
-    printf '%b→%b 3. Copy commands to your AI coding agent:\n' "${COLOR_INFO}" "${COLOR_RESET}"
-    printf '%b  •%b Claude Code:  mkdir -p .claude && cp -r .ai-workflow/commands/.claude/commands .claude/\n' "${COLOR_SUCCESS}" "${COLOR_RESET}"
-    printf '%b  •%b Cursor:       mkdir -p .cursor && cp -r .ai-workflow/commands/.cursor/commands .cursor/\n' "${COLOR_SUCCESS}" "${COLOR_RESET}"
-    printf '%b  •%b Gemini CLI:   mkdir -p .gemini && cp -r .ai-workflow/commands/.gemini/commands .gemini/\n' "${COLOR_SUCCESS}" "${COLOR_RESET}"
-    printf '%b  •%b OpenCode:     mkdir -p .opencode && cp -r .ai-workflow/commands/.opencode/command .opencode/\n' "${COLOR_SUCCESS}" "${COLOR_RESET}"
-    printf '%b→%b 4. Start development with: %b/dev start%b\n' "${COLOR_INFO}" "${COLOR_RESET}" "${COLOR_BOLD}" "${COLOR_RESET}"
-    printf '%b→%b 5. Manage Shell Starter dependencies with: %b/deps%b\n' "${COLOR_INFO}" "${COLOR_RESET}" "${COLOR_BOLD}" "${COLOR_RESET}"
-  fi
+		log::success "AI workflow generated successfully!"
+		echo
+		log::info "Next steps:"
+		printf '%b→%b 1. Edit .ai-workflow/state/requirements.md with your project details\n' "${COLOR_INFO}" "${COLOR_RESET}"
+		printf '%b  •%b Use docs/prompting-guide.md for help generating comprehensive PRDs\n' "${COLOR_INFO}" "${COLOR_RESET}"
+		printf '%b→%b 2. Generate specific tasks: %b%s --update-tasks %s%b\n' "${COLOR_INFO}" "${COLOR_RESET}" "${COLOR_BOLD}" "$SCRIPT_NAME" "$project_name" "${COLOR_RESET}"
+		printf '%b→%b 3. Copy commands to your AI coding agent:\n' "${COLOR_INFO}" "${COLOR_RESET}"
+		printf '%b  •%b Claude Code:  mkdir -p .claude && cp -r .ai-workflow/commands/.claude/commands .claude/\n' "${COLOR_SUCCESS}" "${COLOR_RESET}"
+		printf '%b  •%b Cursor:       mkdir -p .cursor && cp -r .ai-workflow/commands/.cursor/commands .cursor/\n' "${COLOR_SUCCESS}" "${COLOR_RESET}"
+		printf '%b  •%b Gemini CLI:   mkdir -p .gemini && cp -r .ai-workflow/commands/.gemini/commands .gemini/\n' "${COLOR_SUCCESS}" "${COLOR_RESET}"
+		printf '%b  •%b OpenCode:     mkdir -p .opencode && cp -r .ai-workflow/commands/.opencode/command .opencode/\n' "${COLOR_SUCCESS}" "${COLOR_RESET}"
+		printf '%b→%b 4. Start development with: %b/dev start%b\n' "${COLOR_INFO}" "${COLOR_RESET}" "${COLOR_BOLD}" "${COLOR_RESET}"
+		printf '%b→%b 5. Manage Shell Starter dependencies with: %b/deps%b\n' "${COLOR_INFO}" "${COLOR_RESET}" "${COLOR_BOLD}" "${COLOR_RESET}"
+	fi
 }
 
 # Run main function with all arguments
