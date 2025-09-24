@@ -37,6 +37,8 @@ OPTIONS:
     --check-deps          Check external dependencies and exit
     --init-config         Create default configuration and exit
     --validate-workflow FILE  Validate workflow file and exit
+    --list-workflows      List available workflows and exit
+    --list-presets        List available presets and exit
 
 BUILT-IN WORKFLOWS:
     pdf-to-thumbnails     Extract PDF images and create thumbnails
@@ -1060,6 +1062,8 @@ main() {
 	local check_deps=false
 	local init_config=false
 	local validate_workflow_file=""
+	local list_workflows=false
+	local list_presets=false
 	local inputs=()
 
 	# Parse command line arguments
@@ -1138,6 +1142,14 @@ main() {
 			validate_workflow_file="$2"
 			shift 2
 			;;
+		--list-workflows)
+			list_workflows=true
+			shift
+			;;
+		--list-presets)
+			list_presets=true
+			shift
+			;;
 		-*)
 			log::error "Unknown option: $1"
 			show_help
@@ -1171,10 +1183,72 @@ main() {
 		fi
 	fi
 
+	if [[ "$list_workflows" == true ]]; then
+		# Initialize to load config
+		imgxsh::init
+		imgxsh::load_config
+		
+		log::info "Available workflows:"
+		imgxsh::list_workflows "$IMGXSH_CONFIG_FILE" | while read -r workflow_name; do
+			if [[ -n "$workflow_name" ]]; then
+				log::info "  - $workflow_name"
+			fi
+		done
+		exit 0
+	fi
+
+	if [[ "$list_presets" == true ]]; then
+		# Initialize to load config
+		imgxsh::init
+		imgxsh::load_config
+		
+		log::info "Available presets:"
+		imgxsh::list_presets "$IMGXSH_CONFIG_FILE" | while read -r preset_name; do
+			if [[ -n "$preset_name" ]]; then
+				log::info "  - $preset_name"
+			fi
+		done
+		exit 0
+	fi
+
 	# Initialize imgxsh environment
 	if ! imgxsh::init; then
 		log::error "Failed to initialize imgxsh environment"
 		exit 1
+	fi
+
+	# Load configuration if specified
+	if [[ -n "$config_file" ]]; then
+		if ! imgxsh::load_config "$config_file"; then
+			log::error "Failed to load configuration file: $config_file"
+			exit 1
+		fi
+	else
+		# Load default configuration
+		imgxsh::load_config
+	fi
+
+	# Validate configuration
+	if ! imgxsh::validate_config "$IMGXSH_ACTIVE_CONFIG"; then
+		log::error "Configuration validation failed"
+		exit 1
+	fi
+
+	# Override settings from config if not specified via command line
+	if [[ "$output_dir" == "./output" ]]; then
+		local config_output_dir
+		config_output_dir=$(imgxsh::get_config "settings.output_dir" 2>/dev/null)
+		if [[ -n "$config_output_dir" ]]; then
+			output_dir="$config_output_dir"
+		fi
+	fi
+
+	if [[ "$parallel_jobs" == 4 ]]; then
+		local config_parallel_jobs
+		config_parallel_jobs=$(imgxsh::get_config "settings.parallel_jobs" 2>/dev/null)
+		if [[ -n "$config_parallel_jobs" ]] && [[ "$config_parallel_jobs" =~ ^[0-9]+$ ]]; then
+			parallel_jobs="$config_parallel_jobs"
+		fi
 	fi
 
 	# Check dependencies if not in dry-run mode
@@ -1199,16 +1273,42 @@ main() {
 
 	# Use preset if specified
 	if [[ -n "$preset" ]]; then
-		case "$preset" in
-		"quick-thumbnails")
-			workflow="pdf-to-thumbnails"
-			parallel_jobs=8
-			;;
-		*)
+		# Check if preset exists in configuration
+		if imgxsh::list_presets "$IMGXSH_CONFIG_FILE" | grep -q "^\s*$preset$"; then
+			# Get base workflow from preset
+			local base_workflow
+			if command -v yq >/dev/null 2>&1; then
+				base_workflow=$(yq eval ".presets.$preset.base_workflow" "$IMGXSH_ACTIVE_CONFIG" 2>/dev/null)
+			else
+				# Fallback parsing - more efficient approach
+				base_workflow=$(sed -n "/^  $preset:/,/^  [a-zA-Z]/p" "$IMGXSH_ACTIVE_CONFIG" | grep "base_workflow:" | sed 's/.*base_workflow:\s*//' | tr -d '"' | tr -d "'" | tr -d ' \t')
+			fi
+			
+			if [[ -n "$base_workflow" ]]; then
+				workflow="$base_workflow"
+				log::info "Using preset '$preset' with workflow '$workflow'"
+				
+				# Apply preset overrides
+				if command -v yq >/dev/null 2>&1; then
+					# Get parallel jobs override from preset
+					local preset_parallel_jobs
+					preset_parallel_jobs=$(yq eval ".presets.$preset.overrides.settings.parallel_jobs" "$IMGXSH_ACTIVE_CONFIG" 2>/dev/null)
+					if [[ -n "$preset_parallel_jobs" ]] && [[ "$preset_parallel_jobs" =~ ^[0-9]+$ ]]; then
+						parallel_jobs="$preset_parallel_jobs"
+					fi
+				fi
+			else
+				log::error "Preset '$preset' has no base_workflow defined"
+				exit 1
+			fi
+		else
 			log::error "Unknown preset: $preset"
+			log::info "Available presets:"
+			imgxsh::list_presets "$IMGXSH_CONFIG_FILE" | while read -r available_preset; do
+				log::info "  - $available_preset"
+			done
 			exit 1
-			;;
-		esac
+		fi
 	fi
 
 	# Validate workflow and inputs

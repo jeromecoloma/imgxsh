@@ -9,6 +9,9 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # Source the main library
 source "${PROJECT_ROOT}/lib/main.sh"
 
+# Source imgxsh core library for validation functions
+source "${PROJECT_ROOT}/lib/imgxsh/core.sh"
+
 # Set up BATS_LIB_PATH for library loading (must be at top level, not in setup())
 # Override bats default (/usr/lib/bats) with correct paths for our libraries
 
