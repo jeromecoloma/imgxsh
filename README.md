@@ -79,6 +79,30 @@ curl -fsSL https://github.com/jeromecoloma/imgxsh/install.sh | bash
 ## 📂 Project Structure
 
 ```
+imgxsh/
+├── bin/                # imgxsh binaries (main tool and individual utilities)
+├── tests/              # Comprehensive testing framework with CI integration
+│   ├── run-tests.sh   # Local development test runner
+│   ├── run-tests-ci.sh # CI-optimized test runner (Shell Starter pattern)
+│   ├── setup-ci-environment.sh # CI environment configuration
+│   ├── imgxsh-convert.bats # Comprehensive test suite (30+ tests)
+│   ├── imgxsh-resize.bats  # Resize test suite (CLI, sizing modes, batch)
+│   ├── imgxsh-extract-pdf.bats # PDF extraction test suite (40+ tests)
+│   ├── fixtures/      # Test data (images, PDFs, Excel files)
+│   └── bats-*/        # Bats testing framework and libraries
+├── .github/workflows/  # GitHub Actions CI/CD workflows
+├── docs/               # Project documentation
+│   └── SETUP-HOOKS.md  # Git hooks setup guide
+├── demo/               # Shell Starter example scripts (for reference)
+├── lib/                # Shell Starter library (colors, logging, spinners)
+├── shell-starter-tests/# Shell Starter framework tests (temporary)
+├── shell-starter-docs/ # Shell Starter framework documentation (temporary)
+├── .ai-workflow/       # AI development workflow and requirements
+├── VERSION             # imgxsh version file (SemVer)
+├── .shell-starter-version  # Shell Starter dependency version tracking
+├── install.sh          # imgxsh installer
+└── uninstall.sh        # imgxsh uninstaller
+```
 
 ## ⬆️ Updating imgxsh
 
@@ -159,30 +183,6 @@ Notes:
 - Project updates use `bin/update-imgxsh`. Shell Starter library updates remain available via `bin/update-shell-starter`.
 - `--check-version` reports the current imgxsh version and the latest GitHub release.
 - In CI or tests, `TEST_MODE=true` ensures update commands are no-ops for speed.
-imgxsh/
-├── bin/                # imgxsh binaries (main tool and individual utilities)
-├── tests/              # Comprehensive testing framework with CI integration
-│   ├── run-tests.sh   # Local development test runner
-│   ├── run-tests-ci.sh # CI-optimized test runner (Shell Starter pattern)
-│   ├── setup-ci-environment.sh # CI environment configuration
-│   ├── imgxsh-convert.bats # Comprehensive test suite (30+ tests)
-│   ├── imgxsh-resize.bats  # Resize test suite (CLI, sizing modes, batch)
-│   ├── imgxsh-extract-pdf.bats # PDF extraction test suite (40+ tests)
-│   ├── fixtures/      # Test data (images, PDFs, Excel files)
-│   └── bats-*/        # Bats testing framework and libraries
-├── .github/workflows/  # GitHub Actions CI/CD workflows
-├── docs/               # Project documentation
-│   └── SETUP-HOOKS.md  # Git hooks setup guide
-├── demo/               # Shell Starter example scripts (for reference)
-├── lib/                # Shell Starter library (colors, logging, spinners)
-├── shell-starter-tests/# Shell Starter framework tests (temporary)
-├── shell-starter-docs/ # Shell Starter framework documentation (temporary)
-├── .ai-workflow/       # AI development workflow and requirements
-├── VERSION             # imgxsh version file (SemVer)
-├── .shell-starter-version  # Shell Starter dependency version tracking
-├── install.sh          # imgxsh installer
-└── uninstall.sh        # imgxsh uninstaller
-```
 
 ## 🔧 Configuration
 
