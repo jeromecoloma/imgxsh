@@ -53,6 +53,58 @@ overrides:
       enabled: true  # Enable/disable steps
 ```
 
+### DO / DON'T: steps structure in presets
+
+> In presets, `overrides.steps` is a mapping (dictionary) from step-name to its overrides. Do not switch to a YAML sequence under this key.
+
+- DO: use a mapping with named step keys
+
+```yaml
+overrides:
+  steps:
+    create_thumbnails:
+      params:
+        width: 300
+        height: 200
+    create_medium:
+      params:
+        width: 800
+        height: 600
+```
+
+- DON'T: mix a mapping with a list item under the same key
+
+```yaml
+overrides:
+  steps:
+    create_thumbnails: { params: { width: 300, height: 200 } }
+    - name: create_medium   # INVALID: sequence item alongside mapping
+      params: { width: 800, height: 600 }
+```
+
+Why: YAML requires a single node type for a given key. Our preset system also expects a mapping so it can look up overrides by step name.
+
+### Visual model
+
+```mermaid
+flowchart TD
+  A[Workflow] --> B[steps (sequence)]
+  B --> B1[step 0: extract_images]
+  B --> B2[step 1: create_thumbnails]
+  A --> C[settings]
+
+  P[Preset] --> D[overrides]
+  D --> E[settings (mapping)]
+  D --> F[steps (mapping)]
+  F --> F1[create_thumbnails → overrides]
+  F --> F2[create_medium → overrides]
+
+  note1[[Workflows use a list of steps]]
+  note2[[Presets map step names → overrides]]
+  B -.-> note1
+  F -.-> note2
+```
+
 ### Preset Properties
 
 - **`name`**: Unique identifier for the preset (required)

@@ -263,6 +263,14 @@ overrides:
         format: "png"
 ```
 
+### Preset steps: mapping vs list
+
+- Workflows define `steps` as a sequence (list).
+- Presets define `overrides.steps` as a mapping of step-name → overrides.
+- To add multiple preset overrides, add more named keys under `overrides.steps` (do not use `- name:` items).
+
+See also: Preset system details in [docs/PRESETS-SYSTEM.md](./PRESETS-SYSTEM.md).
+
 ## Common Patterns
 
 ### Multi-size Generation

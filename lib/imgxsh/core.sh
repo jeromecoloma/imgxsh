@@ -325,17 +325,7 @@ presets:
             width: 300
             height: 200
             quality: 85
-        - name: create_medium
-          type: resize
-          description: "Create medium-sized versions"
-          condition: "extracted_count > 0"
-          params:
-            input_dir: "{temp_dir}/extracted"
-            width: 800
-            height: 600
-            maintain_aspect: true
-            quality: 90
-            output_template: "{output_dir}/medium/{pdf_name}_med_{counter:03d}.jpg"
+            # Note: additional step overrides can be added here as named keys
             
   high-quality:
     name: "high-quality"
