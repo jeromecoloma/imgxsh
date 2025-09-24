@@ -26,11 +26,11 @@ echo "Setting up CI environment for imgxsh tests..."
 # Ensure Bats library path is correctly set for 'load' statements in tests
 # Prefer system-installed bats libraries (from bats-action), fallback to vendored tests/ copies
 if [[ -d "/usr/lib/bats-support" ]] || [[ -d "/usr/lib/bats-assert" ]]; then
-	export BATS_LIB_PATH="/usr/lib"
+  export BATS_LIB_PATH="/usr/lib"
 elif [[ -d "/usr/local/lib/bats-support" ]] || [[ -d "/usr/local/lib/bats-assert" ]]; then
-	export BATS_LIB_PATH="/usr/local/lib"
+  export BATS_LIB_PATH="/usr/local/lib"
 elif [[ -d "${PROJECT_ROOT}/tests/bats-support" ]] || [[ -d "${PROJECT_ROOT}/tests/bats-assert" ]]; then
-	export BATS_LIB_PATH="${PROJECT_ROOT}/tests"
+  export BATS_LIB_PATH="${PROJECT_ROOT}/tests"
 fi
 
 # Check for required POSIX tools
@@ -38,23 +38,23 @@ required_tools=("bash" "grep" "sed" "awk" "find" "sort")
 missing_tools=()
 
 for tool in "${required_tools[@]}"; do
-	if ! command -v "$tool" >/dev/null 2>&1; then
-		missing_tools+=("$tool")
-	fi
+  if ! command -v "$tool" >/dev/null 2>&1; then
+    missing_tools+=("$tool")
+  fi
 done
 
 if [[ ${#missing_tools[@]} -gt 0 ]]; then
-	echo "❌ Missing required tools: ${missing_tools[*]}" >&2
-	exit 1
+  echo "❌ Missing required tools: ${missing_tools[*]}" >&2
+  exit 1
 else
-	echo "✅ All required POSIX tools available"
+  echo "✅ All required POSIX tools available"
 fi
 
 # Check for timeout command (for test timeouts)
 if command -v timeout >/dev/null 2>&1; then
-	echo "✅ timeout command available: $(timeout --version | head -1)"
+  echo "✅ timeout command available: $(timeout --version | head -1)"
 else
-	echo "⚠️  timeout command not available (tests may hang)"
+  echo "⚠️  timeout command not available (tests may hang)"
 fi
 
 # Check for imgxsh-specific dependencies
@@ -63,113 +63,113 @@ missing_imgxsh_deps=()
 
 # Install pdfimages/poppler-utils for PDF processing tests
 if ! command -v pdfimages >/dev/null 2>&1; then
-	echo "Installing pdfimages (poppler-utils) for PDF processing tests..."
-	if command -v apt-get >/dev/null 2>&1; then
-		sudo apt-get update -qq
-		sudo apt-get install -y poppler-utils
-	elif command -v yum >/dev/null 2>&1; then
-		sudo yum install -y poppler-utils
-	elif command -v dnf >/dev/null 2>&1; then
-		sudo dnf install -y poppler-utils
-	elif command -v pacman >/dev/null 2>&1; then
-		sudo pacman -S --noconfirm poppler
-	else
-		echo "⚠️  Cannot install pdfimages automatically on this system"
-		missing_imgxsh_deps+=("pdfimages")
-	fi
+  echo "Installing pdfimages (poppler-utils) for PDF processing tests..."
+  if command -v apt-get >/dev/null 2>&1; then
+    sudo apt-get update -qq
+    sudo apt-get install -y poppler-utils
+  elif command -v yum >/dev/null 2>&1; then
+    sudo yum install -y poppler-utils
+  elif command -v dnf >/dev/null 2>&1; then
+    sudo dnf install -y poppler-utils
+  elif command -v pacman >/dev/null 2>&1; then
+    sudo pacman -S --noconfirm poppler
+  else
+    echo "⚠️  Cannot install pdfimages automatically on this system"
+    missing_imgxsh_deps+=("pdfimages")
+  fi
 fi
 
 if command -v pdfimages >/dev/null 2>&1; then
-	echo "✅ pdfimages available for PDF processing tests"
-	export IMGXSH_PDFIMAGES_AVAILABLE=true
+  echo "✅ pdfimages available for PDF processing tests"
+  export IMGXSH_PDFIMAGES_AVAILABLE=true
 else
-	echo "⚠️  pdfimages not available - PDF processing tests will be skipped"
-	export IMGXSH_PDFIMAGES_AVAILABLE=false
-	missing_imgxsh_deps+=("pdfimages")
+  echo "⚠️  pdfimages not available - PDF processing tests will be skipped"
+  export IMGXSH_PDFIMAGES_AVAILABLE=false
+  missing_imgxsh_deps+=("pdfimages")
 fi
 
 # Check for ImageMagick (either magick or convert command)
 if command -v magick >/dev/null 2>&1; then
-	echo "✅ ImageMagick (magick) available for image processing tests"
-	export IMGXSH_IMAGEMAGICK_CMD="magick"
+  echo "✅ ImageMagick (magick) available for image processing tests"
+  export IMGXSH_IMAGEMAGICK_CMD="magick"
 elif command -v convert >/dev/null 2>&1; then
-	echo "✅ ImageMagick (convert) available for image processing tests"
-	export IMGXSH_IMAGEMAGICK_CMD="convert"
+  echo "✅ ImageMagick (convert) available for image processing tests"
+  export IMGXSH_IMAGEMAGICK_CMD="convert"
 else
-	missing_imgxsh_deps+=("imagemagick")
+  missing_imgxsh_deps+=("imagemagick")
 fi
 
 # Check for identify command
 if ! command -v identify >/dev/null 2>&1; then
-	missing_imgxsh_deps+=("identify")
+  missing_imgxsh_deps+=("identify")
 fi
 
 # Ensure unzip for .xlsx extraction
 if ! command -v unzip >/dev/null 2>&1; then
-	echo "Installing unzip for .xlsx extraction..."
-	if command -v apt-get >/dev/null 2>&1; then
-		sudo apt-get update -qq
-		sudo apt-get install -y unzip
-	elif command -v yum >/dev/null 2>&1; then
-		sudo yum install -y unzip
-	elif command -v dnf >/dev/null 2>&1; then
-		sudo dnf install -y unzip
-	elif command -v pacman >/dev/null 2>&1; then
-		sudo pacman -S --noconfirm unzip
-	else
-		echo "⚠️  Cannot install unzip automatically on this system"
-		missing_imgxsh_deps+=("unzip")
-	fi
+  echo "Installing unzip for .xlsx extraction..."
+  if command -v apt-get >/dev/null 2>&1; then
+    sudo apt-get update -qq
+    sudo apt-get install -y unzip
+  elif command -v yum >/dev/null 2>&1; then
+    sudo yum install -y unzip
+  elif command -v dnf >/dev/null 2>&1; then
+    sudo dnf install -y unzip
+  elif command -v pacman >/dev/null 2>&1; then
+    sudo pacman -S --noconfirm unzip
+  else
+    echo "⚠️  Cannot install unzip automatically on this system"
+    missing_imgxsh_deps+=("unzip")
+  fi
 fi
 
 if command -v unzip >/dev/null 2>&1; then
-	echo "✅ unzip available for .xlsx extraction"
+  echo "✅ unzip available for .xlsx extraction"
 else
-	echo "⚠️  unzip not available - some Excel extraction tests will be limited"
+  echo "⚠️  unzip not available - some Excel extraction tests will be limited"
 fi
 
 # Best-effort install for 7z (p7zip) to support .xls extraction
 if ! command -v 7z >/dev/null 2>&1; then
-	echo "Attempting to install 7z (p7zip) for .xls extraction..."
-	if command -v apt-get >/dev/null 2>&1; then
-		sudo apt-get update -qq
-		sudo apt-get install -y p7zip-full || true
-	elif command -v yum >/dev/null 2>&1; then
-		sudo yum install -y p7zip || true
-	elif command -v dnf >/dev/null 2>&1; then
-		sudo dnf install -y p7zip || true
-	elif command -v pacman >/dev/null 2>&1; then
-		sudo pacman -S --noconfirm p7zip || true
-	else
-		echo "⚠️  Cannot install 7z automatically on this system"
-	fi
+  echo "Attempting to install 7z (p7zip) for .xls extraction..."
+  if command -v apt-get >/dev/null 2>&1; then
+    sudo apt-get update -qq
+    sudo apt-get install -y p7zip-full || true
+  elif command -v yum >/dev/null 2>&1; then
+    sudo yum install -y p7zip || true
+  elif command -v dnf >/dev/null 2>&1; then
+    sudo dnf install -y p7zip || true
+  elif command -v pacman >/dev/null 2>&1; then
+    sudo pacman -S --noconfirm p7zip || true
+  else
+    echo "⚠️  Cannot install 7z automatically on this system"
+  fi
 fi
 
 if command -v 7z >/dev/null 2>&1; then
-	echo "✅ 7z available for .xls extraction"
-	export IMGXSH_7Z_AVAILABLE=true
+  echo "✅ 7z available for .xls extraction"
+  export IMGXSH_7Z_AVAILABLE=true
 else
-	echo "ℹ️  7z not available - .xls extraction will be skipped gracefully"
-	export IMGXSH_7Z_AVAILABLE=false
+  echo "ℹ️  7z not available - .xls extraction will be skipped gracefully"
+  export IMGXSH_7Z_AVAILABLE=false
 fi
 
 # Set environment flags based on dependencies
 if [[ ${#missing_imgxsh_deps[@]} -gt 0 ]]; then
-	echo "⚠️  Missing imgxsh dependencies: ${missing_imgxsh_deps[*]}"
-	echo "   Image processing tests will be skipped"
-	export IMGXSH_SKIP_IMAGE_TESTS=true
+  echo "⚠️  Missing imgxsh dependencies: ${missing_imgxsh_deps[*]}"
+  echo "   Image processing tests will be skipped"
+  export IMGXSH_SKIP_IMAGE_TESTS=true
 else
-	export IMGXSH_SKIP_IMAGE_TESTS=false
+  export IMGXSH_SKIP_IMAGE_TESTS=false
 fi
 
 # Set up Git configuration if needed
 if command -v git >/dev/null 2>&1; then
-	if ! git config --global user.email >/dev/null 2>&1; then
-		git config --global user.email "ci@imgxsh.test" 2>/dev/null || true
-	fi
-	if ! git config --global user.name >/dev/null 2>&1; then
-		git config --global user.name "imgxsh CI" 2>/dev/null || true
-	fi
+  if ! git config --global user.email >/dev/null 2>&1; then
+    git config --global user.email "ci@imgxsh.test" 2>/dev/null || true
+  fi
+  if ! git config --global user.name >/dev/null 2>&1; then
+    git config --global user.name "imgxsh CI" 2>/dev/null || true
+  fi
 fi
 
 # Create isolated shell configuration for tests
@@ -191,9 +191,9 @@ echo "✅ Isolated shell configuration created"
 
 # Set up cleanup trap
 cleanup_ci_environment() {
-	if [[ -d "$CI_TEMP_DIR" ]]; then
-		rm -rf "$CI_TEMP_DIR" 2>/dev/null || true
-	fi
+  if [[ -d $CI_TEMP_DIR ]]; then
+    rm -rf "$CI_TEMP_DIR" 2>/dev/null || true
+  fi
 }
 
 trap cleanup_ci_environment EXIT INT TERM

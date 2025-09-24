@@ -13,6 +13,9 @@ _scripts
 bin.backup-*
 lib.backup-*
 
+# workflow outputs
+/output/
+
 # OS-specific files
 .DS_Store
 Thumbs.db

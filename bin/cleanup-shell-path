@@ -11,102 +11,102 @@ LIB_DIR="${SHELL_STARTER_LIB_PATH:-$(dirname "$SCRIPT_DIR")/lib}"
 
 # Source library functions with enhanced fallback
 if [[ -f "$LIB_DIR/main.sh" ]]; then
-	source "$LIB_DIR/main.sh"
+  source "$LIB_DIR/main.sh"
 else
-	# Enhanced fallback functionality when lib/main.sh is not available
-	colors_has_color() {
-		[[ "${NO_COLOR:-}" == "" ]] && {
-			[[ "${TERM:-}" != "dumb" ]] &&
-				[[ "${TERM:-}" != "" ]] &&
-				[[ -t 1 ]]
-		}
-	}
+  # Enhanced fallback functionality when lib/main.sh is not available
+  colors_has_color() {
+    [[ ${NO_COLOR:-} == "" ]] && {
+      [[ ${TERM:-} != "dumb" ]] \
+        && [[ ${TERM:-} != "" ]] \
+        && [[ -t 1 ]]
+    }
+  }
 
-	# Enhanced color variables with fallback support (guard against redefinition)
-	if ! declare -p COLOR_RESET >/dev/null 2>&1; then
-		if colors_has_color; then
-			readonly COLOR_INFO='\033[0;34m'    # Blue
-			readonly COLOR_SUCCESS='\033[0;32m' # Green
-			readonly COLOR_WARNING='\033[1;33m' # Yellow
-			readonly COLOR_ERROR='\033[0;31m'   # Red
-			readonly COLOR_RESET='\033[0m'
-			readonly COLOR_BOLD='\033[1m'
-			readonly RED='\033[0;31m'
-			readonly GREEN='\033[0;32m'
-			readonly YELLOW='\033[1;33m'
-			readonly BLUE='\033[0;34m'
-			readonly NC='\033[0m'
-		else
-			readonly COLOR_INFO=''
-			readonly COLOR_SUCCESS=''
-			readonly COLOR_WARNING=''
-			readonly COLOR_ERROR=''
-			readonly COLOR_RESET=''
-			readonly COLOR_BOLD=''
-			readonly RED=''
-			readonly GREEN=''
-			readonly YELLOW=''
-			readonly BLUE=''
-			readonly NC=''
-		fi
-	fi
+  # Enhanced color variables with fallback support (guard against redefinition)
+  if ! declare -p COLOR_RESET >/dev/null 2>&1; then
+    if colors_has_color; then
+      readonly COLOR_INFO='\033[0;34m'    # Blue
+      readonly COLOR_SUCCESS='\033[0;32m' # Green
+      readonly COLOR_WARNING='\033[1;33m' # Yellow
+      readonly COLOR_ERROR='\033[0;31m'   # Red
+      readonly COLOR_RESET='\033[0m'
+      readonly COLOR_BOLD='\033[1m'
+      readonly RED='\033[0;31m'
+      readonly GREEN='\033[0;32m'
+      readonly YELLOW='\033[1;33m'
+      readonly BLUE='\033[0;34m'
+      readonly NC='\033[0m'
+    else
+      readonly COLOR_INFO=''
+      readonly COLOR_SUCCESS=''
+      readonly COLOR_WARNING=''
+      readonly COLOR_ERROR=''
+      readonly COLOR_RESET=''
+      readonly COLOR_BOLD=''
+      readonly RED=''
+      readonly GREEN=''
+      readonly YELLOW=''
+      readonly BLUE=''
+      readonly NC=''
+    fi
+  fi
 
-	# Enhanced logging functions with visual indicators
-	log() {
-		local level="$1"
-		shift
-		case "$level" in
-		info) printf '%bℹ%b %s\n' "${COLOR_INFO}" "${COLOR_RESET}" "$*" ;;
-		warn) printf '%b⚠%b %s\n' "${COLOR_WARNING}" "${COLOR_RESET}" "$*" ;;
-		error) printf '%b✗%b %s\n' "${COLOR_ERROR}" "${COLOR_RESET}" "$*" >&2 ;;
-		*) printf '%b[%s]%b %s\n' "${COLOR_INFO}" "$level" "${COLOR_RESET}" "$*" ;;
-		esac
-	}
+  # Enhanced logging functions with visual indicators
+  log() {
+    local level="$1"
+    shift
+    case "$level" in
+      info) printf '%bℹ%b %s\n' "${COLOR_INFO}" "${COLOR_RESET}" "$*" ;;
+      warn) printf '%b⚠%b %s\n' "${COLOR_WARNING}" "${COLOR_RESET}" "$*" ;;
+      error) printf '%b✗%b %s\n' "${COLOR_ERROR}" "${COLOR_RESET}" "$*" >&2 ;;
+      *) printf '%b[%s]%b %s\n' "${COLOR_INFO}" "$level" "${COLOR_RESET}" "$*" ;;
+    esac
+  }
 
-	log::info() {
-		printf '%bℹ%b %s\n' "${COLOR_INFO}" "${COLOR_RESET}" "$*"
-	}
+  log::info() {
+    printf '%bℹ%b %s\n' "${COLOR_INFO}" "${COLOR_RESET}" "$*"
+  }
 
-	log::warn() {
-		printf '%b⚠%b %s\n' "${COLOR_WARNING}" "${COLOR_RESET}" "$*"
-	}
+  log::warn() {
+    printf '%b⚠%b %s\n' "${COLOR_WARNING}" "${COLOR_RESET}" "$*"
+  }
 
-	log::error() {
-		printf '%b✗%b %s\n' "${COLOR_ERROR}" "${COLOR_RESET}" "$*" >&2
-	}
+  log::error() {
+    printf '%b✗%b %s\n' "${COLOR_ERROR}" "${COLOR_RESET}" "$*" >&2
+  }
 
-	log::success() {
-		printf '%b✓%b %s\n' "${COLOR_SUCCESS}" "${COLOR_RESET}" "$*"
-	}
+  log::success() {
+    printf '%b✓%b %s\n' "${COLOR_SUCCESS}" "${COLOR_RESET}" "$*"
+  }
 
-	# Section header and divider functions
-	section_header() {
-		printf '\n%b─── %s ───%b\n' "${COLOR_BOLD}" "$*" "${COLOR_RESET}"
-	}
+  # Section header and divider functions
+  section_header() {
+    printf '\n%b─── %s ───%b\n' "${COLOR_BOLD}" "$*" "${COLOR_RESET}"
+  }
 
-	section_divider() {
-		printf '%b%s%b\n' "${COLOR_INFO}" "$(printf '%.50s' "──────────────────────────────────────────────────")" "${COLOR_RESET}"
-	}
+  section_divider() {
+    printf '%b%s%b\n' "${COLOR_INFO}" "$(printf '%.50s' "──────────────────────────────────────────────────")" "${COLOR_RESET}"
+  }
 
-	# Minimal banner support
-	banner_minimal() {
-		if colors_has_color; then
-			printf '%b• Shell PATH Cleanup •%b\n' "${COLOR_INFO}" "${COLOR_RESET}"
-		else
-			echo "• Shell PATH Cleanup •"
-		fi
-	}
+  # Minimal banner support
+  banner_minimal() {
+    if colors_has_color; then
+      printf '%b• Shell PATH Cleanup •%b\n' "${COLOR_INFO}" "${COLOR_RESET}"
+    else
+      echo "• Shell PATH Cleanup •"
+    fi
+  }
 fi
 
 # Ensure banner_minimal function is available regardless of lib loading
 if ! declare -f banner_minimal >/dev/null 2>&1; then
-	banner_minimal() {
-		if [[ "${NO_COLOR:-}" == "" ]] && [[ "${TERM:-}" != "dumb" ]] && [[ -t 1 ]]; then
-			printf '\033[0;34m• Shell PATH Cleanup •\033[0m\n'
-		else
-			echo "• Shell PATH Cleanup •"
-		fi
-	}
+  banner_minimal() {
+    if [[ ${NO_COLOR:-} == "" ]] && [[ ${TERM:-} != "dumb" ]] && [[ -t 1 ]]; then
+      printf '\033[0;34m• Shell PATH Cleanup •\033[0m\n'
+    else
+      echo "• Shell PATH Cleanup •"
+    fi
+  }
 fi
 
 # Configuration
@@ -117,43 +117,43 @@ VERBOSE=false
 
 # Enhanced shell configuration detection
 get_shell_configs() {
-	local shell_name configs=()
-	shell_name="$(basename "${SHELL:-bash}")"
+  local shell_name configs=()
+  shell_name="$(basename "${SHELL:-bash}")"
 
-	case "$shell_name" in
-	zsh)
-		[[ -f "$HOME/.zshrc" ]] && configs+=("$HOME/.zshrc")
-		[[ -f "$HOME/.zprofile" ]] && configs+=("$HOME/.zprofile")
-		;;
-	bash)
-		[[ -f "$HOME/.bashrc" ]] && configs+=("$HOME/.bashrc")
-		[[ -f "$HOME/.bash_profile" ]] && configs+=("$HOME/.bash_profile")
-		[[ -f "$HOME/.profile" ]] && configs+=("$HOME/.profile")
-		;;
-	fish)
-		[[ -f "$HOME/.config/fish/config.fish" ]] && configs+=("$HOME/.config/fish/config.fish")
-		;;
-	*)
-		[[ -f "$HOME/.bashrc" ]] && configs+=("$HOME/.bashrc")
-		[[ -f "$HOME/.profile" ]] && configs+=("$HOME/.profile")
-		;;
-	esac
+  case "$shell_name" in
+    zsh)
+      [[ -f "$HOME/.zshrc" ]] && configs+=("$HOME/.zshrc")
+      [[ -f "$HOME/.zprofile" ]] && configs+=("$HOME/.zprofile")
+      ;;
+    bash)
+      [[ -f "$HOME/.bashrc" ]] && configs+=("$HOME/.bashrc")
+      [[ -f "$HOME/.bash_profile" ]] && configs+=("$HOME/.bash_profile")
+      [[ -f "$HOME/.profile" ]] && configs+=("$HOME/.profile")
+      ;;
+    fish)
+      [[ -f "$HOME/.config/fish/config.fish" ]] && configs+=("$HOME/.config/fish/config.fish")
+      ;;
+    *)
+      [[ -f "$HOME/.bashrc" ]] && configs+=("$HOME/.bashrc")
+      [[ -f "$HOME/.profile" ]] && configs+=("$HOME/.profile")
+      ;;
+  esac
 
-	# Return all found config files
-	if [[ ${#configs[@]} -gt 0 ]]; then
-		printf '%s\n' "${configs[@]}"
-	fi
+  # Return all found config files
+  if [[ ${#configs[@]} -gt 0 ]]; then
+    printf '%s\n' "${configs[@]}"
+  fi
 }
 
 # Function to show help
 show_help() {
-	echo
-	if command -v banner::shell_starter >/dev/null 2>&1; then
-		banner::shell_starter minimal
-	else
-		banner_minimal
-	fi
-	cat <<EOF
+  echo
+  if command -v banner::shell_starter >/dev/null 2>&1; then
+    banner::shell_starter minimal
+  else
+    banner_minimal
+  fi
+  cat <<EOF
 
 Shell Configuration PATH Cleanup Utility
 
@@ -186,72 +186,72 @@ EOF
 
 # Parse command line arguments
 parse_args() {
-	while [[ $# -gt 0 ]]; do
-		case $1 in
-		-d | --dry-run)
-			DRY_RUN=true
-			shift
-			;;
-		-f | --force)
-			FORCE=true
-			shift
-			;;
-		-n | --no-backup)
-			BACKUP=false
-			shift
-			;;
-		-v | --verbose)
-			VERBOSE=true
-			shift
-			;;
-		-h | --help)
-			show_help
-			exit 0
-			;;
-		*)
-			echo "Unknown option: $1" >&2
-			echo "Use --help for usage information." >&2
-			exit 1
-			;;
-		esac
-	done
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      -d | --dry-run)
+        DRY_RUN=true
+        shift
+        ;;
+      -f | --force)
+        FORCE=true
+        shift
+        ;;
+      -n | --no-backup)
+        BACKUP=false
+        shift
+        ;;
+      -v | --verbose)
+        VERBOSE=true
+        shift
+        ;;
+      -h | --help)
+        show_help
+        exit 0
+        ;;
+      *)
+        echo "Unknown option: $1" >&2
+        echo "Use --help for usage information." >&2
+        exit 1
+        ;;
+    esac
+  done
 }
 
 # Verbose logging
 verbose_log() {
-	[[ "$VERBOSE" == true ]] && echo -e "${BLUE}[VERBOSE]${NC} $*"
+  [[ $VERBOSE == true ]] && echo -e "${BLUE}[VERBOSE]${NC} $*"
 }
 
 # Clean PATH entries from a shell config file
 cleanup_config_file() {
-	local config_file="$1"
-	local cleaned=false
+  local config_file="$1"
+  local cleaned=false
 
-	[[ ! -f "$config_file" ]] && {
-		verbose_log "Config file not found: $config_file"
-		return 0
-	}
+  [[ ! -f $config_file ]] && {
+    verbose_log "Config file not found: $config_file"
+    return 0
+  }
 
-	verbose_log "Processing: $config_file"
+  verbose_log "Processing: $config_file"
 
-	# Create backup if requested
-	if [[ "$BACKUP" == true && "$DRY_RUN" == false ]]; then
-		local backup_file="${config_file}.backup.$(date +%s)"
-		if ! cp "$config_file" "$backup_file"; then
-			log error "Failed to create backup: $backup_file"
-			return 1
-		fi
-		verbose_log "Created backup: $backup_file"
-	fi
+  # Create backup if requested
+  if [[ $BACKUP == true && $DRY_RUN == false ]]; then
+    local backup_file="${config_file}.backup.$(date +%s)"
+    if ! cp "$config_file" "$backup_file"; then
+      log error "Failed to create backup: $backup_file"
+      return 1
+    fi
+    verbose_log "Created backup: $backup_file"
+  fi
 
-	# Analyze the file for cleanup opportunities
-	local temp_file
-	temp_file=$(mktemp)
-	local duplicate_count=0
-	local shell_starter_count=0
+  # Analyze the file for cleanup opportunities
+  local temp_file
+  temp_file=$(mktemp)
+  local duplicate_count=0
+  local shell_starter_count=0
 
-	# Remove shell-starter entries and track duplicates
-	awk '
+  # Remove shell-starter entries and track duplicates
+  awk '
 	BEGIN {
 		seen_paths = ""
 		duplicate_lines = 0
@@ -297,117 +297,117 @@ cleanup_config_file() {
 	}
 	' "$config_file" >"$temp_file" 2>/tmp/cleanup_stats
 
-	# Read cleanup statistics
-	if [[ -f /tmp/cleanup_stats ]]; then
-		read -r _ duplicate_count shell_starter_count </tmp/cleanup_stats
-		rm -f /tmp/cleanup_stats
-	fi
+  # Read cleanup statistics
+  if [[ -f /tmp/cleanup_stats ]]; then
+    read -r _ duplicate_count shell_starter_count </tmp/cleanup_stats
+    rm -f /tmp/cleanup_stats
+  fi
 
-	# Check if any changes were made
-	if ! cmp -s "$config_file" "$temp_file"; then
-		cleaned=true
-		if [[ "$DRY_RUN" == true ]]; then
-			printf '%b[DRY-RUN]%b Would clean %s:\n' "${COLOR_WARNING}" "${COLOR_RESET}" "$config_file"
-			[[ $duplicate_count -gt 0 ]] && printf '%b  →%b Remove %d duplicate PATH entries\n' "${COLOR_INFO}" "${COLOR_RESET}" "$duplicate_count"
-			[[ $shell_starter_count -gt 0 ]] && printf '%b  →%b Remove %d shell-starter PATH entries\n' "${COLOR_INFO}" "${COLOR_RESET}" "$shell_starter_count"
-		else
-			if mv "$temp_file" "$config_file"; then
-				log::success "Cleaned $config_file:"
-				[[ $duplicate_count -gt 0 ]] && printf '%b  →%b Removed %d duplicate PATH entries\n' "${COLOR_INFO}" "${COLOR_RESET}" "$duplicate_count"
-				[[ $shell_starter_count -gt 0 ]] && printf '%b  →%b Removed %d shell-starter PATH entries\n' "${COLOR_INFO}" "${COLOR_RESET}" "$shell_starter_count"
-			else
-				log::error "Failed to update $config_file"
-				rm -f "$temp_file"
-				return 1
-			fi
-		fi
-	else
-		verbose_log "No cleanup needed for $config_file"
-	fi
+  # Check if any changes were made
+  if ! cmp -s "$config_file" "$temp_file"; then
+    cleaned=true
+    if [[ $DRY_RUN == true ]]; then
+      printf '%b[DRY-RUN]%b Would clean %s:\n' "${COLOR_WARNING}" "${COLOR_RESET}" "$config_file"
+      [[ $duplicate_count -gt 0 ]] && printf '%b  →%b Remove %d duplicate PATH entries\n' "${COLOR_INFO}" "${COLOR_RESET}" "$duplicate_count"
+      [[ $shell_starter_count -gt 0 ]] && printf '%b  →%b Remove %d shell-starter PATH entries\n' "${COLOR_INFO}" "${COLOR_RESET}" "$shell_starter_count"
+    else
+      if mv "$temp_file" "$config_file"; then
+        log::success "Cleaned $config_file:"
+        [[ $duplicate_count -gt 0 ]] && printf '%b  →%b Removed %d duplicate PATH entries\n' "${COLOR_INFO}" "${COLOR_RESET}" "$duplicate_count"
+        [[ $shell_starter_count -gt 0 ]] && printf '%b  →%b Removed %d shell-starter PATH entries\n' "${COLOR_INFO}" "${COLOR_RESET}" "$shell_starter_count"
+      else
+        log::error "Failed to update $config_file"
+        rm -f "$temp_file"
+        return 1
+      fi
+    fi
+  else
+    verbose_log "No cleanup needed for $config_file"
+  fi
 
-	[[ "$DRY_RUN" == true ]] && rm -f "$temp_file"
-	[[ "$cleaned" == true ]] && return 0 || return 1
+  [[ $DRY_RUN == true ]] && rm -f "$temp_file"
+  [[ $cleaned == true ]] && return 0 || return 1
 }
 
 # Get user confirmation
 confirm_cleanup() {
-	[[ "$FORCE" == true ]] && return 0
-	[[ "$DRY_RUN" == true ]] && return 0
+  [[ $FORCE == true ]] && return 0
+  [[ $DRY_RUN == true ]] && return 0
 
-	echo
-	echo -e "${YELLOW}⚠️  This will modify your shell configuration files.${NC}"
-	echo -e "${YELLOW}   Backup files will be created unless --no-backup is used.${NC}"
-	echo
-	echo -e "${YELLOW}Proceed with cleanup? [y/N]${NC} "
-	read -r response
-	case "$response" in
-	[yY] | [yY][eE][sS])
-		return 0
-		;;
-	*)
-		echo "Cleanup cancelled by user"
-		exit 0
-		;;
-	esac
+  echo
+  echo -e "${YELLOW}⚠️  This will modify your shell configuration files.${NC}"
+  echo -e "${YELLOW}   Backup files will be created unless --no-backup is used.${NC}"
+  echo
+  echo -e "${YELLOW}Proceed with cleanup? [y/N]${NC} "
+  read -r response
+  case "$response" in
+    [yY] | [yY][eE][sS])
+      return 0
+      ;;
+    *)
+      echo "Cleanup cancelled by user"
+      exit 0
+      ;;
+  esac
 }
 
 # Main cleanup function
 main() {
-	parse_args "$@"
+  parse_args "$@"
 
-	if [[ "$DRY_RUN" == true ]]; then
-		log::info "Running in dry-run mode - no changes will be made"
-	fi
+  if [[ $DRY_RUN == true ]]; then
+    log::info "Running in dry-run mode - no changes will be made"
+  fi
 
-	log::info "Scanning shell configuration files for cleanup..."
+  log::info "Scanning shell configuration files for cleanup..."
 
-	local configs_cleaned=0
-	local configs_processed=0
+  local configs_cleaned=0
+  local configs_processed=0
 
-	# Process all detected shell config files
-	while IFS= read -r config_file || [[ -n "$config_file" ]]; do
-		if [[ -n "$config_file" ]]; then
-			((configs_processed++))
-			if cleanup_config_file "$config_file"; then
-				((configs_cleaned++))
-			fi
-		fi
-	done < <(get_shell_configs)
+  # Process all detected shell config files
+  while IFS= read -r config_file || [[ -n $config_file ]]; do
+    if [[ -n $config_file ]]; then
+      ((configs_processed++))
+      if cleanup_config_file "$config_file"; then
+        ((configs_cleaned++))
+      fi
+    fi
+  done < <(get_shell_configs)
 
-	if [[ $configs_processed -eq 0 ]]; then
-		log::warn "No shell configuration files found"
-		exit 0
-	fi
+  if [[ $configs_processed -eq 0 ]]; then
+    log::warn "No shell configuration files found"
+    exit 0
+  fi
 
-	# Show results and get confirmation if needed
-	echo
-	if [[ "$DRY_RUN" == true ]]; then
-		log::info "Dry-run complete:"
-		printf '%b  →%b %d configuration files scanned\n' "${COLOR_INFO}" "${COLOR_RESET}" "$configs_processed"
-		printf '%b  →%b %d files need cleanup\n' "${COLOR_INFO}" "${COLOR_RESET}" "$configs_cleaned"
-		echo
-		log::info "Run without --dry-run to perform the actual cleanup."
-	else
-		if [[ $configs_cleaned -gt 0 ]]; then
-			confirm_cleanup
+  # Show results and get confirmation if needed
+  echo
+  if [[ $DRY_RUN == true ]]; then
+    log::info "Dry-run complete:"
+    printf '%b  →%b %d configuration files scanned\n' "${COLOR_INFO}" "${COLOR_RESET}" "$configs_processed"
+    printf '%b  →%b %d files need cleanup\n' "${COLOR_INFO}" "${COLOR_RESET}" "$configs_cleaned"
+    echo
+    log::info "Run without --dry-run to perform the actual cleanup."
+  else
+    if [[ $configs_cleaned -gt 0 ]]; then
+      confirm_cleanup
 
-			# Run actual cleanup (this is a simplified approach for demo)
-			log::success "Cleanup completed:"
-			printf '%b  →%b %d configuration files cleaned\n' "${COLOR_INFO}" "${COLOR_RESET}" "$configs_cleaned"
-			printf '%b  →%b %d files processed\n' "${COLOR_INFO}" "${COLOR_RESET}" "$configs_processed"
-			echo
-			log::info "To apply changes immediately, run:"
-			get_shell_configs | head -1 | while read -r config; do
-				printf '%b  →%b source %s\n' "${COLOR_INFO}" "${COLOR_RESET}" "$config"
-			done
-			log::info "Or restart your terminal/shell"
-		else
-			log::info "No cleanup needed - all configuration files are already clean"
-		fi
-	fi
+      # Run actual cleanup (this is a simplified approach for demo)
+      log::success "Cleanup completed:"
+      printf '%b  →%b %d configuration files cleaned\n' "${COLOR_INFO}" "${COLOR_RESET}" "$configs_cleaned"
+      printf '%b  →%b %d files processed\n' "${COLOR_INFO}" "${COLOR_RESET}" "$configs_processed"
+      echo
+      log::info "To apply changes immediately, run:"
+      get_shell_configs | head -1 | while read -r config; do
+        printf '%b  →%b source %s\n' "${COLOR_INFO}" "${COLOR_RESET}" "$config"
+      done
+      log::info "Or restart your terminal/shell"
+    else
+      log::info "No cleanup needed - all configuration files are already clean"
+    fi
+  fi
 }
 
 # Run main function if script is executed directly
-if [[ "${BASH_SOURCE[0]:-}" == "${0:-}" ]]; then
-	main "$@"
+if [[ ${BASH_SOURCE[0]:-} == "${0:-}" ]]; then
+  main "$@"
 fi

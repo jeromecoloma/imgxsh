@@ -56,19 +56,19 @@ steps:
 
 hooks:
   pre_workflow:
-    - echo "Starting PDF to web gallery conversion for: {workflow_input}"
-    
+    - 'echo "Starting PDF to web gallery conversion for: {workflow_input}"'
+  
   post_step:
-    - echo "Completed step: {step_name}"
-    
+    - 'echo "Completed step: {step_name}"'
+  
   on_success:
-    - echo "Gallery created successfully at: {output_dir}/gallery.html"
-    - echo "Thumbnails: {output_dir}/thumbnails/"
-    - echo "Full images: {output_dir}/full/"
-    
+    - 'echo "Gallery created successfully at: {output_dir}/gallery.html"'
+    - 'echo "Thumbnails: {output_dir}/thumbnails/"'
+    - 'echo "Full images: {output_dir}/full/"'
+  
   on_failure:
-    - echo "Workflow failed at step: {failed_step}"
-    - echo "Check logs for details"
+    - 'echo "Workflow failed at step: {failed_step}"'
+    - 'echo "Check logs for details"'
 
 # Template variables available:
 # {workflow_input} - Input file/directory path

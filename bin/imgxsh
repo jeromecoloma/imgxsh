@@ -12,7 +12,7 @@ source "${SHELL_STARTER_ROOT}/lib/main.sh"
 source "${SHELL_STARTER_ROOT}/lib/imgxsh/core.sh"
 
 show_help() {
-	cat <<EOF
+  cat <<EOF
 Usage: $(basename "$0") [OPTIONS] [--workflow WORKFLOW] [INPUT_PATHS...]
 
 imgxsh - Comprehensive CLI image processing tool with workflow orchestration.
@@ -91,11 +91,16 @@ EOF
 imgxsh::setup_error_traps
 
 show_workflow_help() {
-	local workflow="$1"
+  local workflow="$1"
 
-	case "$workflow" in
-	"pdf-to-thumbnails")
-		cat <<EOF
+  # Normalize common aliases
+  case "$workflow" in
+    "pdf-to-web") workflow="pdf-to-thumbnails" ;;
+  esac
+
+  case "$workflow" in
+    "pdf-to-thumbnails")
+      cat <<EOF
 Workflow: pdf-to-thumbnails
 Description: Extract images from PDF documents and create thumbnails
 
@@ -119,9 +124,9 @@ Configuration variables:
 Example:
   $(basename "$0") --workflow pdf-to-thumbnails --output ./thumbs/ document.pdf
 EOF
-		;;
-	"web-optimize")
-		cat <<EOF
+      ;;
+    "web-optimize")
+      cat <<EOF
 Workflow: web-optimize
 Description: Optimize images for web use
 
@@ -145,1366 +150,1371 @@ Configuration variables:
 Example:
   $(basename "$0") --workflow web-optimize --output ./web/ *.jpg *.png
 EOF
-		;;
-	*)
-		log::error "Unknown workflow: $workflow"
-		log::info "Available workflows: pdf-to-thumbnails, web-optimize, excel-extract, batch-convert, watermark-apply"
-		exit 1
-		;;
-	esac
+      ;;
+    *)
+      log::error "Unknown workflow: $workflow"
+      log::info "Available workflows: pdf-to-thumbnails (alias: pdf-to-web), web-optimize, excel-extract, batch-convert, watermark-apply"
+      exit 1
+      ;;
+  esac
 }
 
 validate_workflow_input() {
-	local workflow="$1"
-	local inputs=("${@:2}")
+  local workflow="$1"
+  local inputs=("${@:2}")
 
-	case "$workflow" in
-	"pdf-to-thumbnails")
-		for input in "${inputs[@]}"; do
-			if ! imgxsh::validate_file "$input" "pdf"; then
-				return 1
-			fi
-		done
-		;;
-	"excel-extract")
-		for input in "${inputs[@]}"; do
-			if ! imgxsh::validate_file "$input" "excel"; then
-				return 1
-			fi
-		done
-		;;
-	"web-optimize" | "batch-convert" | "watermark-apply")
-		for input in "${inputs[@]}"; do
-			if [[ -d "$input" ]]; then
-				continue # Directory input is valid
-			elif ! imgxsh::validate_file "$input" "image"; then
-				return 1
-			fi
-		done
-		;;
-	esac
+  case "$workflow" in
+    "pdf-to-thumbnails")
+      for input in "${inputs[@]}"; do
+        if ! imgxsh::validate_file "$input" "pdf"; then
+          return 1
+        fi
+      done
+      ;;
+    "excel-extract")
+      for input in "${inputs[@]}"; do
+        if ! imgxsh::validate_file "$input" "excel"; then
+          return 1
+        fi
+      done
+      ;;
+    "web-optimize" | "batch-convert" | "watermark-apply")
+      for input in "${inputs[@]}"; do
+        if [[ -d $input ]]; then
+          continue # Directory input is valid
+        elif ! imgxsh::validate_file "$input" "image"; then
+          return 1
+        fi
+      done
+      ;;
+  esac
 
-	return 0
+  return 0
 }
 
 execute_workflow() {
-	local workflow="$1"
-	local dry_run="$2"
-	local output_dir="$3"
-	local parallel_jobs="$4"
-	local inputs=("${@:5}")
+  local workflow="$1"
+  local dry_run="$2"
+  local output_dir="$3"
+  local parallel_jobs="$4"
+  local inputs=("${@:5}")
 
-	if [[ "$dry_run" == true ]]; then
-		log::info "DRY RUN MODE - No actual processing will occur"
-		echo
-	fi
+  # Normalize common aliases
+  case "$workflow" in
+    "pdf-to-web") workflow="pdf-to-thumbnails" ;;
+  esac
 
-	log::info "Executing workflow: $workflow"
-	log::info "Output directory: $output_dir"
-	log::info "Parallel jobs: $parallel_jobs"
-	log::info "Input files: ${#inputs[@]} items"
-	echo
+  if [[ $dry_run == true ]]; then
+    log::info "DRY RUN MODE - No actual processing will occur"
+    echo
+  fi
 
-	# Ensure output directory exists
-	if [[ "$dry_run" == false ]]; then
-		imgxsh::ensure_output_dir "$output_dir"
-	fi
+  log::info "Executing workflow: $workflow"
+  log::info "Output directory: $output_dir"
+  log::info "Parallel jobs: $parallel_jobs"
+  log::info "Input files: ${#inputs[@]} items"
+  echo
 
-	case "$workflow" in
-	"pdf-to-thumbnails")
-		execute_pdf_to_thumbnails "$dry_run" "$output_dir" "$parallel_jobs" "${inputs[@]}"
-		;;
-	"web-optimize")
-		execute_web_optimize "$dry_run" "$output_dir" "$parallel_jobs" "${inputs[@]}"
-		;;
-	"excel-extract")
-		execute_excel_extract "$dry_run" "$output_dir" "$parallel_jobs" "${inputs[@]}"
-		;;
-	"batch-convert")
-		execute_batch_convert "$dry_run" "$output_dir" "$parallel_jobs" "${inputs[@]}"
-		;;
-	"watermark-apply")
-		execute_watermark_apply "$dry_run" "$output_dir" "$parallel_jobs" "${inputs[@]}"
-		;;
-	*)
-		# Try to load custom workflow file
-		if [[ -f "$workflow" ]]; then
-			execute_custom_workflow "$workflow" "$dry_run" "$output_dir" "$parallel_jobs" "${inputs[@]}"
-		else
-			log::error "Unknown workflow: $workflow"
-			exit 1
-		fi
-		;;
-	esac
+  # Ensure output directory exists
+  if [[ $dry_run == false ]]; then
+    imgxsh::ensure_output_dir "$output_dir"
+  fi
+
+  case "$workflow" in
+    "pdf-to-thumbnails")
+      execute_pdf_to_thumbnails "$dry_run" "$output_dir" "$parallel_jobs" "${inputs[@]}"
+      ;;
+    "web-optimize")
+      execute_web_optimize "$dry_run" "$output_dir" "$parallel_jobs" "${inputs[@]}"
+      ;;
+    "excel-extract")
+      execute_excel_extract "$dry_run" "$output_dir" "$parallel_jobs" "${inputs[@]}"
+      ;;
+    "batch-convert")
+      execute_batch_convert "$dry_run" "$output_dir" "$parallel_jobs" "${inputs[@]}"
+      ;;
+    "watermark-apply")
+      execute_watermark_apply "$dry_run" "$output_dir" "$parallel_jobs" "${inputs[@]}"
+      ;;
+    *)
+      # Try to load custom workflow file
+      if [[ -f $workflow ]]; then
+        execute_custom_workflow "$workflow" "$dry_run" "$output_dir" "$parallel_jobs" "${inputs[@]}"
+      else
+        log::error "Unknown workflow: $workflow"
+        exit 1
+      fi
+      ;;
+  esac
 }
 
 execute_pdf_to_thumbnails() {
-	local dry_run="$1"
-	local output_dir="$2"
-	local parallel_jobs="$3"
-	local inputs=("${@:4}")
+  local dry_run="$1"
+  local output_dir="$2"
+  local parallel_jobs="$3"
+  local inputs=("${@:4}")
 
-	log::info "Starting PDF to thumbnails workflow"
+  log::info "Starting PDF to thumbnails workflow"
 
-	for pdf_file in "${inputs[@]}"; do
-		local pdf_name
-		pdf_name=$(basename "$pdf_file" .pdf)
-		local temp_dir="${IMGXSH_TEMP_DIR}/${pdf_name}"
+  for pdf_file in "${inputs[@]}"; do
+    local pdf_name
+    pdf_name=$(basename "$pdf_file" .pdf)
+    local temp_dir="${IMGXSH_TEMP_DIR}/${pdf_name}"
 
-		log::info "Processing: $pdf_file"
+    log::info "Processing: $pdf_file"
 
-		if [[ "$dry_run" == true ]]; then
-			echo "  Would extract images to: $temp_dir"
-			echo "  Would create thumbnails in: $output_dir"
-			echo "  Would use parallel processing: $parallel_jobs jobs"
-			continue
-		fi
+    if [[ $dry_run == true ]]; then
+      echo "  Would extract images to: $temp_dir"
+      echo "  Would create thumbnails in: $output_dir"
+      echo "  Would use parallel processing: $parallel_jobs jobs"
+      continue
+    fi
 
-		# Create temporary directory
-		mkdir -p "$temp_dir"
+    # Create temporary directory
+    mkdir -p "$temp_dir"
 
-		# Extract images from PDF
-		spinner::start "Extracting images from $pdf_name"
-		if pdfimages -png "$pdf_file" "$temp_dir/$pdf_name" 2>/dev/null; then
-			spinner::stop
-			local extracted_count
-			extracted_count=$(find "$temp_dir" -name "${pdf_name}-*.png" | wc -l)
-			log::success "Extracted $extracted_count images from $pdf_name"
-		else
-			spinner::stop
-			log::error "Failed to extract images from $pdf_file"
-			continue
-		fi
+    # Extract images from PDF
+    spinner::start "Extracting images from $pdf_name"
+    if pdfimages -png "$pdf_file" "$temp_dir/$pdf_name" 2>/dev/null; then
+      spinner::stop
+      local extracted_count
+      extracted_count=$(find "$temp_dir" -name "${pdf_name}-*.png" | wc -l)
+      log::success "Extracted $extracted_count images from $pdf_name"
+    else
+      spinner::stop
+      log::error "Failed to extract images from $pdf_file"
+      continue
+    fi
 
-		# Create thumbnails
-		if [[ $extracted_count -gt 0 ]]; then
-			spinner::start "Creating thumbnails for $pdf_name"
-			local counter=1
-			for image in "$temp_dir"/"${pdf_name}"-*.png; do
-				if [[ -f "$image" ]]; then
-					local thumb_name
-					thumb_name=$(printf "%s_thumb_%03d.jpg" "$pdf_name" $counter)
+    # Create thumbnails
+    if [[ $extracted_count -gt 0 ]]; then
+      spinner::start "Creating thumbnails for $pdf_name"
+      local counter=1
+      for image in "$temp_dir"/"${pdf_name}"-*.png; do
+        if [[ -f $image ]]; then
+          local thumb_name
+          thumb_name=$(printf "%s_thumb_%03d.jpg" "$pdf_name" $counter)
 
-					if convert "$image" -resize "200x200>" -quality 80 "$output_dir/$thumb_name" 2>/dev/null; then
-						((counter++))
-					else
-						log::warn "Failed to create thumbnail for $(basename "$image")"
-					fi
-				fi
-			done
-			spinner::stop
-			log::success "Created $((counter - 1)) thumbnails for $pdf_name"
-		fi
+          if convert "$image" -resize "200x200>" -quality 80 "$output_dir/$thumb_name" 2>/dev/null; then
+            ((counter++))
+          else
+            log::warn "Failed to create thumbnail for $(basename "$image")"
+          fi
+        fi
+      done
+      spinner::stop
+      log::success "Created $((counter - 1)) thumbnails for $pdf_name"
+    fi
 
-		# Cleanup temporary files
-		rm -rf "$temp_dir"
-	done
+    # Cleanup temporary files
+    rm -rf "$temp_dir"
+  done
 }
 
 execute_web_optimize() {
-	local dry_run="$1"
-	local output_dir="$2"
-	local parallel_jobs="$3"
-	local inputs=("${@:4}")
+  local dry_run="$1"
+  local output_dir="$2"
+  local parallel_jobs="$3"
+  local inputs=("${@:4}")
 
-	log::info "Starting web optimization workflow"
+  log::info "Starting web optimization workflow"
 
-	# Collect all image files
-	local image_files=()
-	for input in "${inputs[@]}"; do
-		if [[ -d "$input" ]]; then
-			while IFS= read -r -d '' file; do
-				image_files+=("$file")
-			done < <(find "$input" -type f \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" -o -iname "*.tiff" -o -iname "*.bmp" \) -print0)
-		else
-			image_files+=("$input")
-		fi
-	done
+  # Collect all image files
+  local image_files=()
+  for input in "${inputs[@]}"; do
+    if [[ -d $input ]]; then
+      while IFS= read -r -d '' file; do
+        image_files+=("$file")
+      done < <(find "$input" -type f \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" -o -iname "*.tiff" -o -iname "*.bmp" \) -print0)
+    else
+      image_files+=("$input")
+    fi
+  done
 
-	if [[ ${#image_files[@]} -eq 0 ]]; then
-		log::error "No image files found to process"
-		exit 1
-	fi
+  if [[ ${#image_files[@]} -eq 0 ]]; then
+    log::error "No image files found to process"
+    exit 1
+  fi
 
-	log::info "Found ${#image_files[@]} images to optimize"
+  log::info "Found ${#image_files[@]} images to optimize"
 
-	if [[ "$dry_run" == true ]]; then
-		for image in "${image_files[@]}"; do
-			local base_name
-			base_name=$(basename "$image" | sed 's/\.[^.]*$//')
-			echo "  Would optimize: $image -> $output_dir/${base_name}_web.webp"
-		done
-		return 0
-	fi
+  if [[ $dry_run == true ]]; then
+    for image in "${image_files[@]}"; do
+      local base_name
+      base_name=$(basename "$image" | sed 's/\.[^.]*$//')
+      echo "  Would optimize: $image -> $output_dir/${base_name}_web.webp"
+    done
+    return 0
+  fi
 
-	# Process images
-	local processed=0
-	local failed=0
+  # Process images
+  local processed=0
+  local failed=0
 
-	spinner::start "Optimizing images for web"
-	for image in "${image_files[@]}"; do
-		local base_name
-		base_name=$(basename "$image" | sed 's/\.[^.]*$//')
-		local output_file="$output_dir/${base_name}_web.webp"
+  spinner::start "Optimizing images for web"
+  for image in "${image_files[@]}"; do
+    local base_name
+    base_name=$(basename "$image" | sed 's/\.[^.]*$//')
+    local output_file="$output_dir/${base_name}_web.webp"
 
-		if convert "$image" -resize "1200x800>" -quality 85 "$output_file" 2>/dev/null; then
-			((processed++))
-		else
-			((failed++))
-			log::warn "Failed to optimize: $(basename "$image")"
-		fi
-	done
-	spinner::stop
+    if convert "$image" -resize "1200x800>" -quality 85 "$output_file" 2>/dev/null; then
+      ((processed++))
+    else
+      ((failed++))
+      log::warn "Failed to optimize: $(basename "$image")"
+    fi
+  done
+  spinner::stop
 
-	log::success "Web optimization completed: $processed processed, $failed failed"
+  log::success "Web optimization completed: $processed processed, $failed failed"
 }
 
 execute_excel_extract() {
-	local dry_run="$1"
-	local output_dir="$2"
-	local parallel_jobs="$3"
-	local inputs=("${@:4}")
+  local dry_run="$1"
+  local output_dir="$2"
+  local parallel_jobs="$3"
+  local inputs=("${@:4}")
 
-	log::info "Starting Excel image extraction workflow"
+  log::info "Starting Excel image extraction workflow"
 
-	for excel_file in "${inputs[@]}"; do
-		local excel_name
-		excel_name=$(basename "$excel_file" | sed 's/\.[^.]*$//')
-		local temp_dir="${IMGXSH_TEMP_DIR}/${excel_name}"
+  for excel_file in "${inputs[@]}"; do
+    local excel_name
+    excel_name=$(basename "$excel_file" | sed 's/\.[^.]*$//')
+    local temp_dir="${IMGXSH_TEMP_DIR}/${excel_name}"
 
-		log::info "Processing: $excel_file"
+    log::info "Processing: $excel_file"
 
-		if [[ "$dry_run" == true ]]; then
-			echo "  Would extract to temporary: $temp_dir"
-			echo "  Would copy images to: $output_dir"
-			continue
-		fi
+    if [[ $dry_run == true ]]; then
+      echo "  Would extract to temporary: $temp_dir"
+      echo "  Would copy images to: $output_dir"
+      continue
+    fi
 
-		# Create temporary directory
-		mkdir -p "$temp_dir"
+    # Create temporary directory
+    mkdir -p "$temp_dir"
 
-		# Extract Excel file
-		spinner::start "Extracting Excel file $excel_name"
-		if unzip -q "$excel_file" -d "$temp_dir" 2>/dev/null; then
-			spinner::stop
+    # Extract Excel file
+    spinner::start "Extracting Excel file $excel_name"
+    if unzip -q "$excel_file" -d "$temp_dir" 2>/dev/null; then
+      spinner::stop
 
-			# Look for images in xl/media directory
-			local media_dir="$temp_dir/xl/media"
-			if [[ -d "$media_dir" ]]; then
-				local image_count
-				image_count=$(find "$media_dir" -type f \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" -o -iname "*.gif" -o -iname "*.bmp" \) | wc -l)
+      # Look for images in xl/media directory
+      local media_dir="$temp_dir/xl/media"
+      if [[ -d $media_dir ]]; then
+        local image_count
+        image_count=$(find "$media_dir" -type f \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" -o -iname "*.gif" -o -iname "*.bmp" \) | wc -l)
 
-				if [[ $image_count -gt 0 ]]; then
-					log::success "Found $image_count images in $excel_name"
+        if [[ $image_count -gt 0 ]]; then
+          log::success "Found $image_count images in $excel_name"
 
-					# Copy images to output directory
-					local counter=1
-					for image in "$media_dir"/*; do
-						if [[ -f "$image" ]]; then
-							local ext="${image##*.}"
-							local new_name
-							new_name=$(printf "%s_image_%03d.%s" "$excel_name" $counter "$ext")
-							cp "$image" "$output_dir/$new_name"
-							((counter++))
-						fi
-					done
+          # Copy images to output directory
+          local counter=1
+          for image in "$media_dir"/*; do
+            if [[ -f $image ]]; then
+              local ext="${image##*.}"
+              local new_name
+              new_name=$(printf "%s_image_%03d.%s" "$excel_name" $counter "$ext")
+              cp "$image" "$output_dir/$new_name"
+              ((counter++))
+            fi
+          done
 
-					log::success "Extracted $((counter - 1)) images from $excel_name"
-				else
-					log::warn "No images found in $excel_name"
-				fi
-			else
-				log::warn "No media directory found in $excel_name"
-			fi
-		else
-			spinner::stop
-			log::error "Failed to extract Excel file: $excel_file"
-		fi
+          log::success "Extracted $((counter - 1)) images from $excel_name"
+        else
+          log::warn "No images found in $excel_name"
+        fi
+      else
+        log::warn "No media directory found in $excel_name"
+      fi
+    else
+      spinner::stop
+      log::error "Failed to extract Excel file: $excel_file"
+    fi
 
-		# Cleanup temporary files
-		rm -rf "$temp_dir"
-	done
+    # Cleanup temporary files
+    rm -rf "$temp_dir"
+  done
 }
 
 execute_batch_convert() {
-	log::info "Batch convert workflow not yet implemented"
-	log::info "This will be implemented in IMX-2 (imgxsh-convert)"
+  log::info "Batch convert workflow not yet implemented"
+  log::info "This will be implemented in IMX-2 (imgxsh-convert)"
 }
 
 execute_watermark_apply() {
-	log::info "Watermark apply workflow not yet implemented"
-	log::info "This will be implemented in IMX-7 (imgxsh-watermark)"
+  log::info "Watermark apply workflow not yet implemented"
+  log::info "This will be implemented in IMX-7 (imgxsh-watermark)"
 }
 
 execute_custom_workflow() {
-	local workflow_file="$1"
-	local dry_run="$2"
-	local output_dir="$3"
-	local parallel_jobs="$4"
-	local inputs=("${@:5}")
+  local workflow_file="$1"
+  local dry_run="$2"
+  local output_dir="$3"
+  local parallel_jobs="$4"
+  local inputs=("${@:5}")
 
-	log::info "Loading custom workflow: $workflow_file"
+  log::info "Loading custom workflow: $workflow_file"
 
-	# Load and parse the workflow
-	if ! yaml::load_workflow "$workflow_file" "CUSTOM_WF"; then
-		log::error "Failed to load workflow: $workflow_file"
-		return 1
-	fi
+  # Load and parse the workflow
+  if ! yaml::load_workflow "$workflow_file" "CUSTOM_WF"; then
+    log::error "Failed to load workflow: $workflow_file"
+    return 1
+  fi
 
-	# Validate the workflow comprehensively
-	if ! validation::validate_workflow_comprehensive "CUSTOM_WF"; then
-		log::error "Workflow validation failed"
-		return 1
-	fi
+  # Validate the workflow comprehensively
+  if ! validation::validate_workflow_comprehensive "CUSTOM_WF"; then
+    log::error "Workflow validation failed"
+    return 1
+  fi
 
-	# Display workflow info
-	local wf_name
-	local wf_description
-	local wf_version
-	local step_count
+  # Display workflow info
+  local wf_name
+  local wf_description
+  local wf_version
+  local step_count
 
-	wf_name=$(yaml::get_workflow_var "CUSTOM_WF" "NAME")
-	wf_description=$(yaml::get_workflow_var "CUSTOM_WF" "DESCRIPTION")
-	wf_version=$(yaml::get_workflow_var "CUSTOM_WF" "VERSION")
-	step_count=$(yaml::get_workflow_var "CUSTOM_WF" "STEP_COUNT")
+  wf_name=$(yaml::get_workflow_var "CUSTOM_WF" "NAME")
+  wf_description=$(yaml::get_workflow_var "CUSTOM_WF" "DESCRIPTION")
+  wf_version=$(yaml::get_workflow_var "CUSTOM_WF" "VERSION")
+  step_count=$(yaml::get_workflow_var "CUSTOM_WF" "STEP_COUNT")
 
-	log::info "Workflow: $wf_name"
-	log::info "Description: $wf_description"
-	[[ -n "$wf_version" ]] && log::info "Version: $wf_version"
-	log::info "Steps: $step_count"
-	echo
+  log::info "Workflow: $wf_name"
+  log::info "Description: $wf_description"
+  [[ -n $wf_version ]] && log::info "Version: $wf_version"
+  log::info "Steps: $step_count"
+  echo
 
-	if [[ "$dry_run" == true ]]; then
-		log::info "DRY RUN MODE - Workflow steps preview:"
+  if [[ $dry_run == true ]]; then
+    log::info "DRY RUN MODE - Workflow steps preview:"
 
-		# Initialize context for dry-run condition evaluation
-		yaml::init_context "DRY_CONTEXT"
-		yaml::set_context_var "DRY_CONTEXT" "total_steps" "$step_count"
+    # Initialize context for dry-run condition evaluation
+    yaml::init_context "DRY_CONTEXT"
+    yaml::set_context_var "DRY_CONTEXT" "total_steps" "$step_count"
 
-		# Initialize template variables for dry-run parameter substitution
-		local dry_primary_input="${inputs[0]:-}"
-		yaml::init_template_vars "DRY_TEMPLATE" "$dry_primary_input" "$output_dir"
-		yaml::set_template_var "DRY_TEMPLATE" "workflow_name" "$wf_name"
+    # Initialize template variables for dry-run parameter substitution
+    local dry_primary_input="${inputs[0]:-}"
+    yaml::init_template_vars "DRY_TEMPLATE" "$dry_primary_input" "$output_dir"
+    yaml::set_template_var "DRY_TEMPLATE" "workflow_name" "$wf_name"
 
-		echo
-		log::info "Template variables available:"
-		yaml::debug_template_vars "DRY_TEMPLATE"
-		echo
+    echo
+    log::info "Template variables available:"
+    yaml::debug_template_vars "DRY_TEMPLATE"
+    echo
 
-		for ((i = 0; i < step_count; i++)); do
-			local step_name
-			local step_type
-			local step_desc
-			local step_condition
+    for ((i = 0; i < step_count; i++)); do
+      local step_name
+      local step_type
+      local step_desc
+      local step_condition
 
-			step_name=$(yaml::get_step_var "CUSTOM_WF" "$i" "NAME")
-			step_type=$(yaml::get_step_var "CUSTOM_WF" "$i" "TYPE")
-			step_desc=$(yaml::get_step_var "CUSTOM_WF" "$i" "DESCRIPTION")
-			step_condition=$(yaml::get_step_var "CUSTOM_WF" "$i" "CONDITION")
+      step_name=$(yaml::get_step_var "CUSTOM_WF" "$i" "NAME")
+      step_type=$(yaml::get_step_var "CUSTOM_WF" "$i" "TYPE")
+      step_desc=$(yaml::get_step_var "CUSTOM_WF" "$i" "DESCRIPTION")
+      step_condition=$(yaml::get_step_var "CUSTOM_WF" "$i" "CONDITION")
 
-			# Update template variables for this step
-			yaml::set_template_var "DRY_TEMPLATE" "step_name" "$step_name"
-			yaml::set_template_var "DRY_TEMPLATE" "step_number" "$((i + 1))"
+      # Update template variables for this step
+      yaml::set_template_var "DRY_TEMPLATE" "step_name" "$step_name"
+      yaml::set_template_var "DRY_TEMPLATE" "step_number" "$((i + 1))"
 
-			echo "  Step $((i + 1)): $step_name ($step_type)"
-			[[ -n "$step_desc" ]] && echo "    Description: $step_desc"
+      echo "  Step $((i + 1)): $step_name ($step_type)"
+      [[ -n $step_desc ]] && echo "    Description: $step_desc"
 
-			# Evaluate condition for dry run
-			if [[ -n "$step_condition" ]]; then
-				yaml::set_context_var "DRY_CONTEXT" "current_step" "$((i + 1))"
-				if yaml::evaluate_condition "$step_condition" "DRY_CONTEXT"; then
-					echo "    Condition: $step_condition [WOULD EXECUTE]"
-				else
-					echo "    Condition: $step_condition [WOULD SKIP]"
-				fi
-			fi
+      # Evaluate condition for dry run
+      if [[ -n $step_condition ]]; then
+        yaml::set_context_var "DRY_CONTEXT" "current_step" "$((i + 1))"
+        if yaml::evaluate_condition "$step_condition" "DRY_CONTEXT"; then
+          echo "    Condition: $step_condition [WOULD EXECUTE]"
+        else
+          echo "    Condition: $step_condition [WOULD SKIP]"
+        fi
+      fi
 
-			# Apply template substitution and show parameters
-			yaml::substitute_step_params "CUSTOM_WF" "$i" "DRY_TEMPLATE"
-			local param_vars
-			param_vars=$(compgen -v "CUSTOM_WF_STEP_${i}_PARAM_" 2>/dev/null || true)
-			if [[ -n "$param_vars" ]]; then
-				echo "    Parameters (after template substitution):"
-				while IFS= read -r var; do
-					[[ -z "$var" ]] && continue
-					local param_name="${var#CUSTOM_WF_STEP_"${i}"_PARAM_}"
-					local param_value="${!var}"
-					local lower_param=$(echo "$param_name" | tr '[:upper:]' '[:lower:]')
+      # Apply template substitution and show parameters
+      yaml::substitute_step_params "CUSTOM_WF" "$i" "DRY_TEMPLATE"
+      local param_vars
+      param_vars=$(compgen -v "CUSTOM_WF_STEP_${i}_PARAM_" 2>/dev/null || true)
+      if [[ -n $param_vars ]]; then
+        echo "    Parameters (after template substitution):"
+        while IFS= read -r var; do
+          [[ -z $var ]] && continue
+          local param_name="${var#CUSTOM_WF_STEP_"${i}"_PARAM_}"
+          local param_value="${!var}"
+          local lower_param=$(echo "$param_name" | tr '[:upper:]' '[:lower:]')
 
-					# Special handling for script parameters (multiline content)
-					if [[ "$lower_param" == "script" ]]; then
-						echo "      $lower_param: [Script Content]"
-						# Show first few lines if it's a script
-						local script_preview
-						script_preview=$(echo "$param_value" | head -3 | sed 's/^/        /')
-						if [[ -n "$script_preview" ]]; then
-							echo "$script_preview"
-							local line_count
-							line_count=$(echo "$param_value" | wc -l)
-							if [[ $line_count -gt 3 ]]; then
-								echo "        ... ($((line_count - 3)) more lines)"
-							fi
-						fi
-					else
-						echo "      $lower_param: $param_value"
-					fi
-				done <<<"$param_vars"
-			fi
+          # Special handling for script parameters (multiline content)
+          if [[ $lower_param == "script" ]]; then
+            echo "      $lower_param: [Script Content]"
+            # Show first few lines if it's a script
+            local script_preview
+            script_preview=$(echo "$param_value" | head -3 | sed 's/^/        /')
+            if [[ -n $script_preview ]]; then
+              echo "$script_preview"
+              local line_count
+              line_count=$(echo "$param_value" | wc -l)
+              if [[ $line_count -gt 3 ]]; then
+                echo "        ... ($((line_count - 3)) more lines)"
+              fi
+            fi
+          else
+            echo "      $lower_param: $param_value"
+          fi
+        done <<<"$param_vars"
+      fi
 
-			# Show step validation status
-			case "$step_type" in
-			"pdf_extract")
-				if command -v pdfimages >/dev/null 2>&1; then
-					echo "    Dependencies: ✓ pdfimages available"
-				else
-					echo "    Dependencies: ✗ pdfimages missing (would cause failure)"
-				fi
-				;;
-			"excel_extract")
-				if command -v unzip >/dev/null 2>&1; then
-					echo "    Dependencies: ✓ unzip available"
-				else
-					echo "    Dependencies: ✗ unzip missing (would cause failure)"
-				fi
-				;;
-			"convert" | "resize" | "watermark")
-				if command -v convert >/dev/null 2>&1; then
-					echo "    Dependencies: ✓ ImageMagick available"
-				else
-					echo "    Dependencies: ✗ ImageMagick missing (would cause failure)"
-				fi
-				;;
-			"ocr")
-				if command -v tesseract >/dev/null 2>&1; then
-					echo "    Dependencies: ✓ Tesseract available"
-				else
-					echo "    Dependencies: ✗ Tesseract missing (would cause failure)"
-				fi
-				;;
-			"webhook")
-				if command -v curl >/dev/null 2>&1; then
-					echo "    Dependencies: ✓ curl available"
-				else
-					echo "    Dependencies: ✗ curl missing (would cause failure)"
-				fi
-				;;
-			"custom")
-				echo "    Dependencies: ✓ Custom script (no external deps)"
-				;;
-			esac
+      # Show step validation status
+      case "$step_type" in
+        "pdf_extract")
+          if command -v pdfimages >/dev/null 2>&1; then
+            echo "    Dependencies: ✓ pdfimages available"
+          else
+            echo "    Dependencies: ✗ pdfimages missing (would cause failure)"
+          fi
+          ;;
+        "excel_extract")
+          if command -v unzip >/dev/null 2>&1; then
+            echo "    Dependencies: ✓ unzip available"
+          else
+            echo "    Dependencies: ✗ unzip missing (would cause failure)"
+          fi
+          ;;
+        "convert" | "resize" | "watermark")
+          if command -v convert >/dev/null 2>&1; then
+            echo "    Dependencies: ✓ ImageMagick available"
+          else
+            echo "    Dependencies: ✗ ImageMagick missing (would cause failure)"
+          fi
+          ;;
+        "ocr")
+          if command -v tesseract >/dev/null 2>&1; then
+            echo "    Dependencies: ✓ Tesseract available"
+          else
+            echo "    Dependencies: ✗ Tesseract missing (would cause failure)"
+          fi
+          ;;
+        "webhook")
+          if command -v curl >/dev/null 2>&1; then
+            echo "    Dependencies: ✓ curl available"
+          else
+            echo "    Dependencies: ✗ curl missing (would cause failure)"
+          fi
+          ;;
+        "custom")
+          echo "    Dependencies: ✓ Custom script (no external deps)"
+          ;;
+      esac
 
-			# Update counter for next step template evaluation
-			yaml::increment_template_var "DRY_TEMPLATE" "counter"
-		done
+      # Update counter for next step template evaluation
+      yaml::increment_template_var "DRY_TEMPLATE" "counter"
+    done
 
-		echo
-		log::info "Dry-run analysis summary:"
+    echo
+    log::info "Dry-run analysis summary:"
 
-		# Count conditional steps
-		local conditional_steps=0
-		local would_execute=0
-		local would_skip=0
+    # Count conditional steps
+    local conditional_steps=0
+    local would_execute=0
+    local would_skip=0
 
-		yaml::init_context "SUMMARY_CONTEXT"
-		yaml::set_context_var "SUMMARY_CONTEXT" "total_steps" "$step_count"
+    yaml::init_context "SUMMARY_CONTEXT"
+    yaml::set_context_var "SUMMARY_CONTEXT" "total_steps" "$step_count"
 
-		for ((i = 0; i < step_count; i++)); do
-			local step_condition
-			step_condition=$(yaml::get_step_var "CUSTOM_WF" "$i" "CONDITION")
+    for ((i = 0; i < step_count; i++)); do
+      local step_condition
+      step_condition=$(yaml::get_step_var "CUSTOM_WF" "$i" "CONDITION")
 
-			if [[ -n "$step_condition" ]]; then
-				((conditional_steps++))
-				yaml::set_context_var "SUMMARY_CONTEXT" "current_step" "$((i + 1))"
-				if yaml::evaluate_condition "$step_condition" "SUMMARY_CONTEXT"; then
-					((would_execute++))
-				else
-					((would_skip++))
-				fi
-			else
-				((would_execute++))
-			fi
-		done
+      if [[ -n $step_condition ]]; then
+        ((conditional_steps++))
+        yaml::set_context_var "SUMMARY_CONTEXT" "current_step" "$((i + 1))"
+        if yaml::evaluate_condition "$step_condition" "SUMMARY_CONTEXT"; then
+          ((would_execute++))
+        else
+          ((would_skip++))
+        fi
+      else
+        ((would_execute++))
+      fi
+    done
 
-		echo "  Total steps: $step_count"
-		echo "  Steps that would execute: $would_execute"
-		if [[ $would_skip -gt 0 ]]; then
-			echo "  Steps that would be skipped: $would_skip"
-		fi
-		if [[ $conditional_steps -gt 0 ]]; then
-			echo "  Conditional steps: $conditional_steps"
-		fi
+    echo "  Total steps: $step_count"
+    echo "  Steps that would execute: $would_execute"
+    if [[ $would_skip -gt 0 ]]; then
+      echo "  Steps that would be skipped: $would_skip"
+    fi
+    if [[ $conditional_steps -gt 0 ]]; then
+      echo "  Conditional steps: $conditional_steps"
+    fi
 
-		# Check for missing dependencies
-		local missing_deps=()
-		local available_deps=()
+    # Check for missing dependencies
+    local missing_deps=()
+    local available_deps=()
 
-		for ((i = 0; i < step_count; i++)); do
-			local step_type
-			step_type=$(yaml::get_step_var "CUSTOM_WF" "$i" "TYPE")
+    for ((i = 0; i < step_count; i++)); do
+      local step_type
+      step_type=$(yaml::get_step_var "CUSTOM_WF" "$i" "TYPE")
 
-			case "$step_type" in
-			"pdf_extract")
-				if command -v pdfimages >/dev/null 2>&1; then
-					available_deps+=("pdfimages")
-				else
-					missing_deps+=("pdfimages")
-				fi
-				;;
-			"excel_extract")
-				if command -v unzip >/dev/null 2>&1; then
-					available_deps+=("unzip")
-				else
-					missing_deps+=("unzip")
-				fi
-				;;
-			"convert" | "resize" | "watermark")
-				if command -v convert >/dev/null 2>&1; then
-					available_deps+=("ImageMagick")
-				else
-					missing_deps+=("ImageMagick")
-				fi
-				;;
-			"ocr")
-				if command -v tesseract >/dev/null 2>&1; then
-					available_deps+=("tesseract")
-				else
-					missing_deps+=("tesseract")
-				fi
-				;;
-			"webhook")
-				if command -v curl >/dev/null 2>&1; then
-					available_deps+=("curl")
-				else
-					missing_deps+=("curl")
-				fi
-				;;
-			esac
-		done
+      case "$step_type" in
+        "pdf_extract")
+          if command -v pdfimages >/dev/null 2>&1; then
+            available_deps+=("pdfimages")
+          else
+            missing_deps+=("pdfimages")
+          fi
+          ;;
+        "excel_extract")
+          if command -v unzip >/dev/null 2>&1; then
+            available_deps+=("unzip")
+          else
+            missing_deps+=("unzip")
+          fi
+          ;;
+        "convert" | "resize" | "watermark")
+          if command -v convert >/dev/null 2>&1; then
+            available_deps+=("ImageMagick")
+          else
+            missing_deps+=("ImageMagick")
+          fi
+          ;;
+        "ocr")
+          if command -v tesseract >/dev/null 2>&1; then
+            available_deps+=("tesseract")
+          else
+            missing_deps+=("tesseract")
+          fi
+          ;;
+        "webhook")
+          if command -v curl >/dev/null 2>&1; then
+            available_deps+=("curl")
+          else
+            missing_deps+=("curl")
+          fi
+          ;;
+      esac
+    done
 
-		# Remove duplicates and show summary
-		local unique_missing=""
-		local unique_available=""
+    # Remove duplicates and show summary
+    local unique_missing=""
+    local unique_available=""
 
-		if [[ ${#missing_deps[@]} -gt 0 ]]; then
-			unique_missing=$(printf '%s\n' "${missing_deps[@]}" | sort -u | tr '\n' ' ')
-		fi
+    if [[ ${#missing_deps[@]} -gt 0 ]]; then
+      unique_missing=$(printf '%s\n' "${missing_deps[@]}" | sort -u | tr '\n' ' ')
+    fi
 
-		if [[ ${#available_deps[@]} -gt 0 ]]; then
-			unique_available=$(printf '%s\n' "${available_deps[@]}" | sort -u | tr '\n' ' ')
-		fi
+    if [[ ${#available_deps[@]} -gt 0 ]]; then
+      unique_available=$(printf '%s\n' "${available_deps[@]}" | sort -u | tr '\n' ' ')
+    fi
 
-		if [[ -n "$unique_missing" ]]; then
-			echo "  Missing dependencies: $unique_missing"
-			echo "  ⚠ Workflow would fail due to missing dependencies"
-		else
-			echo "  ✓ All required dependencies are available"
-		fi
+    if [[ -n $unique_missing ]]; then
+      echo "  Missing dependencies: $unique_missing"
+      echo "  ⚠ Workflow would fail due to missing dependencies"
+    else
+      echo "  ✓ All required dependencies are available"
+    fi
 
-		return 0
-	fi
+    return 0
+  fi
 
-	# Execute pre-workflow hooks
-	local pre_hooks
-	pre_hooks=$(yaml::get_hook "CUSTOM_WF" "PRE_WORKFLOW")
-	if [[ -n "$pre_hooks" ]]; then
-		log::info "Executing pre-workflow hooks"
-		IFS='|' read -ra hook_commands <<<"$pre_hooks"
-		for hook_cmd in "${hook_commands[@]}"; do
-			log::debug "Hook: $hook_cmd"
-			if ! eval "$hook_cmd"; then
-				log::warn "Pre-workflow hook failed: $hook_cmd"
-			fi
-		done
-	fi
+  # Execute pre-workflow hooks
+  local pre_hooks
+  pre_hooks=$(yaml::get_hook "CUSTOM_WF" "PRE_WORKFLOW")
+  if [[ -n $pre_hooks ]]; then
+    log::info "Executing pre-workflow hooks"
+    IFS='|' read -ra hook_commands <<<"$pre_hooks"
+    for hook_cmd in "${hook_commands[@]}"; do
+      log::debug "Hook: $hook_cmd"
+      if ! eval "$hook_cmd"; then
+        log::warn "Pre-workflow hook failed: $hook_cmd"
+      fi
+    done
+  fi
 
-	# Initialize workflow context for condition evaluation
-	yaml::init_context "WF_CONTEXT"
-	yaml::set_context_var "WF_CONTEXT" "total_steps" "$step_count"
+  # Initialize workflow context for condition evaluation
+  yaml::init_context "WF_CONTEXT"
+  yaml::set_context_var "WF_CONTEXT" "total_steps" "$step_count"
 
-	# Initialize template variables for parameter substitution
-	local primary_input="${inputs[0]:-}"
-	yaml::init_template_vars "WF_TEMPLATE" "$primary_input" "$output_dir"
+  # Initialize template variables for parameter substitution
+  local primary_input="${inputs[0]:-}"
+  yaml::init_template_vars "WF_TEMPLATE" "$primary_input" "$output_dir"
 
-	# Set workflow-specific template variables
-	yaml::set_template_var "WF_TEMPLATE" "workflow_name" "$wf_name"
-	yaml::set_template_var "WF_TEMPLATE" "parallel_jobs" "$parallel_jobs"
+  # Set workflow-specific template variables
+  yaml::set_template_var "WF_TEMPLATE" "workflow_name" "$wf_name"
+  yaml::set_template_var "WF_TEMPLATE" "parallel_jobs" "$parallel_jobs"
 
-	# Apply template substitution to all hooks before execution
-	yaml::substitute_hook_commands "CUSTOM_WF" "pre_workflow" "WF_TEMPLATE"
-	yaml::substitute_hook_commands "CUSTOM_WF" "post_step" "WF_TEMPLATE"
-	yaml::substitute_hook_commands "CUSTOM_WF" "on_success" "WF_TEMPLATE"
-	yaml::substitute_hook_commands "CUSTOM_WF" "on_failure" "WF_TEMPLATE"
+  # Apply template substitution to all hooks before execution
+  yaml::substitute_hook_commands "CUSTOM_WF" "pre_workflow" "WF_TEMPLATE"
+  yaml::substitute_hook_commands "CUSTOM_WF" "post_step" "WF_TEMPLATE"
+  yaml::substitute_hook_commands "CUSTOM_WF" "on_success" "WF_TEMPLATE"
+  yaml::substitute_hook_commands "CUSTOM_WF" "on_failure" "WF_TEMPLATE"
 
-	# Execute workflow steps
-	local failed_step=""
-	local executed_steps=0
-	local skipped_steps=0
+  # Execute workflow steps
+  local failed_step=""
+  local executed_steps=0
+  local skipped_steps=0
 
-	for ((i = 0; i < step_count; i++)); do
-		local step_name
-		local step_type
-		local step_condition
+  for ((i = 0; i < step_count; i++)); do
+    local step_name
+    local step_type
+    local step_condition
 
-		step_name=$(yaml::get_step_var "CUSTOM_WF" "$i" "NAME")
-		step_type=$(yaml::get_step_var "CUSTOM_WF" "$i" "TYPE")
-		step_condition=$(yaml::get_step_var "CUSTOM_WF" "$i" "CONDITION")
+    step_name=$(yaml::get_step_var "CUSTOM_WF" "$i" "NAME")
+    step_type=$(yaml::get_step_var "CUSTOM_WF" "$i" "TYPE")
+    step_condition=$(yaml::get_step_var "CUSTOM_WF" "$i" "CONDITION")
 
-		# Update context variables
-		yaml::set_context_var "WF_CONTEXT" "current_step" "$((i + 1))"
-		yaml::set_context_var "WF_CONTEXT" "current_step_name" "$step_name"
+    # Update context variables
+    yaml::set_context_var "WF_CONTEXT" "current_step" "$((i + 1))"
+    yaml::set_context_var "WF_CONTEXT" "current_step_name" "$step_name"
 
-		# Update template variables for this step
-		yaml::set_template_var "WF_TEMPLATE" "step_name" "$step_name"
-		yaml::set_template_var "WF_TEMPLATE" "step_number" "$((i + 1))"
+    # Update template variables for this step
+    yaml::set_template_var "WF_TEMPLATE" "step_name" "$step_name"
+    yaml::set_template_var "WF_TEMPLATE" "step_number" "$((i + 1))"
 
-		# Apply template substitution to step parameters before execution
-		yaml::substitute_step_params "CUSTOM_WF" "$i" "WF_TEMPLATE"
+    # Apply template substitution to step parameters before execution
+    yaml::substitute_step_params "CUSTOM_WF" "$i" "WF_TEMPLATE"
 
-		# Check step condition if present
-		local should_execute=true
-		if [[ -n "$step_condition" ]]; then
-			log::debug "Evaluating condition for step '$step_name': $step_condition"
-			if yaml::evaluate_condition "$step_condition" "WF_CONTEXT"; then
-				log::debug "Condition evaluated to true, step will execute"
-			else
-				log::info "Skipping step $((i + 1)) '$step_name' (condition not met: $step_condition)"
-				should_execute=false
-				((skipped_steps++))
-			fi
-		fi
+    # Check step condition if present
+    local should_execute=true
+    if [[ -n $step_condition ]]; then
+      log::debug "Evaluating condition for step '$step_name': $step_condition"
+      if yaml::evaluate_condition "$step_condition" "WF_CONTEXT"; then
+        log::debug "Condition evaluated to true, step will execute"
+      else
+        log::info "Skipping step $((i + 1)) '$step_name' (condition not met: $step_condition)"
+        should_execute=false
+        ((skipped_steps++))
+      fi
+    fi
 
-		if [[ "$should_execute" == true ]]; then
-			log::info "Executing step $((i + 1)): $step_name"
-			((executed_steps++))
-		else
-			continue
-		fi
+    if [[ $should_execute == true ]]; then
+      log::info "Executing step $((i + 1)): $step_name"
+      ((executed_steps++))
+    else
+      continue
+    fi
 
-		# Execute post-step hooks
-		local post_hooks
-		post_hooks=$(yaml::get_hook "CUSTOM_WF" "POST_STEP")
-		if [[ -n "$post_hooks" ]]; then
-			IFS='|' read -ra hook_commands <<<"$post_hooks"
-			for hook_cmd in "${hook_commands[@]}"; do
-				# Substitute step variables
-				hook_cmd="${hook_cmd//\{step_name\}/$step_name}"
-				log::debug "Post-step hook: $hook_cmd"
-				eval "$hook_cmd"
-			done
-		fi
+    # Execute post-step hooks
+    local post_hooks
+    post_hooks=$(yaml::get_hook "CUSTOM_WF" "POST_STEP")
+    if [[ -n $post_hooks ]]; then
+      IFS='|' read -ra hook_commands <<<"$post_hooks"
+      for hook_cmd in "${hook_commands[@]}"; do
+        # Substitute step variables
+        hook_cmd="${hook_cmd//\{step_name\}/$step_name}"
+        log::debug "Post-step hook: $hook_cmd"
+        eval "$hook_cmd"
+      done
+    fi
 
-		# Execute step based on type
-		if execute_workflow_step "$step_type" "$i" "CUSTOM_WF" "$output_dir" "${inputs[@]}"; then
-			# Update context variables on successful step execution
-			yaml::set_context_var "WF_CONTEXT" "processed_count" "$(($(yaml::get_context_var "WF_CONTEXT" "processed_count") + 1))"
-			log::debug "Updated processed_count to $(yaml::get_context_var "WF_CONTEXT" "processed_count")"
+    # Execute step based on type
+    if execute_workflow_step "$step_type" "$i" "CUSTOM_WF" "$output_dir" "${inputs[@]}"; then
+      # Update context variables on successful step execution
+      yaml::set_context_var "WF_CONTEXT" "processed_count" "$(($(yaml::get_context_var "WF_CONTEXT" "processed_count") + 1))"
+      log::debug "Updated processed_count to $(yaml::get_context_var "WF_CONTEXT" "processed_count")"
 
-			# Update template counter variable
-			yaml::increment_template_var "WF_TEMPLATE" "counter"
+      # Update template counter variable
+      yaml::increment_template_var "WF_TEMPLATE" "counter"
 
-			# Update step-specific context variables based on step type
-			case "$step_type" in
-			"pdf_extract" | "excel_extract")
-				# These steps set extracted_count - get it from the step result
-				# For now, set a default value (actual implementation would get from step executor)
-				local extracted_count=5
-				yaml::set_context_var "WF_CONTEXT" "extracted_count" "$extracted_count"
-				yaml::set_template_var "WF_TEMPLATE" "extracted_count" "$extracted_count"
-				log::debug "Set extracted_count variables for conditional evaluation and templates"
-				;;
-			esac
+      # Update step-specific context variables based on step type
+      case "$step_type" in
+        "pdf_extract" | "excel_extract")
+          # These steps set extracted_count - get it from the step result
+          # For now, set a default value (actual implementation would get from step executor)
+          local extracted_count=5
+          yaml::set_context_var "WF_CONTEXT" "extracted_count" "$extracted_count"
+          yaml::set_template_var "WF_TEMPLATE" "extracted_count" "$extracted_count"
+          log::debug "Set extracted_count variables for conditional evaluation and templates"
+          ;;
+      esac
 
-			# Update template variables that might be needed for subsequent steps
-			yaml::set_template_var "WF_TEMPLATE" "processed_count" "$(yaml::get_context_var "WF_CONTEXT" "processed_count")"
-		else
-			failed_step="$step_name"
-			yaml::set_context_var "WF_CONTEXT" "error_count" "$(($(yaml::get_context_var "WF_CONTEXT" "error_count") + 1))"
-			yaml::set_template_var "WF_TEMPLATE" "failed_step" "$step_name"
-			break
-		fi
-	done
+      # Update template variables that might be needed for subsequent steps
+      yaml::set_template_var "WF_TEMPLATE" "processed_count" "$(yaml::get_context_var "WF_CONTEXT" "processed_count")"
+    else
+      failed_step="$step_name"
+      yaml::set_context_var "WF_CONTEXT" "error_count" "$(($(yaml::get_context_var "WF_CONTEXT" "error_count") + 1))"
+      yaml::set_template_var "WF_TEMPLATE" "failed_step" "$step_name"
+      break
+    fi
+  done
 
-	# Execute completion hooks
-	if [[ -n "$failed_step" ]]; then
-		log::error "Workflow failed at step: $failed_step"
+  # Execute completion hooks
+  if [[ -n $failed_step ]]; then
+    log::error "Workflow failed at step: $failed_step"
 
-		# Execute failure hooks
-		local failure_hooks
-		failure_hooks=$(yaml::get_hook "CUSTOM_WF" "ON_FAILURE")
-		if [[ -n "$failure_hooks" ]]; then
-			log::info "Executing failure hooks"
-			IFS='|' read -ra hook_commands <<<"$failure_hooks"
-			for hook_cmd in "${hook_commands[@]}"; do
-				hook_cmd="${hook_cmd//\{failed_step\}/$failed_step}"
-				log::debug "Failure hook: $hook_cmd"
-				eval "$hook_cmd"
-			done
-		fi
-		return 1
-	else
-		# Execute success hooks
-		local success_hooks
-		success_hooks=$(yaml::get_hook "CUSTOM_WF" "ON_SUCCESS")
-		if [[ -n "$success_hooks" ]]; then
-			log::info "Executing success hooks"
-			IFS='|' read -ra hook_commands <<<"$success_hooks"
-			for hook_cmd in "${hook_commands[@]}"; do
-				hook_cmd="${hook_cmd//\{output_dir\}/$output_dir}"
-				log::debug "Success hook: $hook_cmd"
-				eval "$hook_cmd"
-			done
-		fi
+    # Execute failure hooks
+    local failure_hooks
+    failure_hooks=$(yaml::get_hook "CUSTOM_WF" "ON_FAILURE")
+    if [[ -n $failure_hooks ]]; then
+      log::info "Executing failure hooks"
+      IFS='|' read -ra hook_commands <<<"$failure_hooks"
+      for hook_cmd in "${hook_commands[@]}"; do
+        hook_cmd="${hook_cmd//\{failed_step\}/$failed_step}"
+        log::debug "Failure hook: $hook_cmd"
+        eval "$hook_cmd"
+      done
+    fi
+    return 1
+  else
+    # Execute success hooks
+    local success_hooks
+    success_hooks=$(yaml::get_hook "CUSTOM_WF" "ON_SUCCESS")
+    if [[ -n $success_hooks ]]; then
+      log::info "Executing success hooks"
+      IFS='|' read -ra hook_commands <<<"$success_hooks"
+      for hook_cmd in "${hook_commands[@]}"; do
+        hook_cmd="${hook_cmd//\{output_dir\}/$output_dir}"
+        log::debug "Success hook: $hook_cmd"
+        eval "$hook_cmd"
+      done
+    fi
 
-		# Log execution summary
-		log::info "Workflow completed successfully"
-		log::info "Steps executed: $executed_steps"
-		if [[ $skipped_steps -gt 0 ]]; then
-			log::info "Steps skipped (conditions not met): $skipped_steps"
-		fi
-	fi
+    # Log execution summary
+    log::info "Workflow completed successfully"
+    log::info "Steps executed: $executed_steps"
+    if [[ $skipped_steps -gt 0 ]]; then
+      log::info "Steps skipped (conditions not met): $skipped_steps"
+    fi
+  fi
 
-	return 0
+  return 0
 }
 
 # Execute a workflow step based on its type
 execute_workflow_step() {
-	local step_type="$1"
-	local step_index="$2"
-	local workflow_prefix="$3"
-	local output_dir="$4"
-	local inputs=("${@:5}")
+  local step_type="$1"
+  local step_index="$2"
+  local workflow_prefix="$3"
+  local output_dir="$4"
+  local inputs=("${@:5}")
 
-	case "$step_type" in
-	"pdf_extract")
-		execute_pdf_extract_step "$step_index" "$workflow_prefix" "$output_dir" "${inputs[@]}"
-		;;
-	"excel_extract")
-		execute_excel_extract_step "$step_index" "$workflow_prefix" "$output_dir" "${inputs[@]}"
-		;;
-	"convert")
-		execute_convert_step "$step_index" "$workflow_prefix" "$output_dir" "${inputs[@]}"
-		;;
-	"resize")
-		execute_resize_step "$step_index" "$workflow_prefix" "$output_dir" "${inputs[@]}"
-		;;
-	"watermark")
-		execute_watermark_step "$step_index" "$workflow_prefix" "$output_dir" "${inputs[@]}"
-		;;
-	"ocr")
-		execute_ocr_step "$step_index" "$workflow_prefix" "$output_dir" "${inputs[@]}"
-		;;
-	"webhook")
-		execute_webhook_step "$step_index" "$workflow_prefix" "$output_dir" "${inputs[@]}"
-		;;
-	"custom")
-		execute_custom_step "$step_index" "$workflow_prefix" "$output_dir" "${inputs[@]}"
-		;;
-	*)
-		log::error "Unknown step type: $step_type"
-		return 1
-		;;
-	esac
+  case "$step_type" in
+    "pdf_extract")
+      execute_pdf_extract_step "$step_index" "$workflow_prefix" "$output_dir" "${inputs[@]}"
+      ;;
+    "excel_extract")
+      execute_excel_extract_step "$step_index" "$workflow_prefix" "$output_dir" "${inputs[@]}"
+      ;;
+    "convert")
+      execute_convert_step "$step_index" "$workflow_prefix" "$output_dir" "${inputs[@]}"
+      ;;
+    "resize")
+      execute_resize_step "$step_index" "$workflow_prefix" "$output_dir" "${inputs[@]}"
+      ;;
+    "watermark")
+      execute_watermark_step "$step_index" "$workflow_prefix" "$output_dir" "${inputs[@]}"
+      ;;
+    "ocr")
+      execute_ocr_step "$step_index" "$workflow_prefix" "$output_dir" "${inputs[@]}"
+      ;;
+    "webhook")
+      execute_webhook_step "$step_index" "$workflow_prefix" "$output_dir" "${inputs[@]}"
+      ;;
+    "custom")
+      execute_custom_step "$step_index" "$workflow_prefix" "$output_dir" "${inputs[@]}"
+      ;;
+    *)
+      log::error "Unknown step type: $step_type"
+      return 1
+      ;;
+  esac
 }
 
 # Individual step executors (basic implementations)
 execute_pdf_extract_step() {
-	local step_index="$1"
-	local workflow_prefix="$2"
-	local output_dir="$3"
-	local inputs=("${@:4}")
+  local step_index="$1"
+  local workflow_prefix="$2"
+  local output_dir="$3"
+  local inputs=("${@:4}")
 
-	log::info "PDF extraction step (basic implementation)"
-	# This will be enhanced when we implement imgxsh-extract-pdf
-	return 0
+  log::info "PDF extraction step (basic implementation)"
+  # This will be enhanced when we implement imgxsh-extract-pdf
+  return 0
 }
 
 execute_excel_extract_step() {
-	local step_index="$1"
-	local workflow_prefix="$2"
-	local output_dir="$3"
-	local inputs=("${@:4}")
+  local step_index="$1"
+  local workflow_prefix="$2"
+  local output_dir="$3"
+  local inputs=("${@:4}")
 
-	log::info "Excel extraction step (basic implementation)"
-	# This will be enhanced when we implement imgxsh-extract-excel
-	return 0
+  log::info "Excel extraction step (basic implementation)"
+  # This will be enhanced when we implement imgxsh-extract-excel
+  return 0
 }
 
 execute_convert_step() {
-	local step_index="$1"
-	local workflow_prefix="$2"
-	local output_dir="$3"
-	local inputs=("${@:4}")
+  local step_index="$1"
+  local workflow_prefix="$2"
+  local output_dir="$3"
+  local inputs=("${@:4}")
 
-	log::info "Convert step (basic implementation)"
-	# This will be enhanced when we implement imgxsh-convert
-	return 0
+  log::info "Convert step (basic implementation)"
+  # This will be enhanced when we implement imgxsh-convert
+  return 0
 }
 
 execute_resize_step() {
-	local step_index="$1"
-	local workflow_prefix="$2"
-	local output_dir="$3"
-	local inputs=("${@:4}")
+  local step_index="$1"
+  local workflow_prefix="$2"
+  local output_dir="$3"
+  local inputs=("${@:4}")
 
-	log::info "Resize step (basic implementation)"
-	# This will be enhanced when we implement imgxsh-resize
-	return 0
+  log::info "Resize step (basic implementation)"
+  # This will be enhanced when we implement imgxsh-resize
+  return 0
 }
 
 execute_watermark_step() {
-	local step_index="$1"
-	local workflow_prefix="$2"
-	local output_dir="$3"
-	local inputs=("${@:4}")
+  local step_index="$1"
+  local workflow_prefix="$2"
+  local output_dir="$3"
+  local inputs=("${@:4}")
 
-	log::info "Watermark step (basic implementation)"
-	# This will be enhanced when we implement imgxsh-watermark
-	return 0
+  log::info "Watermark step (basic implementation)"
+  # This will be enhanced when we implement imgxsh-watermark
+  return 0
 }
 
 execute_ocr_step() {
-	local step_index="$1"
-	local workflow_prefix="$2"
-	local output_dir="$3"
-	local inputs=("${@:4}")
+  local step_index="$1"
+  local workflow_prefix="$2"
+  local output_dir="$3"
+  local inputs=("${@:4}")
 
-	log::info "OCR step (basic implementation)"
-	# This will be enhanced when we implement imgxsh-ocr
-	return 0
+  log::info "OCR step (basic implementation)"
+  # This will be enhanced when we implement imgxsh-ocr
+  return 0
 }
 
 execute_webhook_step() {
-	local step_index="$1"
-	local workflow_prefix="$2"
-	local output_dir="$3"
-	local inputs=("${@:4}")
+  local step_index="$1"
+  local workflow_prefix="$2"
+  local output_dir="$3"
+  local inputs=("${@:4}")
 
-	local webhook_url
-	webhook_url=$(yaml::get_step_param "$workflow_prefix" "$step_index" "URL")
+  local webhook_url
+  webhook_url=$(yaml::get_step_param "$workflow_prefix" "$step_index" "URL")
 
-	if [[ -z "$webhook_url" ]]; then
-		log::error "Webhook step missing URL parameter"
-		return 1
-	fi
+  if [[ -z $webhook_url ]]; then
+    log::error "Webhook step missing URL parameter"
+    return 1
+  fi
 
-	log::info "Sending webhook to: $webhook_url"
+  log::info "Sending webhook to: $webhook_url"
 
-	if command -v curl >/dev/null 2>&1; then
-		local method
-		local payload
-		method=$(yaml::get_step_param "$workflow_prefix" "$step_index" "METHOD")
-		payload=$(yaml::get_step_param "$workflow_prefix" "$step_index" "PAYLOAD")
+  if command -v curl >/dev/null 2>&1; then
+    local method
+    local payload
+    method=$(yaml::get_step_param "$workflow_prefix" "$step_index" "METHOD")
+    payload=$(yaml::get_step_param "$workflow_prefix" "$step_index" "PAYLOAD")
 
-		method="${method:-POST}"
+    method="${method:-POST}"
 
-		if [[ -n "$payload" ]]; then
-			curl -s -X "$method" -H "Content-Type: application/json" -d "$payload" "$webhook_url" >/dev/null
-		else
-			curl -s -X "$method" "$webhook_url" >/dev/null
-		fi
+    if [[ -n $payload ]]; then
+      curl -s -X "$method" -H "Content-Type: application/json" -d "$payload" "$webhook_url" >/dev/null
+    else
+      curl -s -X "$method" "$webhook_url" >/dev/null
+    fi
 
-		local curl_exit_code=$?
-		if [[ $curl_exit_code -eq 0 ]]; then
-			log::success "Webhook sent successfully"
-		else
-			log::error "Failed to send webhook"
-			return 1
-		fi
-	else
-		log::warn "curl not available, skipping webhook"
-	fi
+    local curl_exit_code=$?
+    if [[ $curl_exit_code -eq 0 ]]; then
+      log::success "Webhook sent successfully"
+    else
+      log::error "Failed to send webhook"
+      return 1
+    fi
+  else
+    log::warn "curl not available, skipping webhook"
+  fi
 
-	return 0
+  return 0
 }
 
 execute_custom_step() {
-	local step_index="$1"
-	local workflow_prefix="$2"
-	local output_dir="$3"
-	local inputs=("${@:4}")
+  local step_index="$1"
+  local workflow_prefix="$2"
+  local output_dir="$3"
+  local inputs=("${@:4}")
 
-	local script_content
-	script_content=$(yaml::get_step_param "$workflow_prefix" "$step_index" "SCRIPT")
+  local script_content
+  script_content=$(yaml::get_step_param "$workflow_prefix" "$step_index" "SCRIPT")
 
-	if [[ -z "$script_content" ]]; then
-		log::error "Custom step missing script parameter"
-		return 1
-	fi
+  if [[ -z $script_content ]]; then
+    log::error "Custom step missing script parameter"
+    return 1
+  fi
 
-	log::info "Executing custom script"
+  log::info "Executing custom script"
 
-	# Create temporary script file
-	local temp_script="${IMGXSH_TEMP_DIR}/custom_step_${step_index}.sh"
-	mkdir -p "$(dirname "$temp_script")"
+  # Create temporary script file
+  local temp_script="${IMGXSH_TEMP_DIR}/custom_step_${step_index}.sh"
+  mkdir -p "$(dirname "$temp_script")"
 
-	echo "#!/bin/bash" >"$temp_script"
-	echo "set -euo pipefail" >>"$temp_script"
-	echo >>"$temp_script"
-	echo "$script_content" >>"$temp_script"
+  echo "#!/bin/bash" >"$temp_script"
+  echo "set -euo pipefail" >>"$temp_script"
+  echo >>"$temp_script"
+  echo "$script_content" >>"$temp_script"
 
-	chmod +x "$temp_script"
+  chmod +x "$temp_script"
 
-	# Execute script
-	if "$temp_script"; then
-		log::success "Custom script executed successfully"
-		rm -f "$temp_script"
-		return 0
-	else
-		log::error "Custom script failed"
-		rm -f "$temp_script"
-		return 1
-	fi
+  # Execute script
+  if "$temp_script"; then
+    log::success "Custom script executed successfully"
+    rm -f "$temp_script"
+    return 0
+  else
+    log::error "Custom script failed"
+    rm -f "$temp_script"
+    return 1
+  fi
 }
 
 # Apply configuration overrides from config file
 apply_config_overrides() {
-	# Set up logging level from config
-	local config_log_level
-	config_log_level=$(imgxsh::get_config "settings.log_level" 2>/dev/null)
-	if [[ -n "$config_log_level" ]]; then
-		case "$config_log_level" in
-		"debug")
-			export DEBUG=1
-			;;
-		"info")
-			# Default level, no change needed
-			;;
-		"warn")
-			# Could implement warning-only mode
-			;;
-		"error")
-			# Could implement error-only mode
-			;;
-		esac
-	fi
+  # Set up logging level from config
+  local config_log_level
+  config_log_level=$(imgxsh::get_config "settings.log_level" 2>/dev/null)
+  if [[ -n $config_log_level ]]; then
+    case "$config_log_level" in
+      "debug")
+        export DEBUG=1
+        ;;
+      "info")
+        # Default level, no change needed
+        ;;
+      "warn")
+        # Could implement warning-only mode
+        ;;
+      "error")
+        # Could implement error-only mode
+        ;;
+    esac
+  fi
 
-	# Set up backup policy from config
-	local config_backup_policy
-	config_backup_policy=$(imgxsh::get_config "settings.backup_policy" 2>/dev/null)
-	if [[ -n "$config_backup_policy" ]]; then
-		export IMGXSH_BACKUP_POLICY="$config_backup_policy"
-	fi
+  # Set up backup policy from config
+  local config_backup_policy
+  config_backup_policy=$(imgxsh::get_config "settings.backup_policy" 2>/dev/null)
+  if [[ -n $config_backup_policy ]]; then
+    export IMGXSH_BACKUP_POLICY="$config_backup_policy"
+  fi
 
-	# Set up quality settings from config
-	local config_quality_jpg
-	local config_quality_webp
-	local config_quality_png
+  # Set up quality settings from config
+  local config_quality_jpg
+  local config_quality_webp
+  local config_quality_png
 
-	config_quality_jpg=$(imgxsh::get_config "settings.quality.jpg" 2>/dev/null)
-	config_quality_webp=$(imgxsh::get_config "settings.quality.webp" 2>/dev/null)
-	config_quality_png=$(imgxsh::get_config "settings.quality.png" 2>/dev/null)
+  config_quality_jpg=$(imgxsh::get_config "settings.quality.jpg" 2>/dev/null)
+  config_quality_webp=$(imgxsh::get_config "settings.quality.webp" 2>/dev/null)
+  config_quality_png=$(imgxsh::get_config "settings.quality.png" 2>/dev/null)
 
-	[[ -n "$config_quality_jpg" ]] && export IMGXSH_QUALITY_JPG="$config_quality_jpg"
-	[[ -n "$config_quality_webp" ]] && export IMGXSH_QUALITY_WEBP="$config_quality_webp"
-	[[ -n "$config_quality_png" ]] && export IMGXSH_QUALITY_PNG="$config_quality_png"
+  [[ -n $config_quality_jpg ]] && export IMGXSH_QUALITY_JPG="$config_quality_jpg"
+  [[ -n $config_quality_webp ]] && export IMGXSH_QUALITY_WEBP="$config_quality_webp"
+  [[ -n $config_quality_png ]] && export IMGXSH_QUALITY_PNG="$config_quality_png"
 
-	# Set up size constraints from config
-	local config_max_file_size
-	local config_max_dimensions
+  # Set up size constraints from config
+  local config_max_file_size
+  local config_max_dimensions
 
-	config_max_file_size=$(imgxsh::get_config "settings.max_file_size" 2>/dev/null)
-	config_max_dimensions=$(imgxsh::get_config "settings.max_dimensions" 2>/dev/null)
+  config_max_file_size=$(imgxsh::get_config "settings.max_file_size" 2>/dev/null)
+  config_max_dimensions=$(imgxsh::get_config "settings.max_dimensions" 2>/dev/null)
 
-	[[ -n "$config_max_file_size" ]] && export IMGXSH_MAX_FILE_SIZE="$config_max_file_size"
-	[[ -n "$config_max_dimensions" ]] && export IMGXSH_MAX_DIMENSIONS="$config_max_dimensions"
+  [[ -n $config_max_file_size ]] && export IMGXSH_MAX_FILE_SIZE="$config_max_file_size"
+  [[ -n $config_max_dimensions ]] && export IMGXSH_MAX_DIMENSIONS="$config_max_dimensions"
 
-	# Set up notification settings from config
-	local config_notifications_enabled
-	local config_webhook_url
-	local config_desktop_notifications
+  # Set up notification settings from config
+  local config_notifications_enabled
+  local config_webhook_url
+  local config_desktop_notifications
 
-	config_notifications_enabled=$(imgxsh::get_config "settings.notifications.enabled" 2>/dev/null)
-	config_webhook_url=$(imgxsh::get_config "settings.notifications.webhook_url" 2>/dev/null)
-	config_desktop_notifications=$(imgxsh::get_config "settings.notifications.desktop_notifications" 2>/dev/null)
+  config_notifications_enabled=$(imgxsh::get_config "settings.notifications.enabled" 2>/dev/null)
+  config_webhook_url=$(imgxsh::get_config "settings.notifications.webhook_url" 2>/dev/null)
+  config_desktop_notifications=$(imgxsh::get_config "settings.notifications.desktop_notifications" 2>/dev/null)
 
-	[[ -n "$config_notifications_enabled" ]] && export IMGXSH_NOTIFICATIONS_ENABLED="$config_notifications_enabled"
-	[[ -n "$config_webhook_url" ]] && export IMGXSH_WEBHOOK_URL="$config_webhook_url"
-	[[ -n "$config_desktop_notifications" ]] && export IMGXSH_DESKTOP_NOTIFICATIONS="$config_desktop_notifications"
+  [[ -n $config_notifications_enabled ]] && export IMGXSH_NOTIFICATIONS_ENABLED="$config_notifications_enabled"
+  [[ -n $config_webhook_url ]] && export IMGXSH_WEBHOOK_URL="$config_webhook_url"
+  [[ -n $config_desktop_notifications ]] && export IMGXSH_DESKTOP_NOTIFICATIONS="$config_desktop_notifications"
 
-	log::debug "Applied configuration overrides from config file"
+  log::debug "Applied configuration overrides from config file"
 }
 
 main() {
-	# Default values
-	local workflow=""
-	local config_file=""
-	local output_dir="./output"
-	local preset=""
-	local dry_run=false
-	local parallel_jobs=4
-	local verbose=false
-	local quiet=false
-	local check_deps=false
-	local init_config=false
-	local validate_workflow_file=""
-	local list_workflows=false
-	local list_presets=false
-	local create_preset_name=""
-	local create_preset_workflow=""
-	local create_preset_description=""
-	local delete_preset_name=""
-	local export_preset_name=""
-	local export_preset_file=""
-	local import_preset_file=""
-	local import_preset_name=""
-	local inputs=()
+  # Default values
+  local workflow=""
+  local config_file=""
+  local output_dir="./output"
+  local preset=""
+  local dry_run=false
+  local parallel_jobs=4
+  local verbose=false
+  local quiet=false
+  local check_deps=false
+  local init_config=false
+  local validate_workflow_file=""
+  local list_workflows=false
+  local list_presets=false
+  local create_preset_name=""
+  local create_preset_workflow=""
+  local create_preset_description=""
+  local delete_preset_name=""
+  local export_preset_name=""
+  local export_preset_file=""
+  local import_preset_file=""
+  local import_preset_name=""
+  local inputs=()
 
-	# Parse command line arguments
-	while [[ $# -gt 0 ]]; do
-		case $1 in
-		-h | --help)
-			if [[ -n "$workflow" ]]; then
-				show_workflow_help "$workflow"
-			else
-				show_help
-			fi
-			exit 0
-			;;
-		-v | --version)
-			echo "$(basename "$0") $(imgxsh::version)"
-			exit 0
-			;;
-		-w | --workflow)
-			workflow="$2"
-			shift 2
-			;;
-		-c | --config)
-			config_file="$2"
-			shift 2
-			;;
-		-o | --output)
-			output_dir="$2"
-			shift 2
-			;;
-		-p | --preset)
-			preset="$2"
-			shift 2
-			;;
-		-n | --dry-run)
-			dry_run=true
-			shift
-			;;
-		-j | --parallel)
-			parallel_jobs="$2"
-			shift 2
-			;;
-		--verbose)
-			verbose=true
-			shift
-			;;
-		--quiet)
-			quiet=true
-			shift
-			;;
-		--update)
-			if [[ "${TEST_MODE:-}" == "true" ]]; then
-				echo "update-imgxsh (test-mode)"
-				exit 0
-			fi
-			if command -v update-imgxsh >/dev/null 2>&1; then
-				update-imgxsh --check
-			else
-				log::error "update-imgxsh not available"
-				exit 1
-			fi
-			;;
-		--check-version)
-			echo "imgxsh $(imgxsh::version)"
-			IMGXSH_REPO="jeromecoloma/imgxsh" "${SCRIPT_DIR}/../scripts/check-version.sh" status || true
-			exit 0
-			;;
-		--check-deps)
-			check_deps=true
-			shift
-			;;
-		--init-config)
-			init_config=true
-			shift
-			;;
-		--validate-workflow)
-			validate_workflow_file="$2"
-			shift 2
-			;;
-		--list-workflows)
-			list_workflows=true
-			shift
-			;;
-		--list-presets)
-			list_presets=true
-			shift
-			;;
-		--create-preset)
-			create_preset_name="$2"
-			create_preset_workflow="$3"
-			create_preset_description="$4"
-			shift 4
-			;;
-		--delete-preset)
-			delete_preset_name="$2"
-			shift 2
-			;;
-		--export-preset)
-			export_preset_name="$2"
-			export_preset_file="$3"
-			shift 3
-			;;
-		--import-preset)
-			import_preset_file="$2"
-			import_preset_name="$3"
-			shift 3
-			;;
-		-*)
-			log::error "Unknown option: $1"
-			show_help
-			exit 1
-			;;
-		*)
-			# Positional argument
-			inputs+=("$1")
-			shift
-			;;
-		esac
-	done
+  # Parse command line arguments
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      -h | --help)
+        if [[ -n $workflow ]]; then
+          show_workflow_help "$workflow"
+        else
+          show_help
+        fi
+        exit 0
+        ;;
+      -v | --version)
+        echo "$(basename "$0") $(imgxsh::version)"
+        exit 0
+        ;;
+      -w | --workflow)
+        workflow="$2"
+        shift 2
+        ;;
+      -c | --config)
+        config_file="$2"
+        shift 2
+        ;;
+      -o | --output)
+        output_dir="$2"
+        shift 2
+        ;;
+      -p | --preset)
+        preset="$2"
+        shift 2
+        ;;
+      -n | --dry-run)
+        dry_run=true
+        shift
+        ;;
+      -j | --parallel)
+        parallel_jobs="$2"
+        shift 2
+        ;;
+      --verbose)
+        verbose=true
+        shift
+        ;;
+      --quiet)
+        quiet=true
+        shift
+        ;;
+      --update)
+        if [[ ${TEST_MODE:-} == "true" ]]; then
+          echo "update-imgxsh (test-mode)"
+          exit 0
+        fi
+        if command -v update-imgxsh >/dev/null 2>&1; then
+          update-imgxsh --check
+        else
+          log::error "update-imgxsh not available"
+          exit 1
+        fi
+        ;;
+      --check-version)
+        echo "imgxsh $(imgxsh::version)"
+        IMGXSH_REPO="jeromecoloma/imgxsh" "${SCRIPT_DIR}/../scripts/check-version.sh" status || true
+        exit 0
+        ;;
+      --check-deps)
+        check_deps=true
+        shift
+        ;;
+      --init-config)
+        init_config=true
+        shift
+        ;;
+      --validate-workflow)
+        validate_workflow_file="$2"
+        shift 2
+        ;;
+      --list-workflows)
+        list_workflows=true
+        shift
+        ;;
+      --list-presets)
+        list_presets=true
+        shift
+        ;;
+      --create-preset)
+        create_preset_name="$2"
+        create_preset_workflow="$3"
+        create_preset_description="$4"
+        shift 4
+        ;;
+      --delete-preset)
+        delete_preset_name="$2"
+        shift 2
+        ;;
+      --export-preset)
+        export_preset_name="$2"
+        export_preset_file="$3"
+        shift 3
+        ;;
+      --import-preset)
+        import_preset_file="$2"
+        import_preset_name="$3"
+        shift 3
+        ;;
+      -*)
+        log::error "Unknown option: $1"
+        show_help
+        exit 1
+        ;;
+      *)
+        # Positional argument
+        inputs+=("$1")
+        shift
+        ;;
+    esac
+  done
 
-	# Handle special operations
-	if [[ "$check_deps" == true ]]; then
-		exec "${SCRIPT_DIR}/imgxsh-check-deps" "$@"
-	fi
+  # Handle special operations
+  if [[ $check_deps == true ]]; then
+    exec "${SCRIPT_DIR}/imgxsh-check-deps" "$@"
+  fi
 
-	if [[ "$init_config" == true ]]; then
-		imgxsh::init
-		log::success "Configuration initialized at $IMGXSH_CONFIG_FILE"
-		exit 0
-	fi
+  if [[ $init_config == true ]]; then
+    imgxsh::init
+    log::success "Configuration initialized at $IMGXSH_CONFIG_FILE"
+    exit 0
+  fi
 
-	if [[ -n "$validate_workflow_file" ]]; then
-		if validation::validate_workflow_file "$validate_workflow_file"; then
-			log::success "Workflow validation passed"
-			exit 0
-		else
-			exit 1
-		fi
-	fi
+  if [[ -n $validate_workflow_file ]]; then
+    if validation::validate_workflow_file "$validate_workflow_file"; then
+      log::success "Workflow validation passed"
+      exit 0
+    else
+      exit 1
+    fi
+  fi
 
-	if [[ "$list_workflows" == true ]]; then
-		# Initialize to load config
-		imgxsh::init
-		imgxsh::load_config
+  if [[ $list_workflows == true ]]; then
+    # Initialize to load config
+    imgxsh::init
+    imgxsh::load_config
 
-		log::info "Available workflows:"
-		imgxsh::list_workflows "$IMGXSH_CONFIG_FILE" | while read -r workflow_name; do
-			if [[ -n "$workflow_name" ]]; then
-				log::info "  - $workflow_name"
-			fi
-		done
-		exit 0
-	fi
+    log::info "Available workflows:"
+    imgxsh::list_workflows "$IMGXSH_CONFIG_FILE" | while read -r workflow_name; do
+      if [[ -n $workflow_name ]]; then
+        log::info "  - $workflow_name"
+      fi
+    done
+    exit 0
+  fi
 
-	if [[ "$list_presets" == true ]]; then
-		# Initialize to load config
-		imgxsh::init
-		imgxsh::load_config
+  if [[ $list_presets == true ]]; then
+    # Initialize to load config
+    imgxsh::init
+    imgxsh::load_config
 
-		log::info "Available presets:"
-		imgxsh::list_presets "$IMGXSH_CONFIG_FILE" | while read -r preset_name; do
-			if [[ -n "$preset_name" ]]; then
-				log::info "  - $preset_name"
-			fi
-		done
-		exit 0
-	fi
+    log::info "Available presets:"
+    imgxsh::list_presets "$IMGXSH_CONFIG_FILE" | while read -r preset_name; do
+      if [[ -n $preset_name ]]; then
+        log::info "  - $preset_name"
+      fi
+    done
+    exit 0
+  fi
 
-	if [[ -n "$create_preset_name" ]]; then
-		# Initialize to load config
-		imgxsh::init
-		imgxsh::load_config
+  if [[ -n $create_preset_name ]]; then
+    # Initialize to load config
+    imgxsh::init
+    imgxsh::load_config
 
-		if [[ -z "$create_preset_workflow" ]]; then
-			log::error "Usage: --create-preset PRESET_NAME BASE_WORKFLOW [DESCRIPTION]"
-			exit 1
-		fi
+    if [[ -z $create_preset_workflow ]]; then
+      log::error "Usage: --create-preset PRESET_NAME BASE_WORKFLOW [DESCRIPTION]"
+      exit 1
+    fi
 
-		if imgxsh::create_preset "$create_preset_name" "$create_preset_workflow" "$create_preset_description"; then
-			log::success "Preset '$create_preset_name' created successfully"
-			exit 0
-		else
-			exit 1
-		fi
-	fi
+    if imgxsh::create_preset "$create_preset_name" "$create_preset_workflow" "$create_preset_description"; then
+      log::success "Preset '$create_preset_name' created successfully"
+      exit 0
+    else
+      exit 1
+    fi
+  fi
 
-	if [[ -n "$delete_preset_name" ]]; then
-		# Initialize to load config
-		imgxsh::init
-		imgxsh::load_config
+  if [[ -n $delete_preset_name ]]; then
+    # Initialize to load config
+    imgxsh::init
+    imgxsh::load_config
 
-		if imgxsh::delete_preset "$delete_preset_name"; then
-			log::success "Preset '$delete_preset_name' deleted successfully"
-			exit 0
-		else
-			exit 1
-		fi
-	fi
+    if imgxsh::delete_preset "$delete_preset_name"; then
+      log::success "Preset '$delete_preset_name' deleted successfully"
+      exit 0
+    else
+      exit 1
+    fi
+  fi
 
-	if [[ -n "$export_preset_name" ]]; then
-		# Initialize to load config
-		imgxsh::init
-		imgxsh::load_config
+  if [[ -n $export_preset_name ]]; then
+    # Initialize to load config
+    imgxsh::init
+    imgxsh::load_config
 
-		if [[ -z "$export_preset_file" ]]; then
-			log::error "Usage: --export-preset PRESET_NAME OUTPUT_FILE"
-			exit 1
-		fi
+    if [[ -z $export_preset_file ]]; then
+      log::error "Usage: --export-preset PRESET_NAME OUTPUT_FILE"
+      exit 1
+    fi
 
-		if imgxsh::export_preset "$export_preset_name" "$export_preset_file"; then
-			log::success "Preset '$export_preset_name' exported to: $export_preset_file"
-			exit 0
-		else
-			exit 1
-		fi
-	fi
+    if imgxsh::export_preset "$export_preset_name" "$export_preset_file"; then
+      log::success "Preset '$export_preset_name' exported to: $export_preset_file"
+      exit 0
+    else
+      exit 1
+    fi
+  fi
 
-	if [[ -n "$import_preset_file" ]]; then
-		# Initialize to load config
-		imgxsh::init
-		imgxsh::load_config
+  if [[ -n $import_preset_file ]]; then
+    # Initialize to load config
+    imgxsh::init
+    imgxsh::load_config
 
-		if [[ -z "$import_preset_name" ]]; then
-			log::error "Usage: --import-preset INPUT_FILE PRESET_NAME"
-			exit 1
-		fi
+    if [[ -z $import_preset_name ]]; then
+      log::error "Usage: --import-preset INPUT_FILE PRESET_NAME"
+      exit 1
+    fi
 
-		if imgxsh::import_preset "$import_preset_file" "$import_preset_name"; then
-			log::success "Preset '$import_preset_name' imported from: $import_preset_file"
-			exit 0
-		else
-			exit 1
-		fi
-	fi
+    if imgxsh::import_preset "$import_preset_file" "$import_preset_name"; then
+      log::success "Preset '$import_preset_name' imported from: $import_preset_file"
+      exit 0
+    else
+      exit 1
+    fi
+  fi
 
-	# Initialize imgxsh environment
-	if ! imgxsh::init; then
-		log::error "Failed to initialize imgxsh environment"
-		exit 1
-	fi
+  # Initialize imgxsh environment
+  if ! imgxsh::init; then
+    log::error "Failed to initialize imgxsh environment"
+    exit 1
+  fi
 
-	# Load configuration if specified
-	if [[ -n "$config_file" ]]; then
-		if ! imgxsh::load_config "$config_file"; then
-			log::error "Failed to load configuration file: $config_file"
-			exit 1
-		fi
-	else
-		# Load default configuration
-		imgxsh::load_config
-	fi
+  # Load configuration if specified
+  if [[ -n $config_file ]]; then
+    if ! imgxsh::load_config "$config_file"; then
+      log::error "Failed to load configuration file: $config_file"
+      exit 1
+    fi
+  else
+    # Load default configuration
+    imgxsh::load_config
+  fi
 
-	# Validate configuration
-	if ! imgxsh::validate_config "$IMGXSH_ACTIVE_CONFIG"; then
-		log::error "Configuration validation failed"
-		exit 1
-	fi
+  # Validate configuration
+  if ! imgxsh::validate_config "$IMGXSH_ACTIVE_CONFIG"; then
+    log::error "Configuration validation failed"
+    exit 1
+  fi
 
-	# Override settings from config if not specified via command line
-	if [[ "$output_dir" == "./output" ]]; then
-		local config_output_dir
-		config_output_dir=$(imgxsh::get_config "settings.output_dir" 2>/dev/null)
-		if [[ -n "$config_output_dir" ]]; then
-			output_dir="$config_output_dir"
-		fi
-	fi
+  # Override settings from config if not specified via command line
+  if [[ $output_dir == "./output" ]]; then
+    local config_output_dir
+    config_output_dir=$(imgxsh::get_config "settings.output_dir" 2>/dev/null)
+    if [[ -n $config_output_dir ]]; then
+      output_dir="$config_output_dir"
+    fi
+  fi
 
-	if [[ "$parallel_jobs" == 4 ]]; then
-		local config_parallel_jobs
-		config_parallel_jobs=$(imgxsh::get_config "settings.parallel_jobs" 2>/dev/null)
-		if [[ -n "$config_parallel_jobs" ]] && [[ "$config_parallel_jobs" =~ ^[0-9]+$ ]]; then
-			parallel_jobs="$config_parallel_jobs"
-		fi
-	fi
+  if [[ $parallel_jobs == 4 ]]; then
+    local config_parallel_jobs
+    config_parallel_jobs=$(imgxsh::get_config "settings.parallel_jobs" 2>/dev/null)
+    if [[ -n $config_parallel_jobs ]] && [[ $config_parallel_jobs =~ ^[0-9]+$ ]]; then
+      parallel_jobs="$config_parallel_jobs"
+    fi
+  fi
 
-	# Apply config overrides for other settings
-	apply_config_overrides
+  # Apply config overrides for other settings
+  apply_config_overrides
 
-	# Check dependencies if not in dry-run mode
-	if [[ "$dry_run" == false ]] && ! imgxsh::check_dependencies; then
-		log::error "Required dependencies are missing"
-		log::info "Run '$(basename "$0") --check-deps --install-guide' for help"
-		exit 1
-	fi
+  # Check dependencies if not in dry-run mode
+  if [[ $dry_run == false ]] && ! imgxsh::check_dependencies; then
+    log::error "Required dependencies are missing"
+    log::info "Run '$(basename "$0") --check-deps --install-guide' for help"
+    exit 1
+  fi
 
-	# Validate required arguments
-	if [[ -z "$workflow" ]] && [[ -z "$preset" ]]; then
-		log::error "Either --workflow or --preset is required"
-		show_help
-		exit 1
-	fi
+  # Validate required arguments
+  if [[ -z $workflow ]] && [[ -z $preset ]]; then
+    log::error "Either --workflow or --preset is required"
+    show_help
+    exit 1
+  fi
 
-	if [[ ${#inputs[@]} -eq 0 ]]; then
-		log::error "At least one input file or directory is required"
-		show_help
-		exit 1
-	fi
+  if [[ ${#inputs[@]} -eq 0 ]]; then
+    log::error "At least one input file or directory is required"
+    show_help
+    exit 1
+  fi
 
-	# Use preset if specified
-	if [[ -n "$preset" ]]; then
-		# Check if preset exists in configuration
-		if imgxsh::list_presets "$IMGXSH_CONFIG_FILE" | grep -q "^\s*$preset$"; then
-			# Get base workflow from preset
-			local base_workflow
-			if command -v yq >/dev/null 2>&1; then
-				base_workflow=$(yq eval ".presets.$preset.base_workflow" "$IMGXSH_ACTIVE_CONFIG" 2>/dev/null)
-			else
-				# Fallback parsing - more efficient approach
-				base_workflow=$(sed -n "/^  $preset:/,/^  [a-zA-Z]/p" "$IMGXSH_ACTIVE_CONFIG" | grep "base_workflow:" | sed 's/.*base_workflow:\s*//' | tr -d '"' | tr -d "'" | tr -d ' \t')
-			fi
+  # Use preset if specified
+  if [[ -n $preset ]]; then
+    # Check if preset exists in configuration
+    if imgxsh::list_presets "$IMGXSH_CONFIG_FILE" | grep -q "^\s*$preset$"; then
+      # Get base workflow from preset
+      local base_workflow
+      if command -v yq >/dev/null 2>&1; then
+        base_workflow=$(yq eval ".presets.$preset.base_workflow" "$IMGXSH_ACTIVE_CONFIG" 2>/dev/null)
+      else
+        # Fallback parsing - more efficient approach
+        base_workflow=$(sed -n "/^  $preset:/,/^  [a-zA-Z]/p" "$IMGXSH_ACTIVE_CONFIG" | grep "base_workflow:" | sed 's/.*base_workflow:\s*//' | tr -d '"' | tr -d "'" | tr -d ' \t')
+      fi
 
-			if [[ -n "$base_workflow" ]]; then
-				workflow="$base_workflow"
-				log::info "Using preset '$preset' with workflow '$workflow'"
+      if [[ -n $base_workflow ]]; then
+        workflow="$base_workflow"
+        log::info "Using preset '$preset' with workflow '$workflow'"
 
-				# Apply preset overrides
-				if command -v yq >/dev/null 2>&1; then
-					# Get parallel jobs override from preset
-					local preset_parallel_jobs
-					preset_parallel_jobs=$(yq eval ".presets.$preset.overrides.settings.parallel_jobs" "$IMGXSH_ACTIVE_CONFIG" 2>/dev/null)
-					if [[ -n "$preset_parallel_jobs" ]] && [[ "$preset_parallel_jobs" =~ ^[0-9]+$ ]]; then
-						parallel_jobs="$preset_parallel_jobs"
-					fi
-				fi
-			else
-				log::error "Preset '$preset' has no base_workflow defined"
-				exit 1
-			fi
-		else
-			log::error "Unknown preset: $preset"
-			log::info "Available presets:"
-			imgxsh::list_presets "$IMGXSH_CONFIG_FILE" | while read -r available_preset; do
-				log::info "  - $available_preset"
-			done
-			exit 1
-		fi
-	fi
+        # Apply preset overrides
+        if command -v yq >/dev/null 2>&1; then
+          # Get parallel jobs override from preset
+          local preset_parallel_jobs
+          preset_parallel_jobs=$(yq eval ".presets.$preset.overrides.settings.parallel_jobs" "$IMGXSH_ACTIVE_CONFIG" 2>/dev/null)
+          if [[ -n $preset_parallel_jobs ]] && [[ $preset_parallel_jobs =~ ^[0-9]+$ ]]; then
+            parallel_jobs="$preset_parallel_jobs"
+          fi
+        fi
+      else
+        log::error "Preset '$preset' has no base_workflow defined"
+        exit 1
+      fi
+    else
+      log::error "Unknown preset: $preset"
+      log::info "Available presets:"
+      imgxsh::list_presets "$IMGXSH_CONFIG_FILE" | while read -r available_preset; do
+        log::info "  - $available_preset"
+      done
+      exit 1
+    fi
+  fi
 
-	# Validate workflow and inputs
-	if ! validate_workflow_input "$workflow" "${inputs[@]}"; then
-		log::error "Invalid input files for workflow: $workflow"
-		exit 1
-	fi
+  # Validate workflow and inputs
+  if ! validate_workflow_input "$workflow" "${inputs[@]}"; then
+    log::error "Invalid input files for workflow: $workflow"
+    exit 1
+  fi
 
-	# Set up logging
-	if [[ "$verbose" == true ]]; then
-		export DEBUG=1
-	fi
+  # Set up logging
+  if [[ $verbose == true ]]; then
+    export DEBUG=1
+  fi
 
-	# Execute workflow
-	execute_workflow "$workflow" "$dry_run" "$output_dir" "$parallel_jobs" "${inputs[@]}"
+  # Execute workflow
+  execute_workflow "$workflow" "$dry_run" "$output_dir" "$parallel_jobs" "${inputs[@]}"
 
-	# Cleanup
-	imgxsh::cleanup
+  # Cleanup
+  imgxsh::cleanup
 
-	log::success "Workflow completed successfully"
+  log::success "Workflow completed successfully"
 }
 
 # Only run main if script is executed directly
-if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-	main "$@"
+if [[ ${BASH_SOURCE[0]} == "${0}" ]]; then
+  main "$@"
 fi

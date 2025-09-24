@@ -13,8 +13,8 @@ echo "Setting up Bats-core testing framework..."
 
 # Check if we're in a git repository
 if ! git rev-parse --git-dir >/dev/null 2>&1; then
-	echo "Error: Not in a git repository. Bats setup requires git." >&2
-	exit 1
+  echo "Error: Not in a git repository. Bats setup requires git." >&2
+  exit 1
 fi
 
 # Create tests directory if it doesn't exist
@@ -22,23 +22,23 @@ mkdir -p tests
 
 # Add Bats-core as a git submodule
 if [ ! -d "tests/bats-core" ]; then
-	echo "Adding Bats-core as git submodule..."
-	git submodule add https://github.com/bats-core/bats-core.git tests/bats-core
-	git submodule update --init --recursive
+  echo "Adding Bats-core as git submodule..."
+  git submodule add https://github.com/bats-core/bats-core.git tests/bats-core
+  git submodule update --init --recursive
 else
-	echo "Bats-core submodule already exists, updating..."
-	git submodule update --recursive --remote tests/bats-core
+  echo "Bats-core submodule already exists, updating..."
+  git submodule update --recursive --remote tests/bats-core
 fi
 
 # Add supporting libraries
 if [ ! -d "tests/bats-support" ]; then
-	echo "Adding bats-support library..."
-	git submodule add https://github.com/bats-core/bats-support.git tests/bats-support
+  echo "Adding bats-support library..."
+  git submodule add https://github.com/bats-core/bats-support.git tests/bats-support
 fi
 
 if [ ! -d "tests/bats-assert" ]; then
-	echo "Adding bats-assert library..."
-	git submodule add https://github.com/bats-core/bats-assert.git tests/bats-assert
+  echo "Adding bats-assert library..."
+  git submodule add https://github.com/bats-core/bats-assert.git tests/bats-assert
 fi
 
 # Create a convenience script for running tests

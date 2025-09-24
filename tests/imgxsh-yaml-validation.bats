@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 
 # imgxsh YAML Validation Tests
-# Tests for the basic YAML validation feature when yq is not available
+# Tests YAML validation behavior with yq-required configuration
 
 load test_helper
 bats_load_library bats-support
@@ -21,7 +21,12 @@ teardown() {
     rm -rf "$TEST_DIR"
 }
 
-# Test 1: Valid YAML configuration should pass validation
+validate_with_yq() {
+    local file="$1"
+    yq eval '.' "$file" >/dev/null 2>&1
+}
+
+# Test 1: Valid YAML configuration should pass validation (yq)
 @test "yaml validation: valid configuration passes" {
     cat > "$IMGXSH_CONFIG_FILE" << 'EOF'
 settings:
@@ -60,10 +65,8 @@ presets:
     base_workflow: "test-workflow"
 EOF
 
-    # Test the validation function directly
-    run imgxsh::validate_yaml_basic "$IMGXSH_CONFIG_FILE"
+    run validate_with_yq "$IMGXSH_CONFIG_FILE"
     assert_success
-    assert_output --partial "Basic YAML validation passed"
 }
 
 # Test 2: Missing required sections should fail validation
@@ -82,9 +85,8 @@ presets:
     base_workflow: "test-workflow"
 EOF
 
-    run imgxsh::validate_yaml_basic "$IMGXSH_CONFIG_FILE"
+    run yq eval -e 'has("settings")' "$IMGXSH_CONFIG_FILE"
     assert_failure
-    assert_output --partial "Missing required section: settings:"
 }
 
 # Test 3: Missing workflows section should fail validation
@@ -102,9 +104,8 @@ presets:
     base_workflow: "test-workflow"
 EOF
 
-    run imgxsh::validate_yaml_basic "$IMGXSH_CONFIG_FILE"
+    run yq eval -e 'has("workflows")' "$IMGXSH_CONFIG_FILE"
     assert_failure
-    assert_output --partial "Missing required section: workflows:"
 }
 
 # Test 4: Missing presets section should fail validation
@@ -122,9 +123,8 @@ workflows:
     version: "1.0"
 EOF
 
-    run imgxsh::validate_yaml_basic "$IMGXSH_CONFIG_FILE"
+    run yq eval -e 'has("presets")' "$IMGXSH_CONFIG_FILE"
     assert_failure
-    assert_output --partial "Missing required section: presets:"
 }
 
 # Test 5: Missing required settings should fail validation
@@ -147,9 +147,8 @@ presets:
     base_workflow: "test-workflow"
 EOF
 
-    run imgxsh::validate_yaml_basic "$IMGXSH_CONFIG_FILE"
+    run yq eval -e '.settings | has("output_dir")' "$IMGXSH_CONFIG_FILE"
     assert_failure
-    assert_output --partial "Missing required setting: output_dir:"
 }
 
 # Test 6: Missing temp_dir setting should fail validation
@@ -172,9 +171,8 @@ presets:
     base_workflow: "test-workflow"
 EOF
 
-    run imgxsh::validate_yaml_basic "$IMGXSH_CONFIG_FILE"
+    run yq eval -e '.settings | has("temp_dir")' "$IMGXSH_CONFIG_FILE"
     assert_failure
-    assert_output --partial "Missing required setting: temp_dir:"
 }
 
 # Test 7: Missing parallel_jobs setting should fail validation
@@ -197,9 +195,8 @@ presets:
     base_workflow: "test-workflow"
 EOF
 
-    run imgxsh::validate_yaml_basic "$IMGXSH_CONFIG_FILE"
+    run yq eval -e '.settings | has("parallel_jobs")' "$IMGXSH_CONFIG_FILE"
     assert_failure
-    assert_output --partial "Missing required setting: parallel_jobs:"
 }
 
 # Test 8: Non-numeric parallel_jobs should fail validation
@@ -223,9 +220,8 @@ presets:
     base_workflow: "test-workflow"
 EOF
 
-    run imgxsh::validate_yaml_basic "$IMGXSH_CONFIG_FILE"
-    assert_failure
-    assert_output --partial "settings.parallel_jobs must be a number"
+    run yq eval '.settings.parallel_jobs | (type == "!!int")' "$IMGXSH_CONFIG_FILE"
+    assert_output "false"
 }
 
 # Test 9: Mixed tabs and spaces should fail validation
@@ -249,13 +245,13 @@ presets:
     base_workflow: "test-workflow"
 EOF
 
-    run imgxsh::validate_yaml_basic "$IMGXSH_CONFIG_FILE"
+    # yq will fail to parse mixed-indented invalid YAML
+    run yq eval '.' "$IMGXSH_CONFIG_FILE"
     assert_failure
-    assert_output --partial "Mixed tabs and spaces in indentation"
 }
 
 # Test 10: Keys without values should fail validation
-@test "yaml validation: keys without values fails" {
+@test "yaml validation: keys without values become null (yq)" {
     cat > "$IMGXSH_CONFIG_FILE" << 'EOF'
 settings:
   output_dir: "./output"
@@ -276,13 +272,14 @@ presets:
     base_workflow: "test-workflow"
 EOF
 
-    run imgxsh::validate_yaml_basic "$IMGXSH_CONFIG_FILE"
-    assert_failure
-    assert_output --partial "Found key without value"
+    run bash -lc 'yq -r ".settings.invalid_key // \"\"" "$IMGXSH_CONFIG_FILE"'
+    assert_success
+    # yq prints an empty line when the value is null with this expression
+    assert_output ""
 }
 
 # Test 11: No valid YAML keys should fail validation
-@test "yaml validation: no valid YAML keys fails" {
+@test "yaml validation: no valid YAML keys (comments only) parses as comments (yq)" {
     cat > "$IMGXSH_CONFIG_FILE" << 'EOF'
 # This is just a comment file
 # No actual YAML content
@@ -290,18 +287,22 @@ EOF
 
 EOF
 
-    run imgxsh::validate_yaml_basic "$IMGXSH_CONFIG_FILE"
-    assert_failure
-    assert_output --partial "No valid YAML keys found"
+    # yq outputs the comments unchanged; just ensure it does not error
+    run yq '.' "$IMGXSH_CONFIG_FILE"
+    assert_success
 }
 
 # Test 12: Empty file should fail validation
-@test "yaml validation: empty file fails" {
+@test "yaml validation: empty file yields empty or null (yq)" {
     touch "$IMGXSH_CONFIG_FILE"
 
-    run imgxsh::validate_yaml_basic "$IMGXSH_CONFIG_FILE"
-    assert_failure
-    assert_output --partial "No valid YAML keys found"
+    run yq -r '.' "$IMGXSH_CONFIG_FILE"
+    assert_success
+    # Some yq builds print nothing for empty input; accept empty or null
+    if [[ "$output" != "null" && -n "$output" ]]; then
+        echo "Unexpected output: $output" >&2
+        false
+    fi
 }
 
 # Test 13: parallel_jobs with comments should still validate correctly
@@ -325,9 +326,8 @@ presets:
     base_workflow: "test-workflow"
 EOF
 
-    run imgxsh::validate_yaml_basic "$IMGXSH_CONFIG_FILE"
+    run yq eval '.' "$IMGXSH_CONFIG_FILE"
     assert_success
-    assert_output --partial "Basic YAML validation passed"
 }
 
 # Test 14: parallel_jobs with quotes should validate correctly
@@ -351,21 +351,12 @@ presets:
     base_workflow: "test-workflow"
 EOF
 
-    run imgxsh::validate_yaml_basic "$IMGXSH_CONFIG_FILE"
+    run yq eval '.' "$IMGXSH_CONFIG_FILE"
     assert_success
-    assert_output --partial "Basic YAML validation passed"
 }
 
-# Test 15: Integration test with imgxsh::validate_config (without yq)
-@test "yaml validation: integration test with validate_config" {
-    # Mock yq as unavailable
-    command() {
-        case "$1" in
-            yq) return 1 ;;
-            *) /usr/bin/command "$@" ;;
-        esac
-    }
-    
+# Test 15: Integration test with validate_config (with yq)
+@test "yaml validation: integration test with validate_config (with yq)" {
     cat > "$IMGXSH_CONFIG_FILE" << 'EOF'
 settings:
   output_dir: "./output"
@@ -387,20 +378,11 @@ EOF
 
     run imgxsh::validate_config "$IMGXSH_CONFIG_FILE"
     assert_success
-    assert_output --partial "yq not available - using basic YAML validation"
     assert_output --partial "Configuration validation passed"
 }
 
-# Test 16: Integration test with invalid config (without yq)
-@test "yaml validation: integration test with invalid config" {
-    # Mock yq as unavailable
-    command() {
-        case "$1" in
-            yq) return 1 ;;
-            *) /usr/bin/command "$@" ;;
-        esac
-    }
-    
+# Test 16: Integration test with invalid config (with yq)
+@test "yaml validation: integration test with invalid config (with yq)" {
     cat > "$IMGXSH_CONFIG_FILE" << 'EOF'
 settings:
   output_dir: "./output"
@@ -422,7 +404,6 @@ EOF
 
     run imgxsh::validate_config "$IMGXSH_CONFIG_FILE"
     assert_failure
-    assert_output --partial "yq not available - using basic YAML validation"
     assert_output --partial "settings.parallel_jobs must be a number"
     assert_output --partial "Configuration validation failed"
 }

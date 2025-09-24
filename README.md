@@ -25,6 +25,7 @@ imgxsh requires the following tools:
 - **ImageMagick** (image processing)
 - **pdfimages/poppler-utils** (PDF processing)
 - **unzip** (Excel processing)
+- **yq** (YAML parsing)
 - **Tesseract** (OCR - optional)
 
 ### Basic Usage
@@ -381,10 +382,10 @@ We welcome contributions to imgxsh! The project follows Shell Starter convention
 2. **Install development tools**:
    ```bash
    # macOS (using Homebrew)
-   brew install lefthook shellcheck shfmt imagemagick poppler tesseract
+   brew install lefthook shellcheck shfmt imagemagick poppler tesseract yq
 
    # Ubuntu/Debian
-   sudo apt-get install shellcheck imagemagick poppler-utils tesseract-ocr
+   sudo apt-get install shellcheck imagemagick poppler-utils tesseract-ocr yq
    # For lefthook: https://github.com/evilmartians/lefthook#installation
    ```
 

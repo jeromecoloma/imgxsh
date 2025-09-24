@@ -11,16 +11,16 @@ SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
 
 # Try to source Shell Starter logging if available
 if [[ -f "${PROJECT_ROOT}/lib/main.sh" ]]; then
-	# shellcheck source=/dev/null
-	source "${PROJECT_ROOT}/lib/main.sh"
+  # shellcheck source=/dev/null
+  source "${PROJECT_ROOT}/lib/main.sh"
 fi
 
 # Fallback logging if Shell Starter not available
 if ! declare -f log::info >/dev/null 2>&1; then
-	log::info() { echo "[INFO] $*"; }
-	log::warn() { echo "[WARN] $*"; }
-	log::error() { echo "[ERROR] $*" 1>&2; }
-	log::success() { echo "[OK] $*"; }
+  log::info() { echo "[INFO] $*"; }
+  log::warn() { echo "[WARN] $*"; }
+  log::error() { echo "[ERROR] $*" 1>&2; }
+  log::success() { echo "[OK] $*"; }
 fi
 
 REPO="${IMGXSH_REPO:-jeromecoloma/imgxsh}"
@@ -31,7 +31,7 @@ TARGET_VERSION=""
 FORCE_UPDATE=false
 
 usage() {
-	cat <<EOF
+  cat <<EOF
 
 ${SCRIPT_NAME} - Update the imgxsh project
 
@@ -54,208 +54,208 @@ EOF
 }
 
 show_version() {
-	printf 'imgxsh updater v0.1.0\n'
+  printf 'imgxsh updater v0.1.0\n'
 }
 
 get_github_token() {
-	local token="${GITHUB_TOKEN:-}"
-	if [[ -z "$token" ]]; then
-		token="${GH_TOKEN:-}"
-	fi
-	echo "$token"
+  local token="${GITHUB_TOKEN:-}"
+  if [[ -z $token ]]; then
+    token="${GH_TOKEN:-}"
+  fi
+  echo "$token"
 }
 
 github_curl() {
-	# Usage: github_curl <curl_args...> -- <url>
-	local url
-	local -a pre_args=()
-	local seen_sep=false
-	for arg in "$@"; do
-		if [[ "$seen_sep" == false && "$arg" == "--" ]]; then
-			seen_sep=true
-			continue
-		fi
-		if [[ "$seen_sep" == false ]]; then
-			pre_args+=("$arg")
-		else
-			url="$arg"
-		fi
-	done
+  # Usage: github_curl <curl_args...> -- <url>
+  local url
+  local -a pre_args=()
+  local seen_sep=false
+  for arg in "$@"; do
+    if [[ $seen_sep == false && $arg == "--" ]]; then
+      seen_sep=true
+      continue
+    fi
+    if [[ $seen_sep == false ]]; then
+      pre_args+=("$arg")
+    else
+      url="$arg"
+    fi
+  done
 
-	local -a cmd=(curl -s -H "User-Agent: imgxsh-update-script" -H "X-GitHub-Api-Version: 2022-11-28")
-	local token
-	token="$(get_github_token)"
-	if [[ -n "$token" ]]; then
-		cmd+=(-H "Authorization: Bearer ${token}")
-	fi
-	if [[ ${#pre_args[@]} -gt 0 ]]; then
-		cmd+=("${pre_args[@]}")
-	fi
-	cmd+=("$url")
+  local -a cmd=(curl -s -H "User-Agent: imgxsh-update-script" -H "X-GitHub-Api-Version: 2022-11-28")
+  local token
+  token="$(get_github_token)"
+  if [[ -n $token ]]; then
+    cmd+=(-H "Authorization: Bearer ${token}")
+  fi
+  if [[ ${#pre_args[@]} -gt 0 ]]; then
+    cmd+=("${pre_args[@]}")
+  fi
+  cmd+=("$url")
 
-	"${cmd[@]}"
+  "${cmd[@]}"
 }
 
 get_current_version() {
-	local version_file="${PROJECT_ROOT}/VERSION"
-	if [[ -f "$version_file" ]]; then
-		cat "$version_file"
-	else
-		echo "0.0.0"
-	fi
+  local version_file="${PROJECT_ROOT}/VERSION"
+  if [[ -f $version_file ]]; then
+    cat "$version_file"
+  else
+    echo "0.0.0"
+  fi
 }
 
 get_latest_version() {
-	local api_url="https://api.github.com/repos/${REPO}/releases/latest"
-	local response
-	if ! response=$(github_curl -- "$api_url"); then
-		log::error "Failed to query GitHub releases"
-		return 1
-	fi
-	local tag
-	if command -v jq >/dev/null 2>&1; then
-		tag=$(echo "$response" | jq -r '.tag_name')
-	else
-		tag=$(echo "$response" | grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)"/\1/')
-	fi
-	[[ -z "$tag" || "$tag" == "null" ]] && return 1
-	echo "${tag#v}"
+  local api_url="https://api.github.com/repos/${REPO}/releases/latest"
+  local response
+  if ! response=$(github_curl -- "$api_url"); then
+    log::error "Failed to query GitHub releases"
+    return 1
+  fi
+  local tag
+  if command -v jq >/dev/null 2>&1; then
+    tag=$(echo "$response" | jq -r '.tag_name')
+  else
+    tag=$(echo "$response" | grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)"/\1/')
+  fi
+  [[ -z $tag || $tag == "null" ]] && return 1
+  echo "${tag#v}"
 }
 
 check_updates() {
-	GITHUB_REPO="$REPO" "${PROJECT_ROOT}/scripts/check-version.sh" status || true
+  GITHUB_REPO="$REPO" "${PROJECT_ROOT}/scripts/check-version.sh" status || true
 }
 
 download_imgxsh() {
-	local version="$1"
-	local temp_dir
-	temp_dir=$(mktemp -d)
-	local url="https://github.com/${REPO}/archive/refs/tags/v${version}.tar.gz"
-	log::info "Downloading imgxsh v${version}"
-	if ! github_curl -L -- "$url" | tar -xz -C "$temp_dir" --strip-components=1 >/dev/null 2>&1; then
-		log::error "Failed to download imgxsh v${version}"
-		rm -rf "$temp_dir"
-		return 1
-	fi
-	echo "$temp_dir"
+  local version="$1"
+  local temp_dir
+  temp_dir=$(mktemp -d)
+  local url="https://github.com/${REPO}/archive/refs/tags/v${version}.tar.gz"
+  log::info "Downloading imgxsh v${version}"
+  if ! github_curl -L -- "$url" | tar -xz -C "$temp_dir" --strip-components=1 >/dev/null 2>&1; then
+    log::error "Failed to download imgxsh v${version}"
+    rm -rf "$temp_dir"
+    return 1
+  fi
+  echo "$temp_dir"
 }
 
 create_backup() {
-	local path="$1"
-	[[ ! -e "$path" ]] && return 0
-	local backup_path="${path}${BACKUP_SUFFIX}"
-	log::info "Creating backup: $backup_path"
-	[[ "$DRY_RUN" == true ]] || cp -r "$path" "$backup_path"
+  local path="$1"
+  [[ ! -e $path ]] && return 0
+  local backup_path="${path}${BACKUP_SUFFIX}"
+  log::info "Creating backup: $backup_path"
+  [[ $DRY_RUN == true ]] || cp -r "$path" "$backup_path"
 }
 
 install_version() {
-	local target_version="$1"
-	local current_version
-	current_version="$(get_current_version)"
+  local target_version="$1"
+  local current_version
+  current_version="$(get_current_version)"
 
-	if [[ "$current_version" == "$target_version" && "$FORCE_UPDATE" != true ]]; then
-		log::info "Already on v${target_version}"
-		return 0
-	fi
+  if [[ $current_version == "$target_version" && $FORCE_UPDATE != true ]]; then
+    log::info "Already on v${target_version}"
+    return 0
+  fi
 
-	local tmp
-	if ! tmp="$(download_imgxsh "$target_version")"; then
-		return 1
-	fi
+  local tmp
+  if ! tmp="$(download_imgxsh "$target_version")"; then
+    return 1
+  fi
 
-	# Backup key directories
-	create_backup "${PROJECT_ROOT}/bin"
-	create_backup "${PROJECT_ROOT}/lib"
-	create_backup "${PROJECT_ROOT}/config"
-	create_backup "${PROJECT_ROOT}/docs"
+  # Backup key directories
+  create_backup "${PROJECT_ROOT}/bin"
+  create_backup "${PROJECT_ROOT}/lib"
+  create_backup "${PROJECT_ROOT}/config"
+  create_backup "${PROJECT_ROOT}/docs"
 
-	# Selective copy from archive → project
-	log::info "Updating project files"
-	for dir in bin lib config docs; do
-		if [[ -d "$tmp/$dir" ]]; then
-			if [[ "$DRY_RUN" == true ]]; then
-				log::info "[DRY-RUN] Would sync $dir/"
-			else
-				rsync -a "$tmp/$dir/" "${PROJECT_ROOT}/$dir/"
-			fi
-		fi
-	done
+  # Selective copy from archive → project
+  log::info "Updating project files"
+  for dir in bin lib config docs; do
+    if [[ -d "$tmp/$dir" ]]; then
+      if [[ $DRY_RUN == true ]]; then
+        log::info "[DRY-RUN] Would sync $dir/"
+      else
+        rsync -a "$tmp/$dir/" "${PROJECT_ROOT}/$dir/"
+      fi
+    fi
+  done
 
-	# Update VERSION
-	if [[ -f "$tmp/VERSION" ]]; then
-		if [[ "$DRY_RUN" == true ]]; then
-			log::info "[DRY-RUN] Would update VERSION to $(cat "$tmp/VERSION")"
-		else
-			cp "$tmp/VERSION" "${PROJECT_ROOT}/VERSION"
-		fi
-	fi
+  # Update VERSION
+  if [[ -f "$tmp/VERSION" ]]; then
+    if [[ $DRY_RUN == true ]]; then
+      log::info "[DRY-RUN] Would update VERSION to $(cat "$tmp/VERSION")"
+    else
+      cp "$tmp/VERSION" "${PROJECT_ROOT}/VERSION"
+    fi
+  fi
 
-	rm -rf "$tmp"
-	if [[ "$DRY_RUN" == true ]]; then
-		log::info "Dry run complete. No changes applied."
-	else
-		log::success "imgxsh updated to v${target_version}"
-	fi
+  rm -rf "$tmp"
+  if [[ $DRY_RUN == true ]]; then
+    log::info "Dry run complete. No changes applied."
+  else
+    log::success "imgxsh updated to v${target_version}"
+  fi
 }
 
 parse_args() {
-	while [[ $# -gt 0 ]]; do
-		case $1 in
-		--version)
-			show_version
-			exit 0
-			;;
-		--help)
-			usage
-			exit 0
-			;;
-		--check)
-			CHECK_ONLY=true
-			shift
-			;;
-		--target-version)
-			TARGET_VERSION="$2"
-			shift 2
-			;;
-		--dry-run)
-			DRY_RUN=true
-			shift
-			;;
-		--force)
-			FORCE_UPDATE=true
-			shift
-			;;
-		*)
-			log::error "Unknown option: $1"
-			usage
-			exit 1
-			;;
-		esac
-	done
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      --version)
+        show_version
+        exit 0
+        ;;
+      --help)
+        usage
+        exit 0
+        ;;
+      --check)
+        CHECK_ONLY=true
+        shift
+        ;;
+      --target-version)
+        TARGET_VERSION="$2"
+        shift 2
+        ;;
+      --dry-run)
+        DRY_RUN=true
+        shift
+        ;;
+      --force)
+        FORCE_UPDATE=true
+        shift
+        ;;
+      *)
+        log::error "Unknown option: $1"
+        usage
+        exit 1
+        ;;
+    esac
+  done
 }
 
 main() {
-	# Fast test-mode path
-	if [[ "${TEST_MODE:-}" == "true" ]]; then
-		echo "update-imgxsh (test-mode)"
-		exit 0
-	fi
+  # Fast test-mode path
+  if [[ ${TEST_MODE:-} == "true" ]]; then
+    echo "update-imgxsh (test-mode)"
+    exit 0
+  fi
 
-	parse_args "$@"
+  parse_args "$@"
 
-	if [[ "$CHECK_ONLY" == true ]]; then
-		check_updates
-		return
-	fi
+  if [[ $CHECK_ONLY == true ]]; then
+    check_updates
+    return
+  fi
 
-	if [[ -z "$TARGET_VERSION" ]]; then
-		if ! TARGET_VERSION="$(get_latest_version)"; then
-			log::error "Unable to resolve latest version"
-			exit 1
-		fi
-	fi
+  if [[ -z $TARGET_VERSION ]]; then
+    if ! TARGET_VERSION="$(get_latest_version)"; then
+      log::error "Unable to resolve latest version"
+      exit 1
+    fi
+  fi
 
-	install_version "$TARGET_VERSION"
+  install_version "$TARGET_VERSION"
 }
 
 main "$@"

@@ -11,7 +11,7 @@ SHELL_STARTER_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 source "${SHELL_STARTER_ROOT}/lib/main.sh"
 
 show_help() {
-	cat <<EOF
+  cat <<EOF
 Usage: $(basename "$0") [OPTIONS] INPUT OUTPUT
 
 Convert images between different formats with quality control.
@@ -60,395 +60,395 @@ EOF
 }
 
 validate_dependencies() {
-	local missing_deps=()
+  local missing_deps=()
 
-	# Check for ImageMagick (either magick or convert command)
-	if ! command -v magick >/dev/null 2>&1 && ! command -v convert >/dev/null 2>&1; then
-		missing_deps+=("ImageMagick (magick command)")
-	fi
+  # Check for ImageMagick (either magick or convert command)
+  if ! command -v magick >/dev/null 2>&1 && ! command -v convert >/dev/null 2>&1; then
+    missing_deps+=("ImageMagick (magick command)")
+  fi
 
-	if ! command -v identify >/dev/null 2>&1; then
-		missing_deps+=("ImageMagick (identify command)")
-	fi
+  if ! command -v identify >/dev/null 2>&1; then
+    missing_deps+=("ImageMagick (identify command)")
+  fi
 
-	if [[ ${#missing_deps[@]} -gt 0 ]]; then
-		log::error "Missing required dependencies: ${missing_deps[*]}"
-		log::info "Install ImageMagick:"
-		log::info "  macOS:    brew install imagemagick"
-		log::info "  Ubuntu:   sudo apt-get install imagemagick"
-		log::info "  CentOS:   sudo yum install ImageMagick"
-		return 1
-	fi
+  if [[ ${#missing_deps[@]} -gt 0 ]]; then
+    log::error "Missing required dependencies: ${missing_deps[*]}"
+    log::info "Install ImageMagick:"
+    log::info "  macOS:    brew install imagemagick"
+    log::info "  Ubuntu:   sudo apt-get install imagemagick"
+    log::info "  CentOS:   sudo yum install ImageMagick"
+    return 1
+  fi
 
-	return 0
+  return 0
 }
 
 validate_format() {
-	local format="$1"
-	local supported_formats=("png" "jpg" "jpeg" "webp" "tiff" "bmp")
+  local format="$1"
+  local supported_formats=("png" "jpg" "jpeg" "webp" "tiff" "bmp")
 
-	# Convert to lowercase for comparison
-	format=$(echo "$format" | tr '[:upper:]' '[:lower:]')
+  # Convert to lowercase for comparison
+  format=$(echo "$format" | tr '[:upper:]' '[:lower:]')
 
-	for supported in "${supported_formats[@]}"; do
-		if [[ "$format" == "$supported" ]]; then
-			return 0
-		fi
-	done
+  for supported in "${supported_formats[@]}"; do
+    if [[ $format == "$supported" ]]; then
+      return 0
+    fi
+  done
 
-	log::error "Unsupported format: $format"
-	log::info "Supported formats: ${supported_formats[*]}"
-	return 1
+  log::error "Unsupported format: $format"
+  log::info "Supported formats: ${supported_formats[*]}"
+  return 1
 }
 
 get_default_quality() {
-	local format="$1"
+  local format="$1"
 
-	case "$format" in
-	jpg | jpeg)
-		echo "85"
-		;;
-	webp)
-		echo "90"
-		;;
-	*)
-		echo "100" # For lossless formats, quality doesn't apply but we return 100
-		;;
-	esac
+  case "$format" in
+    jpg | jpeg)
+      echo "85"
+      ;;
+    webp)
+      echo "90"
+      ;;
+    *)
+      echo "100" # For lossless formats, quality doesn't apply but we return 100
+      ;;
+  esac
 }
 
 extract_format_from_filename() {
-	local filename="$1"
-	local extension
+  local filename="$1"
+  local extension
 
-	extension="${filename##*.}"
-	extension=$(echo "$extension" | tr '[:upper:]' '[:lower:]')
+  extension="${filename##*.}"
+  extension=$(echo "$extension" | tr '[:upper:]' '[:lower:]')
 
-	# Handle common variations
-	case "$extension" in
-	jpeg)
-		echo "jpg"
-		;;
-	tif)
-		echo "tiff"
-		;;
-	*)
-		echo "$extension"
-		;;
-	esac
+  # Handle common variations
+  case "$extension" in
+    jpeg)
+      echo "jpg"
+      ;;
+    tif)
+      echo "tiff"
+      ;;
+    *)
+      echo "$extension"
+      ;;
+  esac
 }
 
 validate_quality() {
-	local quality="$1"
+  local quality="$1"
 
-	if ! [[ "$quality" =~ ^[0-9]+$ ]] || [[ "$quality" -lt 1 ]] || [[ "$quality" -gt 100 ]]; then
-		log::error "Quality must be a number between 1 and 100"
-		return 1
-	fi
+  if ! [[ $quality =~ ^[0-9]+$ ]] || [[ $quality -lt 1 ]] || [[ $quality -gt 100 ]]; then
+    log::error "Quality must be a number between 1 and 100"
+    return 1
+  fi
 
-	return 0
+  return 0
 }
 
 get_image_info() {
-	local file="$1"
-	local info
+  local file="$1"
+  local info
 
-	if ! info=$(identify "$file" 2>/dev/null); then
-		log::error "Cannot read image information from: $file"
-		return 1
-	fi
+  if ! info=$(identify "$file" 2>/dev/null); then
+    log::error "Cannot read image information from: $file"
+    return 1
+  fi
 
-	echo "$info"
+  echo "$info"
 }
 
 create_backup() {
-	local file="$1"
-	local backup_file="${file}.backup.$(date +%Y%m%d_%H%M%S)"
+  local file="$1"
+  local backup_file="${file}.backup.$(date +%Y%m%d_%H%M%S)"
 
-	if cp "$file" "$backup_file"; then
-		log::info "Created backup: $backup_file"
-		return 0
-	else
-		log::error "Failed to create backup of: $file"
-		return 1
-	fi
+  if cp "$file" "$backup_file"; then
+    log::info "Created backup: $backup_file"
+    return 0
+  else
+    log::error "Failed to create backup of: $file"
+    return 1
+  fi
 }
 
 convert_image() {
-	local input="$1"
-	local output="$2"
-	local format="$3"
-	local quality="$4"
-	local verbose="$5"
-	local dry_run="$6"
+  local input="$1"
+  local output="$2"
+  local format="$3"
+  local quality="$4"
+  local verbose="$5"
+  local dry_run="$6"
 
-	# Use the appropriate ImageMagick command (magick or convert)
-	local imagemagick_cmd="magick"
-	if ! command -v magick >/dev/null 2>&1 && command -v convert >/dev/null 2>&1; then
-		imagemagick_cmd="convert"
-	fi
+  # Use the appropriate ImageMagick command (magick or convert)
+  local imagemagick_cmd="magick"
+  if ! command -v magick >/dev/null 2>&1 && command -v convert >/dev/null 2>&1; then
+    imagemagick_cmd="convert"
+  fi
 
-	local convert_cmd=("$imagemagick_cmd" "$input")
-	local format_args=()
+  local convert_cmd=("$imagemagick_cmd" "$input")
+  local format_args=()
 
-	# Add format-specific arguments
-	case "$format" in
-	jpg | jpeg)
-		format_args+=("-quality" "$quality")
-		;;
-	webp)
-		format_args+=("-quality" "$quality")
-		;;
-	png)
-		# PNG doesn't need quality setting
-		;;
-	tiff)
-		# TIFF doesn't need quality setting
-		;;
-	bmp)
-		# BMP doesn't need quality setting
-		;;
-	esac
+  # Add format-specific arguments
+  case "$format" in
+    jpg | jpeg)
+      format_args+=("-quality" "$quality")
+      ;;
+    webp)
+      format_args+=("-quality" "$quality")
+      ;;
+    png)
+      # PNG doesn't need quality setting
+      ;;
+    tiff)
+      # TIFF doesn't need quality setting
+      ;;
+    bmp)
+      # BMP doesn't need quality setting
+      ;;
+  esac
 
-	# For format override, we need to specify the format properly
-	# ImageMagick uses the format: prefix syntax for explicit format specification
-	local output_with_format="$output"
-	if [[ -n "$format" ]]; then
-		# Convert format to ImageMagick format specification
-		case "$format" in
-		jpg | jpeg) output_with_format="JPEG:$output" ;;
-		webp) output_with_format="WEBP:$output" ;;
-		png) output_with_format="PNG:$output" ;;
-		tiff) output_with_format="TIFF:$output" ;;
-		bmp) output_with_format="BMP:$output" ;;
-		esac
-	fi
+  # For format override, we need to specify the format properly
+  # ImageMagick uses the format: prefix syntax for explicit format specification
+  local output_with_format="$output"
+  if [[ -n $format ]]; then
+    # Convert format to ImageMagick format specification
+    case "$format" in
+      jpg | jpeg) output_with_format="JPEG:$output" ;;
+      webp) output_with_format="WEBP:$output" ;;
+      png) output_with_format="PNG:$output" ;;
+      tiff) output_with_format="TIFF:$output" ;;
+      bmp) output_with_format="BMP:$output" ;;
+    esac
+  fi
 
-	# Add format arguments and output file
-	if [[ ${#format_args[@]} -gt 0 ]]; then
-		convert_cmd+=("${format_args[@]}")
-	fi
-	convert_cmd+=("$output_with_format")
+  # Add format arguments and output file
+  if [[ ${#format_args[@]} -gt 0 ]]; then
+    convert_cmd+=("${format_args[@]}")
+  fi
+  convert_cmd+=("$output_with_format")
 
-	if [[ "$dry_run" == true ]]; then
-		log::info "Would execute: ${convert_cmd[*]}"
-		return 0
-	fi
+  if [[ $dry_run == true ]]; then
+    log::info "Would execute: ${convert_cmd[*]}"
+    return 0
+  fi
 
-	if [[ "$verbose" == true ]]; then
-		log::info "Executing: ${convert_cmd[*]}"
-	fi
+  if [[ $verbose == true ]]; then
+    log::info "Executing: ${convert_cmd[*]}"
+  fi
 
-	if "${convert_cmd[@]}"; then
-		return 0
-	else
-		log::error "Image conversion failed"
-		return 1
-	fi
+  if "${convert_cmd[@]}"; then
+    return 0
+  else
+    log::error "Image conversion failed"
+    return 1
+  fi
 }
 
 main() {
-	# Default values
-	local quality=""
-	local format=""
-	local backup=false
-	local overwrite=false
-	local verbose=false
-	local dry_run=false
-	local input=""
-	local output=""
+  # Default values
+  local quality=""
+  local format=""
+  local backup=false
+  local overwrite=false
+  local verbose=false
+  local dry_run=false
+  local input=""
+  local output=""
 
-	# Parse command line arguments
-	while [[ $# -gt 0 ]]; do
-		case $1 in
-		-h | --help)
-			show_help
-			exit 0
-			;;
-		-v | --version)
-			echo "$(basename "$0") $(get_version)"
-			exit 0
-			;;
-		-q | --quality)
-			quality="$2"
-			shift 2
-			;;
-		-f | --format)
-			format="$2"
-			shift 2
-			;;
-		--backup)
-			backup=true
-			shift
-			;;
-		--overwrite)
-			overwrite=true
-			shift
-			;;
-		--verbose)
-			verbose=true
-			shift
-			;;
-		--dry-run)
-			dry_run=true
-			shift
-			;;
-		--update)
-			if [[ "${TEST_MODE:-}" == "true" ]]; then
-				echo "update-imgxsh (test-mode)"
-				exit 0
-			fi
-			if command -v update-imgxsh >/dev/null 2>&1; then
-				update-imgxsh --check
-			else
-				log::error "update-imgxsh not available"
-				exit 1
-			fi
-			;;
-		--check-version)
-			echo "imgxsh-convert $(get_version)"
-			IMGXSH_REPO="jeromecoloma/imgxsh" "${SHELL_STARTER_ROOT}/scripts/check-version.sh" status || true
-			exit 0
-			;;
-		-*)
-			log::error "Unknown option: $1"
-			show_help
-			exit 1
-			;;
-		*)
-			# Positional arguments
-			if [[ -z "$input" ]]; then
-				input="$1"
-			elif [[ -z "$output" ]]; then
-				output="$1"
-			else
-				log::error "Too many arguments"
-				show_help
-				exit 1
-			fi
-			shift
-			;;
-		esac
-	done
+  # Parse command line arguments
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      -h | --help)
+        show_help
+        exit 0
+        ;;
+      -v | --version)
+        echo "$(basename "$0") $(get_version)"
+        exit 0
+        ;;
+      -q | --quality)
+        quality="$2"
+        shift 2
+        ;;
+      -f | --format)
+        format="$2"
+        shift 2
+        ;;
+      --backup)
+        backup=true
+        shift
+        ;;
+      --overwrite)
+        overwrite=true
+        shift
+        ;;
+      --verbose)
+        verbose=true
+        shift
+        ;;
+      --dry-run)
+        dry_run=true
+        shift
+        ;;
+      --update)
+        if [[ ${TEST_MODE:-} == "true" ]]; then
+          echo "update-imgxsh (test-mode)"
+          exit 0
+        fi
+        if command -v update-imgxsh >/dev/null 2>&1; then
+          update-imgxsh --check
+        else
+          log::error "update-imgxsh not available"
+          exit 1
+        fi
+        ;;
+      --check-version)
+        echo "imgxsh-convert $(get_version)"
+        IMGXSH_REPO="jeromecoloma/imgxsh" "${SHELL_STARTER_ROOT}/scripts/check-version.sh" status || true
+        exit 0
+        ;;
+      -*)
+        log::error "Unknown option: $1"
+        show_help
+        exit 1
+        ;;
+      *)
+        # Positional arguments
+        if [[ -z $input ]]; then
+          input="$1"
+        elif [[ -z $output ]]; then
+          output="$1"
+        else
+          log::error "Too many arguments"
+          show_help
+          exit 1
+        fi
+        shift
+        ;;
+    esac
+  done
 
-	# Validate required arguments
-	if [[ -z "$input" ]]; then
-		log::error "Input file is required"
-		show_help
-		exit 1
-	fi
+  # Validate required arguments
+  if [[ -z $input ]]; then
+    log::error "Input file is required"
+    show_help
+    exit 1
+  fi
 
-	if [[ -z "$output" ]]; then
-		log::error "Output file is required"
-		show_help
-		exit 1
-	fi
+  if [[ -z $output ]]; then
+    log::error "Output file is required"
+    show_help
+    exit 1
+  fi
 
-	# Validate dependencies
-	if ! validate_dependencies; then
-		exit 1
-	fi
+  # Validate dependencies
+  if ! validate_dependencies; then
+    exit 1
+  fi
 
-	# Validate input file
-	if [[ ! -r "$input" ]]; then
-		log::error "Cannot read input file: $input"
-		exit 1
-	fi
+  # Validate input file
+  if [[ ! -r $input ]]; then
+    log::error "Cannot read input file: $input"
+    exit 1
+  fi
 
-	# Determine output format
-	if [[ -z "$format" ]]; then
-		format=$(extract_format_from_filename "$output")
-		if [[ "$verbose" == true ]]; then
-			log::info "Detected output format from filename: $format"
-		fi
-	fi
+  # Determine output format
+  if [[ -z $format ]]; then
+    format=$(extract_format_from_filename "$output")
+    if [[ $verbose == true ]]; then
+      log::info "Detected output format from filename: $format"
+    fi
+  fi
 
-	# Validate format
-	if ! validate_format "$format"; then
-		exit 1
-	fi
+  # Validate format
+  if ! validate_format "$format"; then
+    exit 1
+  fi
 
-	# Set default quality if not specified
-	if [[ -z "$quality" ]]; then
-		quality=$(get_default_quality "$format")
-		if [[ "$verbose" == true ]]; then
-			log::info "Using default quality for $format: $quality"
-		fi
-	fi
+  # Set default quality if not specified
+  if [[ -z $quality ]]; then
+    quality=$(get_default_quality "$format")
+    if [[ $verbose == true ]]; then
+      log::info "Using default quality for $format: $quality"
+    fi
+  fi
 
-	# Validate quality
-	if ! validate_quality "$quality"; then
-		exit 1
-	fi
+  # Validate quality
+  if ! validate_quality "$quality"; then
+    exit 1
+  fi
 
-	# Check if output file exists
-	if [[ -f "$output" ]] && [[ "$overwrite" != true ]] && [[ "$dry_run" != true ]]; then
-		log::error "Output file exists: $output"
-		log::info "Use --overwrite to replace existing file"
-		exit 1
-	fi
+  # Check if output file exists
+  if [[ -f $output ]] && [[ $overwrite != true ]] && [[ $dry_run != true ]]; then
+    log::error "Output file exists: $output"
+    log::info "Use --overwrite to replace existing file"
+    exit 1
+  fi
 
-	# Get input image information
-	if [[ "$verbose" == true ]] || [[ "$dry_run" == true ]]; then
-		local input_info
-		if input_info=$(get_image_info "$input"); then
-			log::info "Input image: $input_info"
-		fi
-	fi
+  # Get input image information
+  if [[ $verbose == true ]] || [[ $dry_run == true ]]; then
+    local input_info
+    if input_info=$(get_image_info "$input"); then
+      log::info "Input image: $input_info"
+    fi
+  fi
 
-	# Create backup if requested
-	if [[ "$backup" == true ]] && [[ "$dry_run" != true ]]; then
-		if [[ -f "$input" ]] && [[ "$input" != "$output" ]]; then
-			if ! create_backup "$input"; then
-				exit 1
-			fi
-		fi
-	fi
+  # Create backup if requested
+  if [[ $backup == true ]] && [[ $dry_run != true ]]; then
+    if [[ -f $input ]] && [[ $input != "$output" ]]; then
+      if ! create_backup "$input"; then
+        exit 1
+      fi
+    fi
+  fi
 
-	# Show operation summary
-	if [[ "$verbose" == true ]] || [[ "$dry_run" == true ]]; then
-		log::info "Conversion summary:"
-		log::info "  Input:    $input"
-		log::info "  Output:   $output"
-		log::info "  Format:   $format"
-		log::info "  Quality:  $quality"
-		log::info "  Backup:   $backup"
-		log::info "  Dry-run:  $dry_run"
-	fi
+  # Show operation summary
+  if [[ $verbose == true ]] || [[ $dry_run == true ]]; then
+    log::info "Conversion summary:"
+    log::info "  Input:    $input"
+    log::info "  Output:   $output"
+    log::info "  Format:   $format"
+    log::info "  Quality:  $quality"
+    log::info "  Backup:   $backup"
+    log::info "  Dry-run:  $dry_run"
+  fi
 
-	# Perform conversion
-	if [[ "$verbose" == true ]] && [[ "$dry_run" != true ]]; then
-		spinner::start "Converting $input to $format format"
-	fi
+  # Perform conversion
+  if [[ $verbose == true ]] && [[ $dry_run != true ]]; then
+    spinner::start "Converting $input to $format format"
+  fi
 
-	if convert_image "$input" "$output" "$format" "$quality" "$verbose" "$dry_run"; then
-		if [[ "$verbose" == true ]] && [[ "$dry_run" != true ]]; then
-			spinner::stop
-		fi
+  if convert_image "$input" "$output" "$format" "$quality" "$verbose" "$dry_run"; then
+    if [[ $verbose == true ]] && [[ $dry_run != true ]]; then
+      spinner::stop
+    fi
 
-		if [[ "$dry_run" == true ]]; then
-			log::success "Dry-run completed - no files were modified"
-		else
-			log::success "Successfully converted $input to $output"
+    if [[ $dry_run == true ]]; then
+      log::success "Dry-run completed - no files were modified"
+    else
+      log::success "Successfully converted $input to $output"
 
-			# Show output file information
-			if [[ "$verbose" == true ]]; then
-				local output_info
-				if output_info=$(get_image_info "$output"); then
-					log::info "Output image: $output_info"
-				fi
-			fi
-		fi
-	else
-		if [[ "$verbose" == true ]] && [[ "$dry_run" != true ]]; then
-			spinner::stop
-		fi
-		log::error "Conversion failed"
-		exit 1
-	fi
+      # Show output file information
+      if [[ $verbose == true ]]; then
+        local output_info
+        if output_info=$(get_image_info "$output"); then
+          log::info "Output image: $output_info"
+        fi
+      fi
+    fi
+  else
+    if [[ $verbose == true ]] && [[ $dry_run != true ]]; then
+      spinner::stop
+    fi
+    log::error "Conversion failed"
+    exit 1
+  fi
 }
 
 # Only run main if script is executed directly
-if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-	main "$@"
+if [[ ${BASH_SOURCE[0]} == "${0}" ]]; then
+  main "$@"
 fi
