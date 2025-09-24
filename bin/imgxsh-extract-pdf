@@ -54,7 +54,7 @@ OPTIONS:
     -f, --format FORMAT   Output format (jpg, png, tiff, bmp) [default: jpg]
     -q, --quality QUALITY Quality setting for lossy formats (1-100) [default: 85]
     -p, --prefix PREFIX   Prefix for extracted image names [default: page]
-    --page-range RANGE    Extract specific pages (e.g., "1-5", "1,3,7", "2-")
+    --page-range RANGE    Extract specific pages (e.g., "1-5", "1,3,7", "2-", "1-3,5,7-9")
     --list-only           Show summary of PDF (Pages and Embedded images) without extracting
     --embedded-images     Extract embedded raster images (uses pdfimages); default is rasterized pages
     --no-metadata         Skip metadata extraction and preservation
@@ -75,6 +75,12 @@ EXAMPLES:
     # Extract specific pages with custom naming
     $(basename "$0") --page-range "1-5" --prefix "chapter1" document.pdf ./images/
     
+    # Extract complex page ranges (mixed ranges and individual pages)
+    $(basename "$0") --page-range "1,3,7,10-12" document.pdf ./images/
+    
+    # Extract from page 5 to end of document
+    $(basename "$0") --page-range "5-" document.pdf ./images/
+    
     # Extract as PNG with high quality
     $(basename "$0") --format png --quality 95 document.pdf ./high-res/
     
@@ -83,6 +89,16 @@ EXAMPLES:
     
     # Dry run to preview operations
     $(basename "$0") --dry-run --verbose document.pdf ./output/
+
+PAGE RANGE FORMATS:
+    Simple range:     "1-5"     (pages 1 through 5)
+    Individual pages: "1,3,7"   (pages 1, 3, and 7)
+    Open range:       "5-"      (from page 5 to end)
+    Mixed ranges:     "1-3,5,7-9" (pages 1-3, 5, and 7-9)
+    
+    Note: Pages are processed individually to maintain correct output numbering.
+    Output files are numbered sequentially (page-01.jpg, page-02.jpg, etc.)
+    regardless of which source pages are selected.
 
 DEPENDENCIES:
     ImageMagick (magick/convert) - Required for default rasterized page extraction
@@ -249,6 +265,67 @@ parse_page_range() {
 		log::info "Valid formats: '1-5', '1,3,7', '2-', '1-3,5,7-10'"
 		return 1
 	fi
+
+	return 0
+}
+
+# Parse complex page ranges and return array of page numbers
+parse_complex_page_range() {
+	local range="$1"
+	local pages_array_name="$2"
+
+	# Initialize the array
+	eval "$pages_array_name=()"
+
+	if [[ -z "$range" ]]; then
+		return 0
+	fi
+
+	# Split by commas and process each part
+	IFS=',' read -ra parts <<<"$range"
+
+	for part in "${parts[@]}"; do
+		part=$(echo "$part" | tr -d ' ') # Remove spaces
+
+		if [[ "$part" =~ ^[0-9]+$ ]]; then
+			# Single page number
+			eval "$pages_array_name+=(\"$part\")"
+		elif [[ "$part" =~ ^[0-9]+-[0-9]+$ ]]; then
+			# Range like "1-5"
+			local start_page="${part%-*}"
+			local end_page="${part#*-}"
+
+			# Validate range
+			if [[ "$start_page" -gt "$end_page" ]]; then
+				log::error "Invalid page range: $part (start > end)"
+				return 1
+			fi
+
+			# Add all pages in range
+			for ((page = start_page; page <= end_page; page++)); do
+				eval "$pages_array_name+=(\"$page\")"
+			done
+		elif [[ "$part" =~ ^[0-9]+-$ ]]; then
+			# Open range like "5-" (from page 5 to end)
+			local start_page="${part%-}"
+			eval "$pages_array_name+=(\"${start_page}-\")"
+		else
+			log::error "Invalid page range part: $part"
+			return 1
+		fi
+	done
+
+	# Remove duplicates and sort using a temporary file approach
+	local temp_file=$(mktemp)
+	eval "printf '%s\n' \"\${${pages_array_name}[@]}\"" | sort -n >"$temp_file"
+
+	# Read back the sorted unique values
+	eval "$pages_array_name=()"
+	while IFS= read -r line; do
+		eval "$pages_array_name+=(\"$line\")"
+	done <"$temp_file"
+
+	rm -f "$temp_file"
 
 	return 0
 }
@@ -461,43 +538,98 @@ extract_rasterized_pages() {
 	fi
 
 	local density=300
-	local output_pattern="$output_dir/${PREFIX}-%02d.$FORMAT"
+	local processed_count=0
+	local failed_count=0
 
-	local range_input="$pdf_file"
+	# Handle complex page ranges
 	if [[ -n "$PAGE_RANGE" ]]; then
-		# Convert simple "a-b" to [a-b], otherwise leave to ImageMagick default
-		# Note: Complex ranges like 1,3,7 aren't directly supported by IM in one call
-		if [[ "$PAGE_RANGE" =~ ^[0-9]+-[0-9]+$ ]]; then
-			range_input="${pdf_file}[$PAGE_RANGE]"
+		# Parse complex page range
+		if ! parse_complex_page_range "$PAGE_RANGE" pages_array; then
+			return 1
+		fi
+
+		# Get the parsed pages array
+		eval "local pages_array=(\"\${pages_array[@]}\")"
+
+		if [[ ${#pages_array[@]} -eq 0 ]]; then
+			log::warn "No valid pages found in range: $PAGE_RANGE"
+			return 0
+		fi
+
+		if [[ "$VERBOSE" == true ]]; then
+			log::info "Processing pages: ${pages_array[*]}"
+		fi
+
+		# Process each page individually to maintain correct numbering
+		local output_counter=1
+		for page in "${pages_array[@]}"; do
+			local output_file="$output_dir/${PREFIX}-$(printf "%02d" "$output_counter").$FORMAT"
+
+			if [[ "$page" == *"-" ]]; then
+				# Handle open range (e.g., "5-" means from page 5 to end)
+				local start_page="${page%-}"
+				if [[ "$DRY_RUN" == true ]]; then
+					log::info "Would run: $magick_cmd -density $density \"${pdf_file}[${start_page}-]\" -quality $QUALITY \"$output_file\""
+				else
+					if $magick_cmd -density $density "${pdf_file}[${start_page}-]" -quality "$QUALITY" "$output_file" 2>/dev/null; then
+						((processed_count++))
+					else
+						((failed_count++))
+						log::error "Failed to rasterize pages from $start_page to end"
+					fi
+				fi
+				((output_counter++))
+			else
+				# Handle single page
+				if [[ "$DRY_RUN" == true ]]; then
+					log::info "Would run: $magick_cmd -density $density \"${pdf_file}[$page]\" -quality $QUALITY \"$output_file\""
+				else
+					if $magick_cmd -density $density "${pdf_file}[$page]" -quality "$QUALITY" "$output_file" 2>/dev/null; then
+						((processed_count++))
+					else
+						((failed_count++))
+						log::error "Failed to rasterize page $page"
+					fi
+				fi
+				((output_counter++))
+			fi
+		done
+	else
+		# No page range specified - process all pages
+		local output_pattern="$output_dir/${PREFIX}-%02d.$FORMAT"
+
+		if [[ "$DRY_RUN" == true ]]; then
+			log::info "Would run: $magick_cmd -density $density \"$pdf_file\" -quality $QUALITY \"$output_pattern\""
 		else
-			log::warn "Complex page ranges are not fully supported for raster mode; rendering full document"
+			if $magick_cmd -density $density "$pdf_file" -quality "$QUALITY" "$output_pattern" 2>/dev/null; then
+				# Count generated files
+				shopt -s nullglob
+				for f in "$output_dir"/"${PREFIX}-"*."$FORMAT"; do
+					[[ -f "$f" ]] && ((processed_count++))
+				done
+				shopt -u nullglob
+			else
+				log::error "Failed to rasterize PDF pages"
+				return 1
+			fi
 		fi
 	fi
 
 	if [[ "$DRY_RUN" == true ]]; then
-		log::info "Would run: $magick_cmd -density $density \"$range_input\" -quality $QUALITY \"$output_pattern\""
+		log::info "Dry run completed - no files were modified"
 		return 0
 	fi
 
-	if ! $magick_cmd -density $density "$range_input" -quality "$QUALITY" "$output_pattern" 2>/dev/null; then
-		log::error "Failed to rasterize PDF pages"
-		return 1
-	fi
-
-	# Count generated files
-	local count=0
-	shopt -s nullglob
-	for f in "$output_dir"/"${PREFIX}-"*."$FORMAT"; do
-		[[ -f "$f" ]] && ((count++))
-	done
-	shopt -u nullglob
-
-	if [[ "$count" -eq 0 ]]; then
-		log::warn "No pages were rasterized (no output files created)"
+	if [[ "$processed_count" -eq 0 ]]; then
+		log::warn "No pages were rasterized from PDF"
 		return 0
 	fi
 
-	log::success "Successfully rendered $count page images"
+	if [[ "$failed_count" -gt 0 ]]; then
+		log::warn "Successfully processed $processed_count pages, $failed_count failed"
+	else
+		log::success "Successfully rasterized $processed_count pages"
+	fi
 
 	if [[ "$EXTRACT_METADATA" == true ]]; then
 		extract_pdf_metadata "$pdf_file" "$output_dir"

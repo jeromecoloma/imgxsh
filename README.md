@@ -64,8 +64,9 @@ curl -fsSL https://github.com/jeromecoloma/imgxsh/install.sh | bash
   - Default: rasterize one image per page (ImageMagick, density 300, quality 90)
   - `--embedded-images` to extract original embedded raster images (pdfimages)
   - `--list-only` shows both Pages (via `pdfinfo`) and Embedded images (via `pdfimages`)
-  - Page range selection (limited in raster mode), format conversion, metadata preservation
-  - Template-based naming, quality control, dry-run mode
+  - Advanced page range selection: simple ranges (`1-5`), individual pages (`1,3,7`), open ranges (`5-`), mixed ranges (`1-3,5,7-9`)
+  - Sequential output numbering preserves naming scheme while skipping non-selected pages
+  - Format conversion, metadata preservation, template-based naming, quality control, dry-run mode
 - `imgxsh-extract-excel` - Extract images from Excel files
   - .xlsx support via `unzip` (lists and extracts `xl/media/*`)
   - `--list-only` to preview embedded media; verbose shows file list
@@ -116,6 +117,12 @@ imgxsh-extract-pdf --list-only document.pdf ./out
 # Rasterize pages to JPG (default): page-00.jpg, page-01.jpg, ...
 imgxsh-extract-pdf document.pdf ./out
 
+# Extract specific page ranges with sequential numbering
+imgxsh-extract-pdf --page-range "1-5" document.pdf ./out
+imgxsh-extract-pdf --page-range "1,3,7" document.pdf ./out
+imgxsh-extract-pdf --page-range "5-" document.pdf ./out
+imgxsh-extract-pdf --page-range "1-3,5,7-9" document.pdf ./out
+
 # Extract embedded images instead of rasterizing pages
 imgxsh-extract-pdf --embedded-images document.pdf ./out
 
@@ -125,7 +132,8 @@ imgxsh-extract-pdf --dry-run --verbose document.pdf ./out
 
 Notes:
 - Raster mode uses `magick`/`convert -density 300 -quality 90` by default.
-- Complex page ranges like `1,3,7` are not fully supported in a single rasterization call; ranges like `1-5` are supported.
+- Complex page ranges are fully supported: simple ranges (`1-5`), individual pages (`1,3,7`), open ranges (`5-`), mixed ranges (`1-3,5,7-9`).
+- Pages are processed individually to maintain correct sequential output numbering (page-01.jpg, page-02.jpg, etc.).
 - Embedded images mode uses `pdfimages` and may produce many images per page depending on the document.
 
 ### Excel Extraction (`imgxsh-extract-excel`)

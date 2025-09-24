@@ -38,6 +38,9 @@ OPTIONS:
     -f, --format FORMAT Output format (png, jpg, webp, tiff, bmp, auto)
     --aspect-ratio RATIO Force specific aspect ratio (e.g., 16:9, 4:3)
     --crop              Crop to exact dimensions (disables aspect ratio preservation)
+    --crop-x X          Crop X offset (pixels from left edge, default: center)
+    --crop-y Y          Crop Y offset (pixels from top edge, default: center)
+    --crop-gravity POS  Crop gravity: center, north, south, east, west, northeast, northwest, southeast, southwest
     --fit               Fit within dimensions (maintains aspect ratio, default)
     --fill              Fill dimensions (crop to fit, maintains aspect ratio)
     --stretch           Stretch to exact dimensions (ignores aspect ratio)
@@ -71,8 +74,14 @@ EXAMPLES:
     # Force aspect ratio
     $(basename "$0") --aspect-ratio 16:9 --width 1920 input.jpg output.jpg
 
-    # Crop to exact dimensions
+    # Crop to exact dimensions (center-based)
     $(basename "$0") --crop --size 800x600 input.jpg output.jpg
+
+    # Crop with specific position (top-left corner)
+    $(basename "$0") --crop --size 800x600 --crop-x 0 --crop-y 0 input.jpg output.jpg
+
+    # Crop with gravity positioning
+    $(basename "$0") --crop --size 800x600 --crop-gravity northeast input.jpg output.jpg
 
     # Batch resize directory (preserves relative structure)
     $(basename "$0") --width 800 ./images/ ./resized/
@@ -324,6 +333,9 @@ build_resize_command() {
 	local resize_mode="${10}"
 	local quality="${11}"
 	local format="${12}"
+	local crop_x="${13:-}"
+	local crop_y="${14:-}"
+	local crop_gravity="${15:-center}"
 
 	local magick_cmd
 	magick_cmd="$(get_imagemagick_cmd)"
@@ -432,7 +444,17 @@ build_resize_command() {
 
 	# Add crop operations for crop/fill modes
 	if [[ "$resize_mode" == "crop" || "$resize_mode" == "fill" ]]; then
-		cmd_parts+=("-gravity" "center" "-crop" "${width}x${height}+0+0")
+		# Determine crop position
+		local crop_offset=""
+		if [[ -n "$crop_x" && -n "$crop_y" ]]; then
+			# Use absolute coordinates
+			crop_offset="+${crop_x}+${crop_y}"
+		else
+			# Use gravity-based positioning
+			crop_offset="+0+0"
+		fi
+
+		cmd_parts+=("-gravity" "$crop_gravity" "-crop" "${width}x${height}${crop_offset}")
 	fi
 
 	# Add quality setting for lossy formats
@@ -468,6 +490,9 @@ resize_image() {
 	local quality="${11}"
 	local format="${12}"
 	local backup="${13}"
+	local crop_x="${14:-}"
+	local crop_y="${15:-}"
+	local crop_gravity="${16:-center}"
 
 	# Validate input
 	if ! validate_input_file "$input_file"; then
@@ -504,7 +529,7 @@ resize_image() {
 
 	# Build resize command
 	local resize_cmd
-	resize_cmd="$(build_resize_command "$input_file" "$output_file" "$width" "$height" "$max_width" "$max_height" "$min_width" "$min_height" "$aspect_ratio" "$resize_mode" "$quality" "$output_format")"
+	resize_cmd="$(build_resize_command "$input_file" "$output_file" "$width" "$height" "$max_width" "$max_height" "$min_width" "$min_height" "$aspect_ratio" "$resize_mode" "$quality" "$output_format" "$crop_x" "$crop_y" "$crop_gravity")"
 
 	if [[ "$VERBOSE" == "true" ]]; then
 		log::info "Resize command: $resize_cmd"
@@ -567,6 +592,9 @@ process_directory() {
 	local format="${12}"
 	local backup="${13}"
 	local overwrite="${14}"
+	local crop_x="${15:-}"
+	local crop_y="${16:-}"
+	local crop_gravity="${17:-center}"
 
 	local processed=0
 	local failed=0
@@ -632,7 +660,7 @@ process_directory() {
 			spinner::start "Resizing $relative_path"
 			spinner_active=true
 		fi
-		if resize_image "$input_file" "$output_file" "$width" "$height" "$max_width" "$max_height" "$min_width" "$min_height" "$aspect_ratio" "$resize_mode" "$quality" "$format" "$backup"; then
+		if resize_image "$input_file" "$output_file" "$width" "$height" "$max_width" "$max_height" "$min_width" "$min_height" "$aspect_ratio" "$resize_mode" "$quality" "$format" "$backup" "$crop_x" "$crop_y" "$crop_gravity"; then
 			((processed++))
 		else
 			((failed++))
@@ -672,6 +700,9 @@ main() {
 	local quiet=false
 	local input_file=""
 	local output_file=""
+	local crop_x=""
+	local crop_y=""
+	local crop_gravity="center"
 
 	# Parse command line arguments
 	while [[ $# -gt 0 ]]; do
@@ -734,6 +765,34 @@ main() {
 		--crop)
 			resize_mode="crop"
 			shift
+			;;
+		--crop-x)
+			crop_x="$2"
+			if [[ ! "$crop_x" =~ ^[0-9]+$ ]]; then
+				log::error "Crop X offset must be a positive number: $crop_x"
+				exit 1
+			fi
+			shift 2
+			;;
+		--crop-y)
+			crop_y="$2"
+			if [[ ! "$crop_y" =~ ^[0-9]+$ ]]; then
+				log::error "Crop Y offset must be a positive number: $crop_y"
+				exit 1
+			fi
+			shift 2
+			;;
+		--crop-gravity)
+			crop_gravity="$2"
+			case "$crop_gravity" in
+			center | north | south | east | west | northeast | northwest | southeast | southwest) ;;
+			*)
+				log::error "Invalid crop gravity: $crop_gravity"
+				log::info "Valid options: center, north, south, east, west, northeast, northwest, southeast, southwest"
+				exit 1
+				;;
+			esac
+			shift 2
 			;;
 		--fit)
 			resize_mode="fit"
@@ -899,11 +958,11 @@ main() {
 
 	# Process files
 	if [[ "$input_is_dir" == "true" ]]; then
-		if ! process_directory "$input_file" "$output_file" "$width" "$height" "$max_width" "$max_height" "$min_width" "$min_height" "$aspect_ratio" "$resize_mode" "$quality" "$format" "$backup" "$overwrite"; then
+		if ! process_directory "$input_file" "$output_file" "$width" "$height" "$max_width" "$max_height" "$min_width" "$min_height" "$aspect_ratio" "$resize_mode" "$quality" "$format" "$backup" "$overwrite" "$crop_x" "$crop_y" "$crop_gravity"; then
 			exit 1
 		fi
 	else
-		if ! resize_image "$input_file" "$output_file" "$width" "$height" "$max_width" "$max_height" "$min_width" "$min_height" "$aspect_ratio" "$resize_mode" "$quality" "$format" "$backup"; then
+		if ! resize_image "$input_file" "$output_file" "$width" "$height" "$max_width" "$max_height" "$min_width" "$min_height" "$aspect_ratio" "$resize_mode" "$quality" "$format" "$backup" "$crop_x" "$crop_y" "$crop_gravity"; then
 			exit 1
 		fi
 	fi
