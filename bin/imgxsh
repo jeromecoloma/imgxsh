@@ -87,6 +87,9 @@ workflow help with: $(basename "$0") --workflow WORKFLOW_NAME --help
 EOF
 }
 
+## Initialize error traps early for robust error handling and spinner safety
+imgxsh::setup_error_traps
+
 show_workflow_help() {
 	local workflow="$1"
 

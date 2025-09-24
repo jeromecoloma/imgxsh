@@ -21,6 +21,97 @@ readonly IMGXSH_PLUGINS_DIR="${IMGXSH_CONFIG_DIR}/plugins"
 readonly IMGXSH_PRESETS_DIR="${IMGXSH_CONFIG_DIR}/presets"
 readonly IMGXSH_TEMP_DIR="${TMPDIR:-/tmp}/imgxsh"
 
+# Internal state for error tracking
+IMGXSH_ERROR_COUNT=${IMGXSH_ERROR_COUNT:-0}
+
+# Stop any active spinner safely (no-op if none active)
+_imgxsh_stop_spinner_safely() {
+	# spinner::stop is safe to call even if not started, but guard just in case
+	if declare -F spinner::stop >/dev/null 2>&1; then
+		spinner::stop || true
+	fi
+}
+
+# Central error handler (used by traps)
+imgxsh::handle_error() {
+	local exit_code=$?
+	local last_cmd=${BASH_COMMAND:-unknown}
+	local context_msg="${1:-}"
+
+	_imgxsh_stop_spinner_safely
+	((IMGXSH_ERROR_COUNT++))
+
+	if [[ -n "$context_msg" ]]; then
+		log::error "$context_msg"
+	fi
+
+	log::error "Command failed (exit $exit_code): $last_cmd"
+	# Respect strict failure if set by caller
+	if [[ "${IMGXSH_STRICT_FAIL:-1}" -eq 1 ]]; then
+		exit "$exit_code"
+	fi
+}
+
+# Install robust error traps for callers (use early in entrypoints)
+imgxsh::setup_error_traps() {
+	# -E to ensure ERR is inherited by functions, -o pipefail already set by scripts
+	set -E
+	trap 'imgxsh::handle_error "An unexpected error occurred"' ERR
+	trap '_imgxsh_stop_spinner_safely' EXIT
+}
+
+# Execute a command with a spinner and consistent logging
+imgxsh::with_spinner() {
+	local message="$1"
+	shift
+	local quiet="${QUIET:-false}"
+
+	if [[ "$quiet" != true ]]; then
+		spinner::start "$message"
+	fi
+
+	# Run the command; on failure, handler will be triggered by ERR trap
+	"$@"
+
+	if [[ "$quiet" != true ]]; then
+		spinner::stop
+	fi
+}
+
+# Validate output directory and one or more input paths
+imgxsh::validate_paths() {
+	local output_dir="$1"
+	shift || true
+
+	if [[ -n "$output_dir" ]]; then
+		if ! imgxsh::ensure_output_dir "$output_dir"; then
+			return 1
+		fi
+	fi
+
+	local input
+	for input in "$@"; do
+		if [[ -z "$input" ]]; then
+			log::error "Empty input path provided"
+			return 1
+		fi
+		if [[ ! -e "$input" ]]; then
+			log::error "Input path does not exist: $input"
+			return 1
+		fi
+		if [[ -f "$input" ]] && [[ ! -r "$input" ]]; then
+			log::error "Cannot read file: $input"
+			return 1
+		fi
+		if [[ -d "$input" ]] && [[ ! -x "$input" ]]; then
+			log::error "Cannot access directory: $input"
+			return 1
+		fi
+	done
+
+	return 0
+}
+
 # Initialize imgxsh environment
 imgxsh::init() {
 	# Create configuration directories if they don't exist
