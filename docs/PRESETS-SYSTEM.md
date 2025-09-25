@@ -403,6 +403,231 @@ overrides:
 
 ## Examples
 
+### PDF to Web Gallery Presets
+
+The `pdf-to-web` workflow is perfect for creating presets that customize the gallery generation for different use cases.
+
+#### High-Quality Gallery Preset
+
+Create a high-quality gallery with larger images and better compression:
+
+```yaml
+name: high-quality-gallery
+description: "High-quality PDF gallery with larger images"
+base_workflow: pdf-to-web
+
+overrides:
+  settings:
+    output_dir: "./high-quality-gallery"
+    parallel_jobs: 2  # Reduce parallel jobs for better quality
+    
+  steps:
+    create_thumbnails:
+      params:
+        width: 400
+        height: 300
+        quality: 90
+        format: "jpg"
+        
+    create_full_size:
+      params:
+        format: "webp"
+        quality: 95
+        max_width: 1920
+        max_height: 1080
+        
+    generate_gallery_html:
+      params:
+        script: |
+          #!/bin/bash
+          # Generate high-quality gallery with enhanced styling
+          html_file="{output_dir}/gallery.html"
+          
+          cat > "$html_file" << 'EOF'
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>High-Quality PDF Gallery</title>
+              <style>
+                  body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+                  .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 25px; padding: 20px; }
+                  .gallery-item { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 8px 32px rgba(0,0,0,0.1); transition: transform 0.3s ease; }
+                  .gallery-item:hover { transform: translateY(-5px); }
+                  .gallery-item img { width: 100%; height: auto; border-radius: 8px; cursor: pointer; }
+                  .gallery-item h3 { margin: 15px 0 8px 0; color: #333; font-size: 18px; }
+                  .gallery-item p { margin: 0; color: #666; font-size: 14px; }
+                  .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.95); }
+                  .modal-content { margin: auto; display: block; max-width: 95%; max-height: 95%; }
+                  .close { position: absolute; top: 20px; right: 40px; color: #f1f1f1; font-size: 50px; font-weight: bold; cursor: pointer; }
+              </style>
+          </head>
+          <body>
+              <h1 style="text-align: center; color: white; margin: 30px 0;">High-Quality PDF Gallery</h1>
+              <div class="gallery">
+          EOF
+          
+          # Generate gallery items with enhanced styling
+          counter=1
+          for thumb in "{output_dir}/thumbnails"/*.jpg; do
+              if [[ -f "$thumb" ]]; then
+                  thumb_name=$(basename "$thumb")
+                  full_name="${thumb_name/_thumb_/_full_}"
+                  full_name="${full_name/.jpg/.webp}"
+                  echo "                  <div class=\"gallery-item\">" >> "$html_file"
+                  echo "                      <img src=\"thumbnails/$thumb_name\" onclick=\"openModal('full/$full_name')\" alt=\"Page $counter\">" >> "$html_file"
+                  echo "                      <h3>Page $counter</h3>" >> "$html_file"
+                  echo "                      <p>Click to view full resolution</p>" >> "$html_file"
+                  echo "                  </div>" >> "$html_file"
+                  ((counter++))
+              fi
+          done
+          
+          cat >> "$html_file" << 'EOF'
+              </div>
+              <div id="modal" class="modal">
+                  <span class="close" onclick="closeModal()">&times;</span>
+                  <img class="modal-content" id="modalImg">
+              </div>
+              <script>
+                  function openModal(src) {
+                      document.getElementById('modal').style.display = 'block';
+                      document.getElementById('modalImg').src = src;
+                  }
+                  function closeModal() {
+                      document.getElementById('modal').style.display = 'none';
+                  }
+                  window.onclick = function(event) {
+                      const modal = document.getElementById('modal');
+                      if (event.target == modal) {
+                          modal.style.display = 'none';
+                      }
+                  }
+              </script>
+          </body>
+          </html>
+          EOF
+          
+          echo "High-quality gallery created at $html_file"
+
+hooks:
+  on_success:
+    - echo "High-quality gallery created successfully"
+    - echo "Gallery: {output_dir}/gallery.html"
+    - echo "Thumbnails: {output_dir}/thumbnails/"
+    - echo "Full images: {output_dir}/full/"
+```
+
+#### Mobile-Optimized Gallery Preset
+
+Create a mobile-optimized gallery with smaller file sizes:
+
+```yaml
+name: mobile-gallery
+description: "Mobile-optimized PDF gallery with smaller file sizes"
+base_workflow: pdf-to-web
+
+overrides:
+  settings:
+    output_dir: "./mobile-gallery"
+    parallel_jobs: 6  # More parallel jobs for faster processing
+    
+  steps:
+    create_thumbnails:
+      params:
+        width: 200
+        height: 150
+        quality: 75
+        format: "jpg"
+        
+    create_full_size:
+      params:
+        format: "webp"
+        quality: 80
+        max_width: 800
+        max_height: 600
+        
+    generate_gallery_html:
+      params:
+        script: |
+          #!/bin/bash
+          # Generate mobile-optimized gallery
+          html_file="{output_dir}/gallery.html"
+          
+          cat > "$html_file" << 'EOF'
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>Mobile PDF Gallery</title>
+              <style>
+                  body { font-family: Arial, sans-serif; margin: 0; padding: 10px; background-color: #f5f5f5; }
+                  .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+                  .gallery-item { background: white; border-radius: 6px; padding: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+                  .gallery-item img { width: 100%; height: auto; border-radius: 4px; cursor: pointer; }
+                  .gallery-item h3 { margin: 8px 0 4px 0; color: #333; font-size: 14px; }
+                  .gallery-item p { margin: 0; color: #666; font-size: 12px; }
+                  .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.9); }
+                  .modal-content { margin: auto; display: block; max-width: 95%; max-height: 95%; }
+                  .close { position: absolute; top: 15px; right: 25px; color: #f1f1f1; font-size: 30px; font-weight: bold; cursor: pointer; }
+              </style>
+          </head>
+          <body>
+              <h1 style="text-align: center; color: #333; margin: 20px 0;">Mobile PDF Gallery</h1>
+              <div class="gallery">
+          EOF
+          
+          counter=1
+          for thumb in "{output_dir}/thumbnails"/*.jpg; do
+              if [[ -f "$thumb" ]]; then
+                  thumb_name=$(basename "$thumb")
+                  full_name="${thumb_name/_thumb_/_full_}"
+                  full_name="${full_name/.jpg/.webp}"
+                  echo "                  <div class=\"gallery-item\">" >> "$html_file"
+                  echo "                      <img src=\"thumbnails/$thumb_name\" onclick=\"openModal('full/$full_name')\" alt=\"Page $counter\">" >> "$html_file"
+                  echo "                      <h3>Page $counter</h3>" >> "$html_file"
+                  echo "                      <p>Tap to view</p>" >> "$html_file"
+                  echo "                  </div>" >> "$html_file"
+                  ((counter++))
+              fi
+          done
+          
+          cat >> "$html_file" << 'EOF'
+              </div>
+              <div id="modal" class="modal">
+                  <span class="close" onclick="closeModal()">&times;</span>
+                  <img class="modal-content" id="modalImg">
+              </div>
+              <script>
+                  function openModal(src) {
+                      document.getElementById('modal').style.display = 'block';
+                      document.getElementById('modalImg').src = src;
+                  }
+                  function closeModal() {
+                      document.getElementById('modal').style.display = 'none';
+                  }
+                  window.onclick = function(event) {
+                      const modal = document.getElementById('modal');
+                      if (event.target == modal) {
+                          modal.style.display = 'none';
+                      }
+                  }
+              </script>
+          </body>
+          </html>
+          EOF
+          
+          echo "Mobile gallery created at $html_file"
+
+hooks:
+  on_success:
+    - echo "Mobile-optimized gallery created successfully"
+    - echo "Gallery: {output_dir}/gallery.html"
+    - echo "Optimized for mobile devices with smaller file sizes"
+```
+
 ### Social Media Preset
 
 Create thumbnails optimized for different social media platforms:

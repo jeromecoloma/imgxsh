@@ -14,6 +14,9 @@ imgxsh --list-presets
 # Run workflow
 imgxsh --workflow pdf-to-web document.pdf
 
+# Use built-in workflow
+imgxsh --workflow pdf-to-thumbnails document.pdf
+
 # Use preset
 imgxsh --preset quick-thumbnails document.pdf
 
@@ -133,6 +136,72 @@ hooks:
       echo "Custom processing for {workflow_input}"
       # Your custom logic here
     output_file: "{output_dir}/custom_result.txt"
+```
+
+### HTML Generation Pattern
+```yaml
+- name: generate_html_gallery
+  type: custom
+  description: "Generate interactive HTML gallery"
+  params:
+    script: |
+      #!/bin/bash
+      html_file="{output_dir}/gallery.html"
+      
+      # Create HTML with embedded CSS and JavaScript
+      cat > "$html_file" << 'EOF'
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Image Gallery</title>
+          <style>
+              .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+              .gallery-item { background: white; border-radius: 8px; padding: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+              .gallery-item img { width: 100%; height: auto; cursor: pointer; }
+              .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.9); }
+              .modal-content { margin: auto; display: block; max-width: 90%; max-height: 90%; }
+          </style>
+      </head>
+      <body>
+          <h1>Image Gallery</h1>
+          <div class="gallery">
+      EOF
+      
+      # Generate gallery items dynamically
+      counter=1
+      for thumb in "{output_dir}/thumbnails"/*.jpg; do
+          if [[ -f "$thumb" ]]; then
+              thumb_name=$(basename "$thumb")
+              full_name="${thumb_name/_thumb_/_full_}"
+              echo "              <div class=\"gallery-item\">" >> "$html_file"
+              echo "                  <img src=\"thumbnails/$thumb_name\" onclick=\"openModal('full/$full_name')\" alt=\"Image $counter\">" >> "$html_file"
+              echo "                  <h3>Image $counter</h3>" >> "$html_file"
+              echo "              </div>" >> "$html_file"
+              ((counter++))
+          fi
+      done
+      
+      # Close HTML with JavaScript
+      cat >> "$html_file" << 'EOF'
+          </div>
+          <div id="modal" class="modal">
+              <span class="close" onclick="closeModal()">&times;</span>
+              <img class="modal-content" id="modalImg">
+          </div>
+          <script>
+              function openModal(src) {
+                  document.getElementById('modal').style.display = 'block';
+                  document.getElementById('modalImg').src = src;
+              }
+              function closeModal() {
+                  document.getElementById('modal').style.display = 'none';
+              }
+          </script>
+      </body>
+      </html>
+      EOF
 ```
 
 ## Template Variables
@@ -270,6 +339,36 @@ overrides:
 - To add multiple preset overrides, add more named keys under `overrides.steps` (do not use `- name:` items).
 
 See also: Preset system details in [docs/PRESETS-SYSTEM.md](./PRESETS-SYSTEM.md).
+
+## Built-in Workflows
+
+### pdf-to-web
+Complete PDF to web gallery workflow with HTML generation:
+```bash
+imgxsh --workflow pdf-to-web document.pdf
+```
+Creates:
+- `thumbnails/` - 300x200 thumbnails for quick browsing
+- `full/` - Full-size WebP images for detailed viewing  
+- `gallery.html` - Interactive HTML gallery with modal view
+
+### pdf-to-thumbnails
+Extract PDF images and create thumbnails:
+```bash
+imgxsh --workflow pdf-to-thumbnails document.pdf
+```
+
+### web-optimize
+Optimize images for web use:
+```bash
+imgxsh --workflow web-optimize *.jpg
+```
+
+### excel-extract
+Extract images from Excel files:
+```bash
+imgxsh --workflow excel-extract workbook.xlsx
+```
 
 ## Common Patterns
 
