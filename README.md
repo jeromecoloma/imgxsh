@@ -70,6 +70,7 @@ curl -fsSL https://github.com/jeromecoloma/imgxsh/install.sh | bash
   - Format conversion, metadata preservation, template-based naming, quality control, dry-run mode
 - `imgxsh-extract-excel` - Extract images from Excel files
   - .xlsx support via `unzip` (lists and extracts `xl/media/*`)
+  - .xls (legacy) support via `7z/p7zip` for Composite Document Format
   - `--list-only` to preview embedded media; verbose shows file list
   - Naming: default `{prefix}_{NNN}.{ext}` or `--keep-names`
   - Optional conversion with `-f/--format` and `--quality`
