@@ -88,13 +88,13 @@ Why: YAML requires a single node type for a given key. Our preset system also ex
 
 ```mermaid
 flowchart TD
-  A[Workflow] --> B[steps (sequence)]
+  A[Workflow] --> B["steps (sequence)"]
   B --> B1[step 0: extract_images]
   B --> B2[step 1: create_thumbnails]
   A --> C[settings]
 
   P[Preset] --> D[overrides]
-  D --> E[settings (mapping)]
+  D --> E["settings (mapping)"]
   D --> F[steps (mapping)]
   F --> F1[create_thumbnails → overrides]
   F --> F2[create_medium → overrides]
