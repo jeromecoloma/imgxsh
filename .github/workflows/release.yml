@@ -78,29 +78,97 @@ jobs:
           else
             echo "Version change detected: $PREV_VERSION -> $VERSION"
 
-            # Basic version comparison (simplified - assumes standard semver)
-            VERSION_PARTS=(${VERSION//./ })
-            PREV_PARTS=(${PREV_VERSION//./ })
+            # Enhanced semantic version comparison with pre-release support
+            # Function to parse semantic version
+            parse_semver() {
+              local version="$1"
+              local core_version prerelease
 
-            MAJOR=${VERSION_PARTS[0]:-0}
-            MINOR=${VERSION_PARTS[1]:-0}
-            PATCH=${VERSION_PARTS[2]:-0}
+              # Split by dash to separate core version from pre-release
+              if [[ "$version" == *-* ]]; then
+                core_version="${version%-*}"
+                prerelease="${version#*-}"
+              else
+                core_version="$version"
+                prerelease=""
+              fi
 
-            PREV_MAJOR=${PREV_PARTS[0]:-0}
-            PREV_MINOR=${PREV_PARTS[1]:-0}
-            PREV_PATCH=${PREV_PARTS[2]:-0}
+              # Split core version into major.minor.patch
+              IFS='.' read -r major minor patch <<< "$core_version"
 
-            echo "New version breakdown: $MAJOR.$MINOR.$PATCH"
-            echo "Previous version breakdown: $PREV_MAJOR.$PREV_MINOR.$PREV_PATCH"
+              echo "major:$major minor:$minor patch:$patch prerelease:$prerelease"
+            }
 
-            # Validate version increment
+            # Parse current version
+            version_parts=$(parse_semver "$VERSION")
+            MAJOR=$(echo "$version_parts" | sed 's/.*major:\([0-9]*\).*/\1/')
+            MINOR=$(echo "$version_parts" | sed 's/.*minor:\([0-9]*\).*/\1/')
+            PATCH=$(echo "$version_parts" | sed 's/.*patch:\([0-9]*\).*/\1/')
+            PRERELEASE=$(echo "$version_parts" | sed 's/.*prerelease:\(.*\)/\1/')
+
+            # Parse previous version
+            prev_parts=$(parse_semver "$PREV_VERSION")
+            PREV_MAJOR=$(echo "$prev_parts" | sed 's/.*major:\([0-9]*\).*/\1/')
+            PREV_MINOR=$(echo "$prev_parts" | sed 's/.*minor:\([0-9]*\).*/\1/')
+            PREV_PATCH=$(echo "$prev_parts" | sed 's/.*patch:\([0-9]*\).*/\1/')
+            PREV_PRERELEASE=$(echo "$prev_parts" | sed 's/.*prerelease:\(.*\)/\1/')
+
+            # Validate parsed values
+            if [[ ! "$MAJOR" =~ ^[0-9]+$ ]] || [[ ! "$MINOR" =~ ^[0-9]+$ ]] || [[ ! "$PATCH" =~ ^[0-9]+$ ]]; then
+              echo "❌ Invalid semantic version format: $VERSION"
+              exit 1
+            fi
+            if [[ ! "$PREV_MAJOR" =~ ^[0-9]+$ ]] || [[ ! "$PREV_MINOR" =~ ^[0-9]+$ ]] || [[ ! "$PREV_PATCH" =~ ^[0-9]+$ ]]; then
+              echo "❌ Invalid semantic version format: $PREV_VERSION"
+              exit 1
+            fi
+
+            echo "New version breakdown: $MAJOR.$MINOR.$PATCH${PRERELEASE}"
+            echo "Previous version breakdown: $PREV_MAJOR.$PREV_MINOR.$PREV_PATCH${PREV_PRERELEASE}"
+
+            # Compare core versions (major.minor.patch)
+            CORE_GREATER=false
             if [ "$MAJOR" -gt "$PREV_MAJOR" ] || \
                ([ "$MAJOR" -eq "$PREV_MAJOR" ] && [ "$MINOR" -gt "$PREV_MINOR" ]) || \
                ([ "$MAJOR" -eq "$PREV_MAJOR" ] && [ "$MINOR" -eq "$PREV_MINOR" ] && [ "$PATCH" -gt "$PREV_PATCH" ]); then
-              echo "✅ Valid version increment detected"
+              CORE_GREATER=true
+            fi
+
+            CORE_EQUAL=false
+            if [ "$MAJOR" -eq "$PREV_MAJOR" ] && [ "$MINOR" -eq "$PREV_MINOR" ] && [ "$PATCH" -eq "$PREV_PATCH" ]; then
+              CORE_EQUAL=true
+            fi
+
+            # Validate version increment according to semver rules
+            VALID_INCREMENT=false
+
+            if [ "$CORE_GREATER" = true ]; then
+              # Core version increased - always valid
+              VALID_INCREMENT=true
+              echo "✅ Core version increment: $PREV_MAJOR.$PREV_MINOR.$PREV_PATCH -> $MAJOR.$MINOR.$PATCH"
+            elif [ "$CORE_EQUAL" = true ]; then
+              # Core versions equal - check pre-release transition
+              if [ -n "$PREV_PRERELEASE" ] && [ -z "$PRERELEASE" ]; then
+                # Pre-release to release (e.g., 1.0.0-dev -> 1.0.0) - valid
+                VALID_INCREMENT=true
+                echo "✅ Pre-release to release: $PREV_VERSION -> $VERSION"
+              elif [ -n "$PREV_PRERELEASE" ] && [ -n "$PRERELEASE" ] && [ "$PRERELEASE" != "$PREV_PRERELEASE" ]; then
+                # Pre-release to different pre-release - valid
+                VALID_INCREMENT=true
+                echo "✅ Pre-release update: $PREV_VERSION -> $VERSION"
+              elif [ -z "$PREV_PRERELEASE" ] && [ -n "$PRERELEASE" ]; then
+                # Release to pre-release of NEXT version - should not happen here
+                echo "⚠️ Release to pre-release detected: $PREV_VERSION -> $VERSION"
+                VALID_INCREMENT=false
+              fi
+            fi
+
+            if [ "$VALID_INCREMENT" = true ]; then
+              echo "✅ Valid semantic version increment detected"
             else
               echo "❌ Invalid version increment: $PREV_VERSION -> $VERSION"
               echo "Versions must increment according to semantic versioning rules"
+              echo "See https://semver.org/ for details"
               exit 1
             fi
           fi
