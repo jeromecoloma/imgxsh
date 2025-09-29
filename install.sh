@@ -5,7 +5,7 @@ set -euo pipefail
 # imgxsh Installer
 # Configuration
 DEFAULT_PREFIX="$HOME/.local/bin"
-DEFAULT_LIB_PREFIX="$HOME/.local/lib/imgxsh"
+DEFAULT_LIB_PREFIX="$HOME/.local/lib"
 MANIFEST_DIR="${MANIFEST_DIR:-$HOME/.config/imgxsh}"
 MANIFEST_FILE="$MANIFEST_DIR/install-manifest.txt"
 GITHUB_REPO="${GITHUB_REPO:-jeromecoloma/imgxsh}"
