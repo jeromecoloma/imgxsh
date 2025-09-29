@@ -346,7 +346,7 @@ download_project() {
 	local temp_dir="$TEMP_DIR"
 	local repo_url="https://github.com/$GITHUB_REPO"
 
-	log info "Preparing download directory..."
+	log info "Preparing download directory..." >&2
 	if ! mkdir -p "$temp_dir"; then
 		fatal_error "Failed to create temporary directory: $temp_dir"
 	fi
@@ -359,49 +359,49 @@ download_project() {
 
 	# Method 1: Try git clone (fastest and most reliable)
 	if command -v git >/dev/null 2>&1; then
-		log info "Attempting to clone repository with git..."
+		log info "Attempting to clone repository with git..." >&2
 		if git clone --depth 1 --quiet "$repo_url" . 2>/dev/null; then
 			if [[ -d "bin" ]]; then
-				log info "Successfully cloned repository"
+				log info "Successfully cloned repository" >&2
 				cd "$original_dir"
 				echo "$temp_dir"
 				return 0
 			else
-				log warn "Git clone succeeded but no bin/ directory found"
+				log warn "Git clone succeeded but no bin/ directory found" >&2
 			fi
 		else
-			log warn "Git clone failed, trying alternative download methods..."
+			log warn "Git clone failed, trying alternative download methods..." >&2
 		fi
 	fi
 
 	# Method 2: Try curl with GitHub tarball
 	if command -v curl >/dev/null 2>&1; then
-		log info "Downloading project archive with curl..."
+		log info "Downloading project archive with curl..." >&2
 		if curl -fsSL "$repo_url/archive/refs/heads/main.tar.gz" | tar -xz --strip-components=1 2>/dev/null; then
 			if [[ -d "bin" ]]; then
-				log info "Successfully downloaded and extracted project"
+				log info "Successfully downloaded and extracted project" >&2
 				cd "$original_dir"
 				echo "$temp_dir"
 				return 0
 			else
-				log warn "Curl download succeeded but no bin/ directory found"
+				log warn "Curl download succeeded but no bin/ directory found" >&2
 			fi
 		else
-			log warn "Curl download failed, trying wget..."
+			log warn "Curl download failed, trying wget..." >&2
 		fi
 	fi
 
 	# Method 3: Try wget as fallback
 	if command -v wget >/dev/null 2>&1; then
-		log info "Downloading project archive with wget..."
+		log info "Downloading project archive with wget..." >&2
 		if wget -qO- "$repo_url/archive/refs/heads/main.tar.gz" | tar -xz --strip-components=1 2>/dev/null; then
 			if [[ -d "bin" ]]; then
-				log info "Successfully downloaded and extracted project"
+				log info "Successfully downloaded and extracted project" >&2
 				cd "$original_dir"
 				echo "$temp_dir"
 				return 0
 			else
-				log warn "Wget download succeeded but no bin/ directory found"
+				log warn "Wget download succeeded but no bin/ directory found" >&2
 			fi
 		fi
 	fi
@@ -504,6 +504,14 @@ install_scripts() {
 				fatal_error "Failed to copy script: $script -> $dest_path"
 			fi
 
+			# Update library paths in installed scripts
+			if grep -q 'lib/main\.sh' "$dest_path" 2>/dev/null; then
+				sed -i.bak "s|source \"[^\"]*lib/main\.sh\"|source \"$LIB_PREFIX/main.sh\"|g" "$dest_path" && rm -f "$dest_path.bak"
+			fi
+			if grep -q 'lib/imgxsh/' "$dest_path" 2>/dev/null; then
+				sed -i.bak "s|source \"[^\"]*lib/imgxsh/\([^\"]*\)\"|source \"$LIB_PREFIX/imgxsh/\1\"|g" "$dest_path" && rm -f "$dest_path.bak"
+			fi
+
 			if ! chmod +x "$dest_path"; then
 				log warn "Failed to set executable permission on: $dest_path"
 			fi
@@ -519,27 +527,26 @@ install_scripts() {
 	# Install libraries from lib/ if directory exists
 	if [[ -d "$working_dir/lib" ]]; then
 		log info "Installing libraries from: $working_dir/lib/"
-		for lib_file in "$working_dir"/lib/*; do
-			if [[ -f $lib_file ]]; then
-				local name dest_path
-				name=$(basename "$lib_file")
-				dest_path="$LIB_PREFIX/$name"
 
-				if ! cp "$lib_file" "$dest_path"; then
-					fatal_error "Failed to copy library: $lib_file -> $dest_path"
-				fi
+		# Copy all files and subdirectories recursively
+		if ! cp -r "$working_dir"/lib/* "$LIB_PREFIX/" 2>/dev/null; then
+			fatal_error "Failed to copy libraries to: $LIB_PREFIX"
+		fi
 
-				if ! chmod 644 "$dest_path"; then
-					log warn "Failed to set permissions on library: $dest_path"
-				fi
-
-				echo "$dest_path" >>"$MANIFEST_FILE" || {
-					log warn "Failed to add to manifest: $dest_path"
-				}
-				((lib_count++))
-				log info "Installed library: $name"
+		# Set permissions and count files
+		find "$LIB_PREFIX" -type f -name "*.sh" | while read -r lib_file; do
+			if ! chmod 644 "$lib_file"; then
+				log warn "Failed to set permissions on library: $lib_file"
 			fi
+
+			echo "$lib_file" >>"$MANIFEST_FILE" || {
+				log warn "Failed to add to manifest: $lib_file"
+			}
 		done
+
+		# Count installed library files
+		lib_count=$(find "$LIB_PREFIX" -type f -name "*.sh" | wc -l)
+		log info "Installed $lib_count library files"
 	else
 		log warn "No 'lib' directory found, skipping library installation"
 	fi
