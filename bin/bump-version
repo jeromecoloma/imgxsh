@@ -135,9 +135,10 @@ OPTIONS:
     --check-repo            Show repository detection results and exit
 
 BEHAVIOR:
+    • imgxsh project: Updates only VERSION file
     • Shell-starter repository: Updates VERSION and .shell-starter-version
-    • Cloned projects: Updates only VERSION file
-    • Automatically detects repository type by checking for shell-starter markers
+    • Other projects: Updates only VERSION file
+    • Automatically detects repository type by checking for project-specific markers
 
 EXAMPLES:
     ${SCRIPT_NAME} 1.2.3                # Set version to 1.2.3
@@ -202,9 +203,31 @@ parse_args() {
 	fi
 }
 
-# Detect if this is the shell-starter repository or a cloned project
+# Detect project type - imgxsh or other shell-starter based project
 detect_repository_type() {
-	local repo_indicators=(
+	# Check for imgxsh-specific indicators first
+	local imgxsh_indicators=(
+		"bin/imgxsh"
+		"bin/imgxsh-convert"
+		"config/workflows"
+		"lib/imgxsh"
+	)
+
+	local imgxsh_count=0
+	for indicator in "${imgxsh_indicators[@]}"; do
+		if [[ -f "${PROJECT_ROOT}/${indicator}" ]] || [[ -d "${PROJECT_ROOT}/${indicator}" ]]; then
+			((imgxsh_count++))
+		fi
+	done
+
+	# If we find imgxsh indicators, this is an imgxsh project
+	if [[ $imgxsh_count -ge 3 ]]; then
+		echo "imgxsh-project"
+		return
+	fi
+
+	# Check for shell-starter repository indicators
+	local shell_starter_indicators=(
 		"bin/generate-ai-workflow"
 		"scripts/generate-release-notes.sh"
 		"tests/framework.bats"
@@ -212,7 +235,7 @@ detect_repository_type() {
 	)
 
 	local found_indicators=0
-	for indicator in "${repo_indicators[@]}"; do
+	for indicator in "${shell_starter_indicators[@]}"; do
 		if [[ -f "${PROJECT_ROOT}/${indicator}" ]]; then
 			((found_indicators++))
 		fi
@@ -324,19 +347,26 @@ show_current() {
 # Show repository detection details
 show_repo_check() {
 	local repo_type
-	local indicators=(
-		"bin/generate-ai-workflow"
-		"scripts/generate-release-notes.sh"
-		"tests/framework.bats"
-		"install.sh"
-	)
 
 	repo_type=$(detect_repository_type)
 	section_header "Repository Detection Results"
 	log::info "Detected type: ${repo_type}"
-	printf '\n%bShell-starter indicators:%b\n' "${COLOR_BOLD}" "${COLOR_RESET}"
 
-	for indicator in "${indicators[@]}"; do
+	# Show imgxsh indicators
+	printf '\n%bimgxsh indicators:%b\n' "${COLOR_BOLD}" "${COLOR_RESET}"
+	local imgxsh_indicators=("bin/imgxsh" "bin/imgxsh-convert" "config/workflows" "lib/imgxsh")
+	for indicator in "${imgxsh_indicators[@]}"; do
+		if [[ -f "${PROJECT_ROOT}/${indicator}" ]] || [[ -d "${PROJECT_ROOT}/${indicator}" ]]; then
+			printf '%b  ✓%b %s (found)\n' "${COLOR_SUCCESS}" "${COLOR_RESET}" "${indicator}"
+		else
+			printf '%b  ✗%b %s (not found)\n' "${COLOR_ERROR}" "${COLOR_RESET}" "${indicator}"
+		fi
+	done
+
+	# Show shell-starter indicators
+	printf '\n%bShell-starter indicators:%b\n' "${COLOR_BOLD}" "${COLOR_RESET}"
+	local shell_starter_indicators=("bin/generate-ai-workflow" "scripts/generate-release-notes.sh" "tests/framework.bats" "install.sh")
+	for indicator in "${shell_starter_indicators[@]}"; do
 		if [[ -f "${PROJECT_ROOT}/${indicator}" ]]; then
 			printf '%b  ✓%b %s (found)\n' "${COLOR_SUCCESS}" "${COLOR_RESET}" "${indicator}"
 		else
@@ -348,6 +378,8 @@ show_repo_check() {
 	log::info "  • ${VERSION_FILE} (always)"
 	if [[ $repo_type == "shell-starter" ]]; then
 		log::info "  • ${SHELL_STARTER_VERSION_FILE} (shell-starter repo)"
+	elif [[ $repo_type == "imgxsh-project" ]]; then
+		log::info "  • ${SHELL_STARTER_VERSION_FILE} (skipped - imgxsh project)"
 	else
 		log::info "  • ${SHELL_STARTER_VERSION_FILE} (skipped - cloned project)"
 	fi
@@ -390,6 +422,8 @@ perform_bump() {
 	# Update .shell-starter-version only for shell-starter repository
 	if [[ $repo_type == "shell-starter" ]]; then
 		update_version_file "$SHELL_STARTER_VERSION_FILE" "$new_version" "shell-starter version"
+	elif [[ $repo_type == "imgxsh-project" ]]; then
+		log::info "Skipping ${SHELL_STARTER_VERSION_FILE} update (imgxsh project)"
 	else
 		log::info "Skipping ${SHELL_STARTER_VERSION_FILE} update (cloned project)"
 	fi
