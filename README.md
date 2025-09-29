@@ -46,10 +46,24 @@ imgxsh --config custom.yaml --dry-run ./images/
 > **Note**: imgxsh is currently in development. Installation instructions will be available once the first release is ready.
 
 ```bash
-# Future installation method
-curl -fsSL https://raw.githubusercontent.com/jeromecoloma/imgxsh/main/install.sh | bash
-# or
+# Remote installation (recommended)
+bash <(curl -fsSL https://raw.githubusercontent.com/jeromecoloma/imgxsh/main/install.sh)
+
+# Local installation (if you've cloned the repository)
 ./install.sh --prefix ~/.local/bin
+```
+
+### Uninstallation
+
+```bash
+# Method 1: Using imgxsh built-in uninstaller (recommended)
+imgxsh --uninstall
+
+# Method 2: Standalone uninstaller
+bash <(curl -fsSL https://raw.githubusercontent.com/jeromecoloma/imgxsh/main/uninstall.sh)
+
+# Automatic uninstall without confirmation
+bash <(curl -fsSL https://raw.githubusercontent.com/jeromecoloma/imgxsh/main/uninstall.sh) -y
 ```
 
 ## 📋 Available Commands

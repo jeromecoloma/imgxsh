@@ -1123,9 +1123,8 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y imagemagick poppler-utils
         
-        # Install imgxsh (assuming it's in the repo)
-        chmod +x ./install.sh
-        ./install.sh
+        # Install imgxsh from GitHub
+        bash <(curl -fsSL https://raw.githubusercontent.com/jeromecoloma/imgxsh/main/install.sh)
         
     - name: Process Images
       run: |

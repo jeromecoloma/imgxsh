@@ -341,7 +341,73 @@ get_download_url() {
 	[[ -n $url && $url != "null" ]] && echo "$url" || return 1
 }
 
-# Download and extract from GitHub
+# Download project using multiple methods
+download_project() {
+	local temp_dir="$TEMP_DIR"
+	local repo_url="https://github.com/$GITHUB_REPO"
+
+	log info "Preparing download directory..."
+	if ! mkdir -p "$temp_dir"; then
+		fatal_error "Failed to create temporary directory: $temp_dir"
+	fi
+
+	# Method 1: Try git clone (fastest and most reliable)
+	if command -v git >/dev/null 2>&1; then
+		log info "Attempting to clone repository with git..."
+		if git clone --depth 1 --quiet "$repo_url" "$temp_dir" 2>/dev/null; then
+			log info "Successfully cloned repository"
+			echo "$temp_dir"
+			return 0
+		else
+			log warn "Git clone failed, trying alternative download methods..."
+		fi
+	fi
+
+	# Method 2: Try curl with GitHub tarball
+	if command -v curl >/dev/null 2>&1; then
+		log info "Downloading project archive with curl..."
+		local tarball="$temp_dir.tar.gz"
+		if curl -fsSL "$repo_url/archive/refs/heads/main.tar.gz" -o "$tarball" 2>/dev/null; then
+			if tar -xzf "$tarball" -C "$(dirname "$temp_dir")" 2>/dev/null; then
+				# GitHub tarballs create a directory with the format: repo-branch
+				local extracted_dir="$(dirname "$temp_dir")/$(basename "$GITHUB_REPO")-main"
+				if [[ -d "$extracted_dir" ]]; then
+					mv "$extracted_dir" "$temp_dir"
+					rm -f "$tarball"
+					log info "Successfully downloaded and extracted project"
+					echo "$temp_dir"
+					return 0
+				fi
+			fi
+		fi
+		log warn "Curl download failed, trying wget..."
+		rm -f "$tarball"
+	fi
+
+	# Method 3: Try wget as fallback
+	if command -v wget >/dev/null 2>&1; then
+		log info "Downloading project archive with wget..."
+		local tarball="$temp_dir.tar.gz"
+		if wget -q "$repo_url/archive/refs/heads/main.tar.gz" -O "$tarball" 2>/dev/null; then
+			if tar -xzf "$tarball" -C "$(dirname "$temp_dir")" 2>/dev/null; then
+				local extracted_dir="$(dirname "$temp_dir")/$(basename "$GITHUB_REPO")-main"
+				if [[ -d "$extracted_dir" ]]; then
+					mv "$extracted_dir" "$temp_dir"
+					rm -f "$tarball"
+					log info "Successfully downloaded and extracted project"
+					echo "$temp_dir"
+					return 0
+				fi
+			fi
+		fi
+		rm -f "$tarball"
+	fi
+
+	# If all methods failed
+	fatal_error "Failed to download project. Please check your internet connection or try: git clone $repo_url"
+}
+
+# Download and extract from GitHub (legacy function for releases)
 download_release() {
 	local version="${1:-latest}" temp_dir="$TEMP_DIR"
 
@@ -393,8 +459,16 @@ install_scripts() {
 
 	# Download if from GitHub
 	if [[ $FROM_GITHUB == true ]]; then
-		if ! working_dir=$(download_release "${VERSION:-latest}"); then
-			fatal_error "GitHub download failed"
+		# If a specific version is requested, use the release download
+		if [[ -n ${VERSION:-} && $VERSION != "latest" ]]; then
+			if ! working_dir=$(download_release "$VERSION"); then
+				fatal_error "GitHub release download failed for version: $VERSION"
+			fi
+		else
+			# For latest/default, use the simpler project download
+			if ! working_dir=$(download_project); then
+				fatal_error "GitHub project download failed"
+			fi
 		fi
 	fi
 
@@ -708,7 +782,7 @@ main() {
 	# Auto-detect if we should install from GitHub
 	# If no local bin/ directory exists and --from-github wasn't explicitly set, enable GitHub installation
 	if [[ $FROM_GITHUB == false && ! -d "./bin" ]]; then
-		log info "No local imgxsh files found - automatically enabling GitHub installation"
+		log info "No local imgxsh files found - downloading from GitHub"
 		FROM_GITHUB=true
 	fi
 
