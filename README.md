@@ -47,7 +47,7 @@ imgxsh --config custom.yaml --dry-run ./images/
 
 ```bash
 # Future installation method
-curl -fsSL https://github.com/jeromecoloma/imgxsh/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/jeromecoloma/imgxsh/main/install.sh | bash
 # or
 ./install.sh --prefix ~/.local/bin
 ```

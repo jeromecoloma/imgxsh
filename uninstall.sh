@@ -2,11 +2,11 @@
 
 set -euo pipefail
 
-# Shell Starter Uninstaller
+# imgxsh Uninstaller
 # Removes installed CLI scripts based on the installation manifest
 
 # Configuration
-MANIFEST_DIR="${MANIFEST_DIR:-$HOME/.config/shell-starter}"
+MANIFEST_DIR="${MANIFEST_DIR:-$HOME/.config/imgxsh}"
 MANIFEST_FILE="${MANIFEST_FILE:-$MANIFEST_DIR/install-manifest.txt}"
 
 # Colors and logging
@@ -71,9 +71,9 @@ cleanup_path_from_file() {
 		return 0
 	}
 
-	# Check if any shell-starter PATH entries exist
-	if ! grep -q "shell-starter" "$config_file" 2>/dev/null && ! grep -q "$path_to_remove" "$config_file" 2>/dev/null; then
-		log "No shell-starter PATH entries found in $config_file"
+	# Check if any imgxsh PATH entries exist
+	if ! grep -q "imgxsh" "$config_file" 2>/dev/null && ! grep -q "$path_to_remove" "$config_file" 2>/dev/null; then
+		log "No imgxsh PATH entries found in $config_file"
 		return 0
 	fi
 
@@ -94,18 +94,18 @@ cleanup_path_from_file() {
 	# shellcheck disable=SC2016
 	escaped_path=$(printf '%s\n' "$path_to_remove" | sed 's/[[\.*^$()+?{|/]/\\&/g')
 	sed \
-		-e '/^# Added by shell-starter installer$/,+1d' \
-		-e '/^# Shell Starter PATH$/,+1d' \
-		-e '/^export PATH=.*shell-starter.*$/d' \
+		-e '/^# Added by imgxsh installer$/,+1d' \
+		-e '/^# imgxsh PATH$/,+1d' \
+		-e '/^export PATH=.*imgxsh.*$/d' \
 		-e "/^export PATH=.*${escaped_path}.*\$/d" \
-		-e '/^PATH=.*shell-starter.*$/d' \
+		-e '/^PATH=.*imgxsh.*$/d' \
 		-e "/^PATH=.*${escaped_path}.*\$/d" \
 		"$config_file" >"$temp_file"
 
 	# Check if any changes were actually made
 	if cmp -s "$config_file" "$temp_file"; then
 		# No changes made
-		log "No shell-starter PATH entries found in $config_file"
+		log "No imgxsh PATH entries found in $config_file"
 		rm -f "$temp_file" "$backup_file"
 		return 0
 	fi
@@ -163,7 +163,7 @@ cleanup_path() {
 # Show help
 show_help() {
 	cat <<EOF
-Shell Starter Uninstaller
+imgxsh Uninstaller
 
 Usage: $0 [OPTIONS]
 
@@ -172,7 +172,7 @@ OPTIONS:
     -n, --dry-run    Preview what would be removed
     -h, --help       Show this help
 
-Removes Shell Starter CLI scripts using the installation manifest.
+Removes imgxsh CLI scripts using the installation manifest.
 Manifest: $MANIFEST_FILE
 
 EXAMPLES:
@@ -213,7 +213,7 @@ parse_args() {
 read_manifest() {
 	[[ ! -f $MANIFEST_FILE ]] && {
 		error "No installation manifest found: $MANIFEST_FILE"
-		error "Shell Starter may not be installed, or the manifest was deleted."
+		error "imgxsh may not be installed, or the manifest was deleted."
 		error "Try running the installer first, or check if files were manually removed."
 		exit 1
 	}
@@ -385,9 +385,9 @@ main() {
 	parse_args "$@"
 
 	if [[ $DRY_RUN == "true" ]]; then
-		log "Starting Shell Starter uninstallation preview..."
+		log "Starting imgxsh uninstallation preview..."
 	else
-		log "Starting Shell Starter uninstallation..."
+		log "Starting imgxsh uninstallation..."
 	fi
 	read_manifest
 	show_files
@@ -413,8 +413,8 @@ main() {
 
 	echo
 	success "🎉 Uninstallation completed successfully in ${duration}s!"
-	log "All Shell Starter files and PATH entries have been removed"
-	log "Thank you for using Shell Starter!"
+	log "All imgxsh files and PATH entries have been removed"
+	log "Thank you for using imgxsh!"
 }
 
 # Run if executed directly

@@ -2,14 +2,14 @@
 
 set -euo pipefail
 
-# Shell Starter Installer
+# imgxsh Installer
 # Configuration
-DEFAULT_PREFIX="$HOME/.config/shell-starter/bin"
-DEFAULT_LIB_PREFIX="$HOME/.config/shell-starter/lib"
-MANIFEST_DIR="${MANIFEST_DIR:-$HOME/.config/shell-starter}"
+DEFAULT_PREFIX="$HOME/.local/bin"
+DEFAULT_LIB_PREFIX="$HOME/.local/lib/imgxsh"
+MANIFEST_DIR="${MANIFEST_DIR:-$HOME/.config/imgxsh}"
 MANIFEST_FILE="$MANIFEST_DIR/install-manifest.txt"
-GITHUB_REPO="${GITHUB_REPO:-shell-starter/shell-starter}"
-TEMP_DIR="${TMPDIR:-/tmp}/shell-starter-install-$$"
+GITHUB_REPO="${GITHUB_REPO:-jeromecoloma/imgxsh}"
+TEMP_DIR="${TMPDIR:-/tmp}/imgxsh-install-$$"
 CURL_TIMEOUT="${CURL_TIMEOUT:-30}"
 CURL_RETRY_COUNT="${CURL_RETRY_COUNT:-3}"
 
@@ -23,7 +23,7 @@ show_installation_banner() {
 	echo -e "${GREEN}╔══════════════════════════════════════════════╗${NC}"
 	echo -e "${GREEN}║            INSTALLATION COMPLETE            ║${NC}"
 	echo -e "${GREEN}║                                              ║${NC}"
-	echo -e "${GREEN}║     🎉 Shell Starter Successfully Installed  ║${NC}"
+	echo -e "${GREEN}║         🎉 imgxsh Successfully Installed     ║${NC}"
 	echo -e "${GREEN}╚══════════════════════════════════════════════╝${NC}"
 	echo
 }
@@ -89,8 +89,8 @@ add_to_path() {
 		# Check for multiple possible PATH entry patterns
 		if grep -E "^export PATH=.*${escaped_path}(:|$)" "$config_file" >/dev/null 2>&1 ||
 			grep -E "^PATH=.*${escaped_path}(:|$)" "$config_file" >/dev/null 2>&1 ||
-			grep -F "# Added by shell-starter installer" "$config_file" >/dev/null 2>&1; then
-			log info "PATH entry already exists in $config_file (detected duplicate or shell-starter entry)"
+			grep -F "# Added by imgxsh installer" "$config_file" >/dev/null 2>&1; then
+			log info "PATH entry already exists in $config_file (detected duplicate or imgxsh entry)"
 			return 0
 		fi
 
@@ -121,7 +121,7 @@ add_to_path() {
 	# Improved PATH entry addition with duplicate prevention
 	if {
 		echo ""
-		echo "# Added by shell-starter installer on $(date)"
+		echo "# Added by imgxsh installer on $(date)"
 		echo "# This line is managed automatically - do not edit manually"
 		echo "if [[ \":\$PATH:\" != *\":$path_to_add:\"* ]]; then"
 		echo "    export PATH=\"$path_to_add:\$PATH\""
@@ -138,18 +138,18 @@ add_to_path() {
 # Show usage
 show_help() {
 	cat <<EOF
-Shell Starter Installer
+imgxsh Installer
 
 Usage: $0 [OPTIONS]
 
-Install CLI scripts from bin/ directory to your system.
+Install imgxsh CLI image processing tools to your system.
 
 OPTIONS:
     --prefix PATH         Install scripts location (default: $DEFAULT_PREFIX)
     --lib-prefix PATH     Install libraries location (default: $DEFAULT_LIB_PREFIX)
     --from-github         Download from GitHub releases (latest)
     --version VERSION     Install specific version (enables --from-github)
-    --uninstall           Remove Shell Starter installation
+    --uninstall           Remove imgxsh installation
     --help, -h            Show this help
 
 EXAMPLES:
@@ -267,7 +267,7 @@ http_request() {
 	local url="$1" output_file="${2:-}" attempt=1
 
 	while [[ $attempt -le $CURL_RETRY_COUNT ]]; do
-		local curl_cmd="curl -fsSL --connect-timeout $CURL_TIMEOUT --max-time $((CURL_TIMEOUT * 2)) -A 'shell-starter-installer/1.0'"
+		local curl_cmd="curl -fsSL --connect-timeout $CURL_TIMEOUT --max-time $((CURL_TIMEOUT * 2)) -A 'imgxsh-installer/1.0'"
 		[[ -n $output_file ]] && curl_cmd="$curl_cmd -o '$output_file'"
 		curl_cmd="$curl_cmd '$url'"
 
@@ -301,7 +301,7 @@ init_manifest() {
 	fi
 
 	if ! {
-		echo "# Shell Starter Install Manifest"
+		echo "# imgxsh Install Manifest"
 		echo "# Generated on $(date)"
 		echo "# Scripts prefix: $PREFIX"
 		echo "# Libraries prefix: $LIB_PREFIX"
@@ -482,13 +482,13 @@ remove_from_path() {
 	}
 
 	# Check for both old and new format PATH entries
-	if ! grep -q "shell-starter installer" "$config_file" 2>/dev/null &&
+	if ! grep -q "imgxsh installer" "$config_file" 2>/dev/null &&
 		! grep -q "export PATH.*$path_to_remove" "$config_file" 2>/dev/null; then
-		log info "No shell-starter PATH entries found in $config_file"
+		log info "No imgxsh PATH entries found in $config_file"
 		return 0
 	fi
 
-	log info "Removing shell-starter PATH entries from $config_file"
+	log info "Removing imgxsh PATH entries from $config_file"
 
 	local temp_file backup_file
 	temp_file=$(mktemp)
@@ -504,7 +504,7 @@ remove_from_path() {
 	# Enhanced removal to handle both old and new formats
 	awk -v target_path="$path_to_remove" '
 	# Skip old format: comment + PATH line
-	/^# Added by shell-starter installer$/ {
+	/^# Added by imgxsh installer$/ {
 		getline nextline
 		if (index(nextline, target_path) > 0 && nextline ~ /^export PATH=/) {
 			next
@@ -516,7 +516,7 @@ remove_from_path() {
 	}
 
 	# Skip new format: multi-line block
-	/^# Added by shell-starter installer on/ {
+	/^# Added by imgxsh installer on/ {
 		# Skip the entire block: comment, managed comment, if-block
 		getline managed_comment  # "# This line is managed automatically..."
 		getline if_line         # "if [[ \":$PATH:\" != ..."
@@ -552,7 +552,7 @@ remove_from_path() {
 
 	# Apply changes or report failure
 	if mv "$temp_file" "$config_file"; then
-		log success "Removed shell-starter PATH entries from $config_file"
+		log success "Removed imgxsh PATH entries from $config_file"
 		log info "Backup created: $backup_file"
 	else
 		log error "Failed to update $config_file"
@@ -642,12 +642,12 @@ cleanup_manifest() {
 
 # Uninstall functionality
 run_uninstaller() {
-	log info "Starting Shell Starter uninstallation..."
+	log info "Starting imgxsh uninstallation..."
 
 	if [[ ! -f $MANIFEST_FILE ]]; then
 		log error "No installation manifest found at: $MANIFEST_FILE"
-		log error "Either Shell Starter was never installed, or the manifest was deleted."
-		log info "If you installed Shell Starter manually, you'll need to remove files manually:"
+		log error "Either imgxsh was never installed, or the manifest was deleted."
+		log info "If you installed imgxsh manually, you'll need to remove files manually:"
 		log info "  - Check $PREFIX for scripts"
 		log info "  - Check $LIB_PREFIX for libraries"
 		log info "  - Check shell config files for PATH entries"
@@ -686,7 +686,7 @@ run_uninstaller() {
 
 	cleanup_manifest
 	log success "Uninstallation complete!"
-	log info "All Shell Starter files and PATH entries have been removed from your system."
+	log info "All imgxsh files and PATH entries have been removed from your system."
 	[[ -n ${shell_config:-} ]] && log info "Please run 'source $shell_config' or restart your shell to update PATH"
 }
 
@@ -704,9 +704,9 @@ main() {
 	# Check system prerequisites for installation
 	if [[ $FROM_GITHUB == true ]]; then
 		check_prerequisites
-		log info "Installing Shell Starter from GitHub (${VERSION:-latest})"
+		log info "Installing imgxsh from GitHub (${VERSION:-latest})"
 	else
-		log info "Installing Shell Starter from local directory"
+		log info "Installing imgxsh from local directory"
 	fi
 
 	# Initialize installation
