@@ -19,6 +19,7 @@ DRY_RUN=false
 OVERWRITE=false
 BACKUP=false
 LIST_ONLY=false
+CHECK_DEPS_ONLY=false
 
 # Option defaults (aligned with PDF tool where sensible)
 readonly DEFAULT_QUALITY=85
@@ -67,6 +68,7 @@ EXAMPLES:
 DEPENDENCIES:
     unzip                 Required for .xlsx archive inspection/extraction
     file                  Required for file type detection
+    7z (p7zip)           Required for .xls (legacy) file extraction
     (optional) ImageMagick for format conversion/verification
 
 For more information, visit: https://github.com/jeromecoloma/imgxsh
@@ -74,6 +76,7 @@ EOF
 }
 
 check_dependencies() {
+	local excel_file="${1:-}"
 	local missing_deps=()
 
 	if ! command -v unzip >/dev/null 2>&1; then
@@ -93,9 +96,47 @@ check_dependencies() {
 		return 1
 	fi
 
-	# Optional for .xls support
-	if ! command -v 7z >/dev/null 2>&1; then
-		log::info "Optional dependency not found: 7z (for .xls extraction). Install with:"
+	# Context-aware 7z messaging
+	local show_7z_message=false
+
+	if [[ -n "$excel_file" ]]; then
+		# Check if this is specifically an .xls file that would need 7z
+		case "${excel_file##*.}" in
+		xls | XLS)
+			show_7z_message=true
+			;;
+		xlsx | XLSX)
+			# For .xlsx files, only show 7z message if 7z is missing and might be needed as fallback
+			if ! command -v 7z >/dev/null 2>&1; then
+				# Don't show message for .xlsx files - unzip should be sufficient
+				show_7z_message=false
+			fi
+			;;
+		*)
+			# For unknown extensions, detect by file type if possible
+			if [[ -f "$excel_file" ]]; then
+				local file_type
+				file_type=$(file "$excel_file" 2>/dev/null || echo "")
+				if echo "$file_type" | grep -Eqi "Composite Document File|CDF V2"; then
+					show_7z_message=true
+				fi
+			else
+				# No file context, show the message for general guidance
+				show_7z_message=true
+			fi
+			;;
+		esac
+	else
+		# No file context provided, show for general dependency checking
+		show_7z_message=true
+	fi
+
+	if [[ "$show_7z_message" == true ]] && ! command -v 7z >/dev/null 2>&1; then
+		if [[ -n "$excel_file" && "${excel_file##*.}" =~ ^(xls|XLS)$ ]]; then
+			log::warn "7z required for .xls file extraction. Install with:"
+		else
+			log::info "Optional dependency not found: 7z (for .xls extraction). Install with:"
+		fi
 		log::info "  macOS: brew install p7zip"
 		log::info "  Ubuntu/Debian: sudo apt-get install p7zip-full"
 		log::info "  CentOS/RHEL: sudo yum install p7zip"
@@ -574,8 +615,10 @@ main() {
 			shift
 			;;
 		--check-deps)
-			check_dependencies
-			exit $?
+			# For --check-deps, we need to wait until EXCEL_FILE is set
+			# This will be handled after argument parsing
+			CHECK_DEPS_ONLY=true
+			shift
 			;;
 		--update)
 			if [[ ${TEST_MODE:-} == "true" ]]; then
@@ -614,6 +657,12 @@ main() {
 		esac
 	done
 
+	# Handle --check-deps early if specified
+	if [[ $CHECK_DEPS_ONLY == true ]]; then
+		check_dependencies "$EXCEL_FILE"
+		exit $?
+	fi
+
 	# Required args
 	if [[ -z $EXCEL_FILE ]]; then
 		log::error "Excel file is required"
@@ -627,7 +676,7 @@ main() {
 	fi
 
 	# Validate basic dependencies and output directory
-	if ! check_dependencies; then
+	if ! check_dependencies "$EXCEL_FILE"; then
 		exit 1
 	fi
 	if ! validate_output_dir "$OUTPUT_DIR"; then

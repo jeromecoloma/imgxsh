@@ -172,6 +172,87 @@ Executes custom shell scripts.
     output_file: "{output_dir}/custom_result.txt"
 ```
 
+#### HTML Generation with Custom Steps
+
+Custom steps are particularly powerful for generating HTML galleries and reports:
+
+```yaml
+- name: generate_html_gallery
+  type: custom
+  description: "Generate interactive HTML gallery"
+  condition: "extracted_count > 0"
+  params:
+    script: |
+      #!/bin/bash
+      html_file="{output_dir}/gallery.html"
+      
+      # Create HTML with embedded CSS and JavaScript
+      cat > "$html_file" << 'EOF'
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Image Gallery</title>
+          <style>
+              .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+              .gallery-item { background: white; border-radius: 8px; padding: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+              .gallery-item img { width: 100%; height: auto; cursor: pointer; }
+              .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.9); }
+              .modal-content { margin: auto; display: block; max-width: 90%; max-height: 90%; }
+          </style>
+      </head>
+      <body>
+          <h1>Image Gallery</h1>
+          <div class="gallery">
+      EOF
+      
+      # Generate gallery items dynamically
+      counter=1
+      for thumb in "{output_dir}/thumbnails"/*.jpg; do
+          if [[ -f "$thumb" ]]; then
+              thumb_name=$(basename "$thumb")
+              full_name="${thumb_name/_thumb_/_full_}"
+              echo "              <div class=\"gallery-item\">" >> "$html_file"
+              echo "                  <img src=\"thumbnails/$thumb_name\" onclick=\"openModal('full/$full_name')\" alt=\"Image $counter\">" >> "$html_file"
+              echo "                  <h3>Image $counter</h3>" >> "$html_file"
+              echo "              </div>" >> "$html_file"
+              ((counter++))
+          fi
+      done
+      
+      # Close HTML with JavaScript
+      cat >> "$html_file" << 'EOF'
+          </div>
+          <div id="modal" class="modal">
+              <span class="close" onclick="closeModal()">&times;</span>
+              <img class="modal-content" id="modalImg">
+          </div>
+          <script>
+              function openModal(src) {
+                  document.getElementById('modal').style.display = 'block';
+                  document.getElementById('modalImg').src = src;
+              }
+              function closeModal() {
+                  document.getElementById('modal').style.display = 'none';
+              }
+          </script>
+      </body>
+      </html>
+      EOF
+      
+      echo "Gallery created successfully at $html_file"
+```
+
+#### Custom Step Best Practices
+
+1. **Always use shebang**: Start scripts with `#!/bin/bash`
+2. **Handle errors**: Use `set -euo pipefail` for robust error handling
+3. **Use template variables**: Leverage `{workflow_input}`, `{output_dir}`, etc.
+4. **Generate meaningful output**: Create files that users can easily access
+5. **Include progress feedback**: Use `echo` statements to show progress
+6. **Clean up temporary files**: Remove any temporary files created during execution
+
 ### Advanced Step Parameters
 
 #### Batch Processing

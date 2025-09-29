@@ -70,6 +70,7 @@ curl -fsSL https://github.com/jeromecoloma/imgxsh/install.sh | bash
   - Format conversion, metadata preservation, template-based naming, quality control, dry-run mode
 - `imgxsh-extract-excel` - Extract images from Excel files
   - .xlsx support via `unzip` (lists and extracts `xl/media/*`)
+  - .xls (legacy) support via `7z/p7zip` for Composite Document Format
   - `--list-only` to preview embedded media; verbose shows file list
   - Naming: default `{prefix}_{NNN}.{ext}` or `--keep-names`
   - Optional conversion with `-f/--format` and `--quality`
@@ -208,25 +209,29 @@ imgxsh --workflow pdf-to-web --dry-run document.pdf
 - **Presets**: `config/presets/` - Workflow variations and shortcuts
 - **User Config**: `~/.imgxsh.yaml` - Global settings and custom workflows
 
-### Example Workflow
+### Example Workflow: PDF to Web Gallery
+
+The `pdf-to-web` workflow demonstrates the full power of imgxsh by creating a complete web gallery from a PDF document:
 
 ```yaml
 name: pdf-to-web
-description: "Extract PDF images and optimize for web"
+description: "Render PDF pages as images and optimize for web gallery"
 version: "1.0"
 
 settings:
-  output_dir: "./output/pdf-web"
+  output_dir: "./output"
+  temp_dir: "/tmp/imgxsh/pdf-web"
   parallel_jobs: 4
 
 steps:
-  - name: extract_images
+  - name: extract_pages
     type: pdf_extract
-    description: "Extract all images from PDF"
+    description: "Render PDF pages as images"
     params:
       input: "{workflow_input}"
       output_dir: "{temp_dir}/extracted"
       format: "png"
+      quality: 85
       
   - name: create_thumbnails
     type: resize
@@ -238,7 +243,7 @@ steps:
       height: 200
       maintain_aspect: true
       quality: 80
-      output_template: "{output_dir}/thumbs/{pdf_name}_thumb_{counter:03d}.jpg"
+      output_template: "{output_dir}/thumbnails/{pdf_name}_thumb_{counter:03d}.jpg"
       
   - name: create_full_size
     type: convert
@@ -250,13 +255,126 @@ steps:
       quality: 85
       max_width: 1200
       max_height: 800
-      output_template: "{output_dir}/full/{pdf_name}_full_{counter:03d}.webp"
+      output_template: "{output_dir}/full/{pdf_name}_full_{counter:03d}.{format}"
+      
+  - name: generate_gallery_html
+    type: custom
+    description: "Generate HTML gallery page"
+    condition: "extracted_count > 0"
+    params:
+      script: |
+        #!/bin/bash
+        # Generate interactive HTML gallery with modal view
+        output_dir="./output"
+        html_file="$output_dir/gallery.html"
+        
+        # Create responsive gallery with modal functionality
+        cat > "$html_file" << 'EOF'
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>PDF Gallery</title>
+            <style>
+                body { font-family: Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }
+                .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+                .gallery-item { background: white; border-radius: 8px; padding: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+                .gallery-item img { width: 100%; height: auto; border-radius: 4px; cursor: pointer; }
+                .gallery-item h3 { margin: 10px 0 5px 0; color: #333; }
+                .gallery-item p { margin: 0; color: #666; font-size: 14px; }
+                .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.9); }
+                .modal-content { margin: auto; display: block; max-width: 90%; max-height: 90%; }
+                .close { position: absolute; top: 15px; right: 35px; color: #f1f1f1; font-size: 40px; font-weight: bold; cursor: pointer; }
+            </style>
+        </head>
+        <body>
+            <h1>PDF Gallery</h1>
+            <div class="gallery">
+        EOF
+        
+        # Add thumbnail entries with modal functionality
+        counter=1
+        for thumb in "$output_dir/thumbnails"/*.jpg; do
+            if [[ -f "$thumb" ]]; then
+                thumb_name=$(basename "$thumb")
+                full_name="${thumb_name/_thumb_/_full_}"
+                full_name="${full_name/.jpg/.webp}"
+                full_path="$output_dir/full/$full_name"
+                
+                if [[ -f "$full_path" ]]; then
+                    echo "                <div class=\"gallery-item\">" >> "$html_file"
+                    echo "                    <img src=\"thumbnails/$thumb_name\" onclick=\"openModal('full/$full_name')\" alt=\"Page $counter\">" >> "$html_file"
+                    echo "                    <h3>Page $counter</h3>" >> "$html_file"
+                    echo "                    <p>Click to view full size</p>" >> "$html_file"
+                    echo "                </div>" >> "$html_file"
+                    ((counter++))
+                fi
+            fi
+        done
+        
+        # Close the HTML with JavaScript for modal functionality
+        cat >> "$html_file" << 'EOF'
+            </div>
+            
+            <div id="modal" class="modal">
+                <span class="close" onclick="closeModal()">&times;</span>
+                <img class="modal-content" id="modalImg">
+            </div>
+            
+            <script>
+                function openModal(src) {
+                    const modal = document.getElementById('modal');
+                    const modalImg = document.getElementById('modalImg');
+                    modal.style.display = 'block';
+                    modalImg.src = src;
+                }
+                
+                function closeModal() {
+                    document.getElementById('modal').style.display = 'none';
+                }
+                
+                // Close modal when clicking outside the image
+                window.onclick = function(event) {
+                    const modal = document.getElementById('modal');
+                    if (event.target == modal) {
+                        modal.style.display = 'none';
+                    }
+                }
+            </script>
+        </body>
+        </html>
+        EOF
+        
+        echo "Gallery created successfully at $html_file"
 
 hooks:
+  pre_workflow:
+    - 'echo "Starting PDF page rendering for: {workflow_input}"'
+  
   on_success:
-    - echo "Gallery created successfully at: {output_dir}"
-    - echo "Thumbnails: {output_dir}/thumbs/"
-    - echo "Full images: {output_dir}/full/"
+    - 'echo "PDF pages rendered successfully"'
+    - 'echo "Thumbnails and full-size images created in: {output_dir}"'
+    - 'echo "Open gallery.html in your browser to view the interactive gallery"'
+  
+  on_failure:
+    - 'echo "Workflow failed at step: {failed_step}"'
+```
+
+**Usage**:
+```bash
+# Create a complete web gallery from a PDF
+imgxsh --workflow pdf-to-web document.pdf
+
+# Output structure:
+# output/
+# ├── thumbnails/          # 300x200 thumbnails for quick browsing
+# │   ├── document_thumb_001.jpg
+# │   └── document_thumb_002.jpg
+# ├── full/                # Full-size WebP images for detailed viewing
+# │   ├── document_full_001.webp
+# │   └── document_full_002.webp
+# └── gallery.html         # Interactive HTML gallery with modal view
 ```
 
 ### Available Step Types
@@ -297,6 +415,15 @@ Execute steps based on context:
     height: 900
     quality: 90
 ```
+
+### Built-in Workflows
+
+- **`pdf-to-web`** - Complete PDF to web gallery workflow with HTML generation
+- **`pdf-to-thumbnails`** - Extract PDF images and create thumbnails
+- **`web-optimize`** - Optimize images for web use
+- **`excel-extract`** - Extract images from Excel files
+- **`batch-convert`** - Convert image formats in batch
+- **`watermark-apply`** - Apply watermarks to images
 
 ### Built-in Presets
 

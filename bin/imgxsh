@@ -8,6 +8,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SHELL_STARTER_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
+# Debug removed
+
 source "${SHELL_STARTER_ROOT}/lib/main.sh"
 source "${SHELL_STARTER_ROOT}/lib/imgxsh/core.sh"
 
@@ -201,7 +203,7 @@ execute_workflow() {
 
 	# Normalize common aliases
 	case "$workflow" in
-	"pdf-to-web") workflow="pdf-to-thumbnails" ;;
+	"pdf-to-web") workflow="${SCRIPT_DIR}/../config/workflows/pdf-to-web.yaml" ;;
 	esac
 
 	if [[ $dry_run == true ]]; then
@@ -487,6 +489,45 @@ execute_custom_workflow() {
 	if [[ $dry_run == true ]]; then
 		log::info "DRY RUN MODE - Workflow steps preview:"
 
+		# Check for existing output files in dry-run mode
+		check_existing_output_files() {
+			local output_dir="$1"
+			local existing_files=()
+
+			# Check for thumbnail files
+			if [[ -d "$output_dir/thumbnails" ]]; then
+				while IFS= read -r -d '' file; do
+					existing_files+=("$file")
+				done < <(find "$output_dir/thumbnails" -name "*.jpg" -print0 2>/dev/null)
+			fi
+
+			# Check for full-size files
+			if [[ -d "$output_dir/full" ]]; then
+				while IFS= read -r -d '' file; do
+					existing_files+=("$file")
+				done < <(find "$output_dir/full" -name "*.webp" -print0 2>/dev/null)
+			fi
+
+			# Check for gallery file
+			if [[ -f "$output_dir/gallery.html" ]]; then
+				existing_files+=("$output_dir/gallery.html")
+			fi
+
+			if [[ ${#existing_files[@]} -gt 0 ]]; then
+				log::warn "Found ${#existing_files[@]} existing output file(s) that would be overwritten:"
+				for file in "${existing_files[@]}"; do
+					log::warn "  - $(basename "$file")"
+				done
+				log::info "DRY RUN: Would overwrite the above files"
+			fi
+
+			return 0
+		}
+
+		# Check for existing files in dry-run mode
+		check_existing_output_files "$output_dir"
+		echo
+
 		# Initialize context for dry-run condition evaluation
 		yaml::init_context "DRY_CONTEXT"
 		yaml::set_context_var "DRY_CONTEXT" "total_steps" "$step_count"
@@ -713,6 +754,61 @@ execute_custom_workflow() {
 		return 0
 	fi
 
+	# Check for existing output files and warn user
+	check_existing_output_files() {
+		local output_dir="$1"
+		local existing_files=()
+
+		# Check for thumbnail files
+		if [[ -d "$output_dir/thumbnails" ]]; then
+			while IFS= read -r -d '' file; do
+				existing_files+=("$file")
+			done < <(find "$output_dir/thumbnails" -name "*.jpg" -print0 2>/dev/null)
+		fi
+
+		# Check for full-size files
+		if [[ -d "$output_dir/full" ]]; then
+			while IFS= read -r -d '' file; do
+				existing_files+=("$file")
+			done < <(find "$output_dir/full" -name "*.webp" -print0 2>/dev/null)
+		fi
+
+		# Check for gallery file
+		if [[ -f "$output_dir/gallery.html" ]]; then
+			existing_files+=("$output_dir/gallery.html")
+		fi
+
+		if [[ ${#existing_files[@]} -gt 0 ]]; then
+			log::warn "Found ${#existing_files[@]} existing output file(s) that will be overwritten:"
+			for file in "${existing_files[@]}"; do
+				log::warn "  - $(basename "$file")"
+			done
+
+			if [[ "${dry_run:-false}" == "true" ]]; then
+				log::info "DRY RUN: Would overwrite the above files"
+				return 0
+			fi
+
+			# Ask for confirmation
+			echo
+			read -p "Do you want to continue and overwrite these files? (y/N): " -r
+			echo
+			if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+				log::info "Workflow cancelled by user"
+				return 1 # Return 1 to stop execution, but this is user choice, not error
+			fi
+		fi
+
+		return 0
+	}
+
+	# Check for existing files before starting
+	if ! check_existing_output_files "$output_dir"; then
+		# User cancelled - set flag and return normally
+		export IMGXSH_USER_CANCELLED=1
+		return 0
+	fi
+
 	# Execute pre-workflow hooks
 	local pre_hooks
 	pre_hooks=$(yaml::get_hook "CUSTOM_WF" "PRE_WORKFLOW")
@@ -923,9 +1019,89 @@ execute_pdf_extract_step() {
 	local output_dir="$3"
 	local inputs=("${@:4}")
 
-	log::info "PDF extraction step (basic implementation)"
-	# This will be enhanced when we implement imgxsh-extract-pdf
-	return 0
+	log::info "PDF extraction step: Processing ${#inputs[@]} input(s)"
+
+	# Debug removed
+
+	# Get step parameters from YAML
+	local output_dir_param
+	local format
+	local quality
+
+	output_dir_param=$(yaml::get_step_param "$workflow_prefix" "$step_index" "output_dir")
+	format=$(yaml::get_step_param "$workflow_prefix" "$step_index" "format")
+	quality=$(yaml::get_step_param "$workflow_prefix" "$step_index" "quality")
+
+	# Set defaults
+	format=${format:-"png"}
+	quality=${quality:-"85"}
+
+	# Manually substitute template variables since they're not being processed
+	local temp_dir="/tmp/imgxsh/pdf-web"
+	output_dir_param="${output_dir_param//\{temp_dir\}/$temp_dir}"
+
+	# Debug removed
+
+	local processed_count=0
+	local failed_count=0
+
+	for input in "${inputs[@]}"; do
+		if [[ -f "$input" && "$input" == *.pdf ]]; then
+			log::info "Rendering PDF pages as images: $input"
+
+			# Use imgxsh-extract-pdf with raster mode (default)
+			# Note: SCRIPT_DIR gets modified during workflow execution, so use absolute path
+			local extract_cmd=("${SHELL_STARTER_ROOT}/bin/imgxsh-extract-pdf")
+
+			# Add format if specified
+			if [[ -n "$format" ]]; then
+				extract_cmd+=("--format" "$format")
+			fi
+
+			# Add quality if specified
+			if [[ -n "$quality" ]]; then
+				extract_cmd+=("--quality" "$quality")
+			fi
+
+			# Add input and output
+			extract_cmd+=("$input" "$output_dir_param")
+
+			# Debug removed
+
+			# Start spinner for PDF extraction
+			spinner::start "Rasterizing PDF pages: $(basename "$input")"
+
+			# Execute extraction
+			if "${extract_cmd[@]}"; then
+				spinner::stop
+				echo # Ensure newline after spinner stop
+				# Count generated files (imgxsh-extract-pdf creates page-*.ext files)
+				local generated_files
+				generated_files=$(find "$output_dir_param" -name "page-*" 2>/dev/null | wc -l)
+				processed_count=$((processed_count + generated_files))
+				log::success "Generated $generated_files page images from $(basename "$input")"
+			else
+				spinner::stop
+				echo # Ensure newline after spinner stop
+				((failed_count++))
+				log::error "Failed to extract PDF pages: $input"
+			fi
+		else
+			log::warn "Skipping non-PDF file: $input"
+		fi
+	done
+
+	# Update context variables for subsequent steps
+	yaml::set_context_var "WF_CONTEXT" "extracted_count" "$processed_count"
+	yaml::set_template_var "WF_TEMPLATE" "extracted_count" "$processed_count"
+
+	if [[ $failed_count -gt 0 ]]; then
+		log::warn "PDF extraction step completed with $failed_count failures"
+		return 1
+	else
+		log::success "PDF extraction step completed: $processed_count page images generated"
+		return 0
+	fi
 }
 
 execute_excel_extract_step() {
@@ -945,9 +1121,87 @@ execute_convert_step() {
 	local output_dir="$3"
 	local inputs=("${@:4}")
 
-	log::info "Convert step (basic implementation)"
-	# This will be enhanced when we implement imgxsh-convert
-	return 0
+	log::info "Convert step: Processing images"
+
+	# Get step parameters from YAML
+	local input_dir
+	local format
+	local quality
+	local max_width
+	local max_height
+	local output_template
+
+	input_dir=$(yaml::get_step_param "$workflow_prefix" "$step_index" "input_dir")
+	format=$(yaml::get_step_param "$workflow_prefix" "$step_index" "format")
+	quality=$(yaml::get_step_param "$workflow_prefix" "$step_index" "quality")
+	max_width=$(yaml::get_step_param "$workflow_prefix" "$step_index" "max_width")
+	max_height=$(yaml::get_step_param "$workflow_prefix" "$step_index" "max_height")
+	output_template=$(yaml::get_step_param "$workflow_prefix" "$step_index" "output_template")
+
+	# Set defaults
+	format=${format:-"webp"}
+	quality=${quality:-"85"}
+
+	# Manually substitute template variables
+	local temp_dir="/tmp/imgxsh/pdf-web"
+	input_dir="${input_dir//\{temp_dir\}/$temp_dir}"
+	output_template="${output_template//\{output_dir\}/$output_dir}"
+
+	# Create output directory
+	local output_subdir
+	output_subdir=$(dirname "$output_template")
+	mkdir -p "$output_subdir"
+
+	local processed_count=0
+	local failed_count=0
+
+	# Process each image in the input directory
+	for input_file in "$input_dir"/*; do
+		if [[ -f "$input_file" && "$input_file" =~ \.(png|jpg|jpeg|webp|tiff|bmp)$ ]]; then
+			local base_name
+			base_name=$(basename "$input_file" | sed 's/\.[^.]*$//')
+			local output_file
+			output_file="${output_template//\{pdf_name\}/document}"
+			output_file="${output_file//\{counter:03d\}/$(printf "%03d" $((processed_count + 1)))}"
+			output_file="${output_file//\{format\}/$format}"
+
+			# Use imgxsh-convert to process the image
+			local convert_cmd=("${SHELL_STARTER_ROOT}/bin/imgxsh-convert")
+			convert_cmd+=("--format" "$format")
+			convert_cmd+=("--quality" "$quality")
+			convert_cmd+=("--overwrite") # Allow overwriting existing files
+
+			# Note: imgxsh-convert doesn't support resizing, only format conversion
+
+			convert_cmd+=("$input_file" "$output_file")
+
+			# Start spinner for convert operation
+			spinner::start "Converting to $format: $(basename "$input_file")"
+
+			# Capture error output for debugging
+			local error_output
+			if error_output=$("${convert_cmd[@]}" 2>&1); then
+				spinner::stop
+				echo # Ensure newline after spinner stop
+				((processed_count++))
+				log::success "Converted: $(basename "$input_file") -> $(basename "$output_file")"
+			else
+				spinner::stop
+				echo # Ensure newline after spinner stop
+				((failed_count++))
+				log::warn "Failed to convert: $(basename "$input_file")"
+				log::error "Convert error: $error_output"
+			fi
+		fi
+	done
+
+	if [[ $failed_count -gt 0 ]]; then
+		log::warn "Convert step completed with $failed_count failures"
+		return 1
+	else
+		log::success "Convert step completed: $processed_count images converted"
+		return 0
+	fi
 }
 
 execute_resize_step() {
@@ -956,9 +1210,87 @@ execute_resize_step() {
 	local output_dir="$3"
 	local inputs=("${@:4}")
 
-	log::info "Resize step (basic implementation)"
-	# This will be enhanced when we implement imgxsh-resize
-	return 0
+	log::info "Resize step: Creating thumbnails"
+
+	# Get step parameters from YAML
+	local input_dir
+	local width
+	local height
+	local maintain_aspect
+	local quality
+	local output_template
+
+	input_dir=$(yaml::get_step_param "$workflow_prefix" "$step_index" "input_dir")
+	width=$(yaml::get_step_param "$workflow_prefix" "$step_index" "width")
+	height=$(yaml::get_step_param "$workflow_prefix" "$step_index" "height")
+	maintain_aspect=$(yaml::get_step_param "$workflow_prefix" "$step_index" "maintain_aspect")
+	quality=$(yaml::get_step_param "$workflow_prefix" "$step_index" "quality")
+	output_template=$(yaml::get_step_param "$workflow_prefix" "$step_index" "output_template")
+
+	# Set defaults
+	width=${width:-"300"}
+	height=${height:-"200"}
+	maintain_aspect=${maintain_aspect:-"true"}
+	quality=${quality:-"80"}
+
+	# Manually substitute template variables
+	local temp_dir="/tmp/imgxsh/pdf-web"
+	input_dir="${input_dir//\{temp_dir\}/$temp_dir}"
+	output_template="${output_template//\{output_dir\}/$output_dir}"
+
+	# Create output directory
+	local output_subdir
+	output_subdir=$(dirname "$output_template")
+	mkdir -p "$output_subdir"
+
+	local processed_count=0
+	local failed_count=0
+
+	# Process each image in the input directory
+	for input_file in "$input_dir"/*; do
+		if [[ -f "$input_file" && "$input_file" =~ \.(png|jpg|jpeg|webp|tiff|bmp)$ ]]; then
+			local output_file
+			output_file="${output_template//\{pdf_name\}/document}"
+			output_file="${output_file//\{counter:03d\}/$(printf "%03d" $((processed_count + 1)))}"
+
+			# Use imgxsh-resize to create thumbnails
+			local resize_cmd=("${SHELL_STARTER_ROOT}/bin/imgxsh-resize")
+			resize_cmd+=("--width" "$width")
+			resize_cmd+=("--height" "$height")
+			resize_cmd+=("--quality" "$quality")
+			resize_cmd+=("--overwrite") # Allow overwriting existing files
+
+			# imgxsh-resize maintains aspect ratio by default, no need for extra flag
+
+			resize_cmd+=("$input_file" "$output_file")
+
+			# Start spinner for resize operation
+			spinner::start "Creating thumbnail: $(basename "$input_file")"
+
+			# Capture error output for debugging
+			local error_output
+			if error_output=$("${resize_cmd[@]}" 2>&1); then
+				spinner::stop
+				echo # Ensure newline after spinner stop
+				((processed_count++))
+				log::success "Resized: $(basename "$input_file") -> $(basename "$output_file")"
+			else
+				spinner::stop
+				echo # Ensure newline after spinner stop
+				((failed_count++))
+				log::warn "Failed to resize: $(basename "$input_file")"
+				log::error "Resize error: $error_output"
+			fi
+		fi
+	done
+
+	if [[ $failed_count -gt 0 ]]; then
+		log::warn "Resize step completed with $failed_count failures"
+		return 1
+	else
+		log::success "Resize step completed: $processed_count thumbnails created"
+		return 0
+	fi
 }
 
 execute_watermark_step() {
@@ -1054,12 +1386,19 @@ execute_custom_step() {
 
 	chmod +x "$temp_script"
 
+	# Start spinner for custom script execution
+	spinner::start "Generating HTML gallery"
+
 	# Execute script
 	if "$temp_script"; then
+		spinner::stop
+		echo # Ensure newline after spinner stop
 		log::success "Custom script executed successfully"
 		rm -f "$temp_script"
 		return 0
 	else
+		spinner::stop
+		echo # Ensure newline after spinner stop
 		log::error "Custom script failed"
 		rm -f "$temp_script"
 		return 1
@@ -1507,11 +1846,23 @@ main() {
 
 	# Execute workflow
 	execute_workflow "$workflow" "$dry_run" "$output_dir" "$parallel_jobs" "${inputs[@]}"
+	local workflow_exit_code=$?
 
 	# Cleanup
 	imgxsh::cleanup
 
-	log::success "Workflow completed successfully"
+	# Handle different exit codes
+	if [[ $workflow_exit_code -eq 0 ]]; then
+		if [[ "${IMGXSH_USER_CANCELLED:-0}" == "1" ]]; then
+			# User cancelled - no success message needed
+			exit 0
+		else
+			log::success "Workflow completed successfully"
+		fi
+	else
+		# Actual error occurred
+		exit $workflow_exit_code
+	fi
 }
 
 # Only run main if script is executed directly
