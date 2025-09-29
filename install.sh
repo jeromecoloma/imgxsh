@@ -153,10 +153,14 @@ OPTIONS:
     --help, -h            Show this help
 
 EXAMPLES:
-    $0                    # Install from current directory
+    $0                    # Install from current directory (or auto-detect GitHub)
     $0 --from-github      # Install latest from GitHub
     $0 --version v1.2.3   # Install specific version
     $0 --uninstall        # Remove installation
+
+NOTE:
+    When run via curl (e.g., curl -fsSL ... | bash), automatically downloads
+    from GitHub if no local imgxsh files are found.
 
 EOF
 }
@@ -699,6 +703,13 @@ main() {
 	if [[ $UNINSTALL == true ]]; then
 		run_uninstaller
 		return 0
+	fi
+
+	# Auto-detect if we should install from GitHub
+	# If no local bin/ directory exists and --from-github wasn't explicitly set, enable GitHub installation
+	if [[ $FROM_GITHUB == false && ! -d "./bin" ]]; then
+		log info "No local imgxsh files found - automatically enabling GitHub installation"
+		FROM_GITHUB=true
 	fi
 
 	# Check system prerequisites for installation
