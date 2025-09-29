@@ -95,7 +95,7 @@ flowchart TD
 
   P[Preset] --> D[overrides]
   D --> E["settings (mapping)"]
-  D --> F[steps (mapping)]
+  D --> F["steps (mapping)"]
   F --> F1[create_thumbnails → overrides]
   F --> F2[create_medium → overrides]
 
