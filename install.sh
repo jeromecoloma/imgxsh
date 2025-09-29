@@ -351,13 +351,24 @@ download_project() {
 		fatal_error "Failed to create temporary directory: $temp_dir"
 	fi
 
+	# Save current directory to restore later
+	local original_dir="$(pwd)"
+
+	# Change to temp directory for download operations
+	cd "$temp_dir"
+
 	# Method 1: Try git clone (fastest and most reliable)
 	if command -v git >/dev/null 2>&1; then
 		log info "Attempting to clone repository with git..."
-		if git clone --depth 1 --quiet "$repo_url" "$temp_dir" 2>/dev/null; then
-			log info "Successfully cloned repository"
-			echo "$temp_dir"
-			return 0
+		if git clone --depth 1 --quiet "$repo_url" . 2>/dev/null; then
+			if [[ -d "bin" ]]; then
+				log info "Successfully cloned repository"
+				cd "$original_dir"
+				echo "$temp_dir"
+				return 0
+			else
+				log warn "Git clone succeeded but no bin/ directory found"
+			fi
 		else
 			log warn "Git clone failed, trying alternative download methods..."
 		fi
@@ -366,42 +377,37 @@ download_project() {
 	# Method 2: Try curl with GitHub tarball
 	if command -v curl >/dev/null 2>&1; then
 		log info "Downloading project archive with curl..."
-		local tarball="$temp_dir.tar.gz"
-		if curl -fsSL "$repo_url/archive/refs/heads/main.tar.gz" -o "$tarball" 2>/dev/null; then
-			if tar -xzf "$tarball" -C "$(dirname "$temp_dir")" 2>/dev/null; then
-				# GitHub tarballs create a directory with the format: repo-branch
-				local extracted_dir="$(dirname "$temp_dir")/$(basename "$GITHUB_REPO")-main"
-				if [[ -d "$extracted_dir" ]]; then
-					mv "$extracted_dir" "$temp_dir"
-					rm -f "$tarball"
-					log info "Successfully downloaded and extracted project"
-					echo "$temp_dir"
-					return 0
-				fi
+		if curl -fsSL "$repo_url/archive/refs/heads/main.tar.gz" | tar -xz --strip-components=1 2>/dev/null; then
+			if [[ -d "bin" ]]; then
+				log info "Successfully downloaded and extracted project"
+				cd "$original_dir"
+				echo "$temp_dir"
+				return 0
+			else
+				log warn "Curl download succeeded but no bin/ directory found"
 			fi
+		else
+			log warn "Curl download failed, trying wget..."
 		fi
-		log warn "Curl download failed, trying wget..."
-		rm -f "$tarball"
 	fi
 
 	# Method 3: Try wget as fallback
 	if command -v wget >/dev/null 2>&1; then
 		log info "Downloading project archive with wget..."
-		local tarball="$temp_dir.tar.gz"
-		if wget -q "$repo_url/archive/refs/heads/main.tar.gz" -O "$tarball" 2>/dev/null; then
-			if tar -xzf "$tarball" -C "$(dirname "$temp_dir")" 2>/dev/null; then
-				local extracted_dir="$(dirname "$temp_dir")/$(basename "$GITHUB_REPO")-main"
-				if [[ -d "$extracted_dir" ]]; then
-					mv "$extracted_dir" "$temp_dir"
-					rm -f "$tarball"
-					log info "Successfully downloaded and extracted project"
-					echo "$temp_dir"
-					return 0
-				fi
+		if wget -qO- "$repo_url/archive/refs/heads/main.tar.gz" | tar -xz --strip-components=1 2>/dev/null; then
+			if [[ -d "bin" ]]; then
+				log info "Successfully downloaded and extracted project"
+				cd "$original_dir"
+				echo "$temp_dir"
+				return 0
+			else
+				log warn "Wget download succeeded but no bin/ directory found"
 			fi
 		fi
-		rm -f "$tarball"
 	fi
+
+	# Restore original directory before failing
+	cd "$original_dir"
 
 	# If all methods failed
 	fatal_error "Failed to download project. Please check your internet connection or try: git clone $repo_url"
