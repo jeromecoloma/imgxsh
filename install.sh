@@ -851,7 +851,7 @@ main() {
 	local response
 	# Try to read from stdin first (works for both interactive and piped input)
 	if read -r response; then
-		:  # Successfully read from stdin
+		: # Successfully read from stdin
 	elif [[ -r /dev/tty ]]; then
 		# Fallback to /dev/tty if stdin read fails
 		read -r response </dev/tty 2>/dev/null || {
@@ -864,13 +864,13 @@ main() {
 	fi
 
 	case "$response" in
-		[yY]|[yY][eE][sS])
-			log info "Proceeding with installation..."
-			;;
-		*)
-			log info "Installation cancelled by user"
-			exit 0
-			;;
+	[yY] | [yY][eE][sS])
+		log info "Proceeding with installation..."
+		;;
+	*)
+		log info "Installation cancelled by user"
+		exit 0
+		;;
 	esac
 	echo
 
