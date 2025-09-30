@@ -546,6 +546,18 @@ install_scripts() {
 			fatal_error "Failed to copy libraries to: $LIB_PREFIX"
 		fi
 
+		# Copy VERSION file if it exists (required for version detection)
+		if [[ -f "$working_dir/VERSION" ]]; then
+			if cp "$working_dir/VERSION" "$LIB_PREFIX/../VERSION" 2>/dev/null; then
+				log info "Installed VERSION file"
+				echo "$LIB_PREFIX/../VERSION" >>"$MANIFEST_FILE" || {
+					log warn "Failed to add VERSION to manifest"
+				}
+			else
+				log warn "Failed to copy VERSION file (version may show as 'unknown')"
+			fi
+		fi
+
 		# Set permissions, fix paths, and count files
 		find "$LIB_PREFIX" -type f -name "*.sh" | while read -r lib_file; do
 			# Update library paths in library files
