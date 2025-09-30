@@ -575,6 +575,11 @@ install_scripts() {
 				sed -i.bak "s|\${SHELL_STARTER_ROOT_DIR}/VERSION|$LIB_PREFIX/VERSION|g" "$lib_file" && rm -f "$lib_file.bak"
 			fi
 
+			# Update SHELL_STARTER_ROOT references for VERSION file location (in core.sh)
+			if grep -q '${SHELL_STARTER_ROOT}/VERSION' "$lib_file" 2>/dev/null; then
+				sed -i.bak "s|\${SHELL_STARTER_ROOT}/VERSION|$LIB_PREFIX/VERSION|g" "$lib_file" && rm -f "$lib_file.bak"
+			fi
+
 			if ! chmod 644 "$lib_file"; then
 				log warn "Failed to set permissions on library: $lib_file"
 			fi
