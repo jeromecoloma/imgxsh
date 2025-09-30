@@ -5,7 +5,7 @@ set -euo pipefail
 # imgxsh Installer
 # Configuration
 DEFAULT_PREFIX="$HOME/.local/bin"
-DEFAULT_LIB_PREFIX="$HOME/.local/lib"
+DEFAULT_LIB_PREFIX="$HOME/.local/lib/imgxsh"
 MANIFEST_DIR="${MANIFEST_DIR:-$HOME/.config/imgxsh}"
 MANIFEST_FILE="$MANIFEST_DIR/install-manifest.txt"
 GITHUB_REPO="${GITHUB_REPO:-jeromecoloma/imgxsh}"
@@ -520,11 +520,9 @@ install_scripts() {
 			fi
 
 			# Update library paths in installed scripts
-			if grep -q 'lib/main\.sh' "$dest_path" 2>/dev/null; then
-				sed -i.bak "s|source \"[^\"]*lib/main\.sh\"|source \"$LIB_PREFIX/main.sh\"|g" "$dest_path" && rm -f "$dest_path.bak"
-			fi
-			if grep -q 'lib/imgxsh/' "$dest_path" 2>/dev/null; then
-				sed -i.bak "s|source \"[^\"]*lib/imgxsh/\([^\"]*\)\"|source \"$LIB_PREFIX/imgxsh/\1\"|g" "$dest_path" && rm -f "$dest_path.bak"
+			# Replace SHELL_STARTER_ROOT variable references with actual LIB_PREFIX path
+			if grep -q 'SHELL_STARTER_ROOT' "$dest_path" 2>/dev/null; then
+				sed -i.bak "s|\${SHELL_STARTER_ROOT}/lib/|$LIB_PREFIX/|g" "$dest_path" && rm -f "$dest_path.bak"
 			fi
 
 			if ! chmod +x "$dest_path"; then
@@ -548,8 +546,13 @@ install_scripts() {
 			fatal_error "Failed to copy libraries to: $LIB_PREFIX"
 		fi
 
-		# Set permissions and count files
+		# Set permissions, fix paths, and count files
 		find "$LIB_PREFIX" -type f -name "*.sh" | while read -r lib_file; do
+			# Update library paths in library files
+			if grep -q 'SHELL_STARTER_ROOT' "$lib_file" 2>/dev/null; then
+				sed -i.bak "s|\${SHELL_STARTER_ROOT}/lib/|$LIB_PREFIX/|g" "$lib_file" && rm -f "$lib_file.bak"
+			fi
+
 			if ! chmod 644 "$lib_file"; then
 				log warn "Failed to set permissions on library: $lib_file"
 			fi

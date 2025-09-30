@@ -1572,14 +1572,11 @@ main() {
 			shift
 			;;
 		--uninstall)
-			# Run the uninstaller via install.sh
+			# Run the uninstaller via install.sh with proper stdin handling
 			log::info "Running uninstaller..."
-			if bash <(curl -fsSL https://raw.githubusercontent.com/jeromecoloma/imgxsh/main/install.sh) --uninstall; then
-				exit 0
-			else
-				log::error "Uninstallation failed"
-				exit 1
-			fi
+			echo
+			curl -fsSL https://raw.githubusercontent.com/jeromecoloma/imgxsh/main/install.sh | bash -s -- --uninstall
+			exit $?
 			;;
 		--validate-workflow)
 			validate_workflow_file="$2"
