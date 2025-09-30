@@ -202,9 +202,9 @@ execute_workflow() {
 	local parallel_jobs="$4"
 	local inputs=("${@:5}")
 
-	# Normalize common aliases
+	# Normalize common aliases - resolve workflow files using SHELL_STARTER_ROOT
 	case "$workflow" in
-	"pdf-to-web") workflow="${SCRIPT_DIR}/../config/workflows/pdf-to-web.yaml" ;;
+	"pdf-to-web") workflow="${SHELL_STARTER_ROOT}/config/workflows/pdf-to-web.yaml" ;;
 	esac
 
 	if [[ $dry_run == true ]]; then

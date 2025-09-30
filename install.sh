@@ -523,6 +523,7 @@ install_scripts() {
 			# Replace SHELL_STARTER_ROOT variable references with actual LIB_PREFIX path
 			if grep -q 'SHELL_STARTER_ROOT' "$dest_path" 2>/dev/null; then
 				sed -i.bak "s|\${SHELL_STARTER_ROOT}/lib/|$LIB_PREFIX/|g" "$dest_path" && rm -f "$dest_path.bak"
+				sed -i.bak "s|\${SHELL_STARTER_ROOT}/config/|$LIB_PREFIX/config/|g" "$dest_path" && rm -f "$dest_path.bak"
 			fi
 
 			# Update VERSION file path in update-imgxsh script
