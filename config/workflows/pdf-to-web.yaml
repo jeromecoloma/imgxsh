@@ -7,7 +7,7 @@ version: "1.0"
 
 settings:
   output_dir: "./output"
-  temp_dir: "/tmp/imgxsh/pdf-web"
+  temp_dir: "/tmp/imgxsh"
   parallel_jobs: 4
 
 steps:
@@ -16,7 +16,7 @@ steps:
     description: "Render PDF pages as images"
     params:
       input: "{workflow_input}"
-      output_dir: "{temp_dir}/extracted"
+      output_dir: "{temp_dir}/pdf-web-{timestamp}/extracted"
       format: "png"
       quality: 85
       
@@ -25,19 +25,19 @@ steps:
     description: "Create thumbnail versions"
     condition: "extracted_count > 0"
     params:
-      input_dir: "{temp_dir}/extracted"
+      input_dir: "{temp_dir}/pdf-web-{timestamp}/extracted"
       width: 300
       height: 200
       maintain_aspect: true
       quality: 80
       output_template: "{output_dir}/thumbnails/{pdf_name}_thumb_{counter:03d}.jpg"
-      
+
   - name: create_full_size
     type: convert
     description: "Create full-size web-optimized versions"
     condition: "extracted_count > 0"
     params:
-      input_dir: "{temp_dir}/extracted"
+      input_dir: "{temp_dir}/pdf-web-{timestamp}/extracted"
       format: "webp"
       quality: 85
       max_width: 1200
@@ -140,13 +140,16 @@ steps:
 hooks:
   pre_workflow:
     - 'echo "Starting PDF page rendering for: {workflow_input}"'
-  
+    - 'rm -rf /tmp/imgxsh/pdf-web-* 2>/dev/null || true'
+
   on_success:
     - 'echo "PDF pages rendered successfully"'
     - 'echo "Thumbnails and full-size images created in: {output_dir}"'
-  
+    - 'rm -rf {temp_dir}/pdf-web-{timestamp} 2>/dev/null || true'
+
   on_failure:
     - 'echo "Workflow failed at step: {failed_step}"'
+    - 'rm -rf {temp_dir}/pdf-web-{timestamp} 2>/dev/null || true'
 
 # Template variables available:
 # {workflow_input} - Input file/directory path
