@@ -21,9 +21,9 @@ show_installation_banner() {
 	# Simple banner for installation success
 	echo
 	echo -e "${GREEN}╔══════════════════════════════════════════════╗${NC}"
-	echo -e "${GREEN}║            INSTALLATION COMPLETE            ║${NC}"
+	echo -e "${GREEN}║           INSTALLATION COMPLETE              ║${NC}"
 	echo -e "${GREEN}║                                              ║${NC}"
-	echo -e "${GREEN}║         🎉 imgxsh Successfully Installed     ║${NC}"
+	echo -e "${GREEN}║        🎉 imgxsh Successfully Installed      ║${NC}"
 	echo -e "${GREEN}╚══════════════════════════════════════════════╝${NC}"
 	echo
 }
@@ -493,11 +493,26 @@ install_scripts() {
 		log info "Note: Found demo/ directory with example scripts (not installed)"
 	fi
 
+	# List of development-only scripts to exclude from installation
+	local exclude_scripts=("bump-version" "update-shell-starter" "generate-ai-workflow")
+
 	# Install scripts from bin/
 	for script in "$working_dir"/bin/*; do
 		if [[ -f $script && -x $script ]]; then
 			local name dest_path
 			name=$(basename "$script")
+
+			# Skip development-only scripts
+			local skip=false
+			for excluded in "${exclude_scripts[@]}"; do
+				if [[ $name == "$excluded" ]]; then
+					skip=true
+					log info "Skipping dev-only script: $name"
+					break
+				fi
+			done
+			[[ $skip == true ]] && continue
+
 			dest_path="$PREFIX/$name"
 
 			if ! cp "$script" "$dest_path"; then

@@ -1572,14 +1572,12 @@ main() {
 			shift
 			;;
 		--uninstall)
-			# Run the uninstaller
-			if command -v uninstall.sh >/dev/null 2>&1; then
-				exec uninstall.sh
-			elif [[ -f "${SCRIPT_DIR}/../uninstall.sh" ]]; then
-				exec "${SCRIPT_DIR}/../uninstall.sh"
+			# Run the uninstaller via install.sh
+			log::info "Running uninstaller..."
+			if bash <(curl -fsSL https://raw.githubusercontent.com/jeromecoloma/imgxsh/main/install.sh) --uninstall; then
+				exit 0
 			else
-				log::error "Uninstaller not found. Try running:"
-				log::error "bash <(curl -fsSL https://raw.githubusercontent.com/jeromecoloma/imgxsh/main/uninstall.sh)"
+				log::error "Uninstallation failed"
 				exit 1
 			fi
 			;;
