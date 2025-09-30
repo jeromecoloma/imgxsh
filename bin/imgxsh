@@ -1584,6 +1584,9 @@ main() {
 				# Download and run uninstaller directly (not piped) so stdin works
 				local temp_script="/tmp/imgxsh-uninstall-$$.sh"
 				if curl -fsSL https://raw.githubusercontent.com/jeromecoloma/imgxsh/main/install.sh -o "$temp_script"; then
+					# Disable error trap temporarily to handle uninstall exit code ourselves
+					set +E
+					trap - ERR
 					printf "y\ny\n" | bash "$temp_script" --uninstall
 					local exit_code=$?
 					rm -f "$temp_script"
