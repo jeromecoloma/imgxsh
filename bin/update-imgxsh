@@ -123,25 +123,20 @@ get_latest_version() {
 }
 
 check_updates() {
-	# Check if check-version.sh exists before calling it
-	if [[ -f "${PROJECT_ROOT}/scripts/check-version.sh" ]]; then
-		GITHUB_REPO="$REPO" "${PROJECT_ROOT}/scripts/check-version.sh" status || true
-	else
-		log::info "Checking for updates..."
-		local current
-		current="$(get_current_version)"
-		local latest
-		if latest="$(get_latest_version)"; then
-			log::info "Current version: v${current}"
-			log::info "Latest version: v${latest}"
-			if [[ "$current" != "$latest" ]]; then
-				log::info "Update available! Run 'update-imgxsh' to update."
-			else
-				log::success "You are running the latest version."
-			fi
+	log::info "Checking for updates..."
+	local current
+	current="$(get_current_version)"
+	local latest
+	if latest="$(get_latest_version)"; then
+		log::info "Current version: v${current}"
+		log::info "Latest version: v${latest}"
+		if [[ "$current" != "$latest" ]]; then
+			log::info "Update available! Run 'update-imgxsh' to update."
 		else
-			log::error "Failed to check for updates"
+			log::success "You are running the latest version."
 		fi
+	else
+		log::error "Failed to check for updates"
 	fi
 }
 

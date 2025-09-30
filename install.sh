@@ -530,8 +530,8 @@ install_scripts() {
 				sed -i.bak "s|\${PROJECT_ROOT}/VERSION|$LIB_PREFIX/VERSION|g" "$dest_path" && rm -f "$dest_path.bak"
 			fi
 
-			# Comment out non-existent check-version.sh calls in installed scripts
-			if grep -q 'check-version.sh' "$dest_path" 2>/dev/null; then
+			# Comment out non-existent check-version.sh calls in installed scripts (except update-imgxsh)
+			if [[ $(basename "$dest_path") != "update-imgxsh" ]] && grep -q 'check-version.sh' "$dest_path" 2>/dev/null; then
 				sed -i.bak 's|^\([[:space:]]*\)\(.*check-version\.sh.*\)$|\1# \2  # Disabled in installed version|g' "$dest_path" && rm -f "$dest_path.bak"
 			fi
 
