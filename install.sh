@@ -691,7 +691,16 @@ show_uninstall_files() {
 # Get user confirmation for uninstall
 get_uninstall_confirmation() {
 	echo -e "${YELLOW}Are you sure you want to remove these files? [y/N]${NC} "
-	read -r response
+	# Try to read from /dev/tty if stdin is piped, otherwise use stdin
+	local response
+	if read -r response 2>/dev/null; then
+		: # Successfully read from stdin
+	elif read -r response </dev/tty 2>/dev/null; then
+		: # Successfully read from /dev/tty
+	else
+		log warn "Unable to read user input, cancelling uninstallation"
+		exit 0
+	fi
 
 	case "$response" in
 	[yY] | [yY][eE][sS])
