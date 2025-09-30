@@ -14,7 +14,7 @@ CURL_TIMEOUT="${CURL_TIMEOUT:-30}"
 CURL_RETRY_COUNT="${CURL_RETRY_COUNT:-3}"
 
 # Colors
-RED='\033[0;31m' GREEN='\033[0;32m' YELLOW='\033[1;33m' BLUE='\033[0;34m' NC='\033[0m'
+RED='\033[0;31m' GREEN='\033[0;32m' YELLOW='\033[1;33m' BLUE='\033[0;34m' CYAN='\033[0;36m' NC='\033[0m'
 
 # Banner functions for installation success
 show_installation_banner() {
@@ -802,9 +802,7 @@ run_uninstaller() {
 
 	local shell_config
 	if shell_config=$(detect_shell_config); then
-		if ! remove_from_path "$shell_config" "$PREFIX"; then
-			log warn "Failed to remove PATH entry - you may need to do this manually"
-		fi
+		remove_from_path "$shell_config" "$PREFIX" || true
 	else
 		log warn "Could not detect shell config - PATH cleanup skipped"
 	fi
@@ -813,6 +811,7 @@ run_uninstaller() {
 	log success "Uninstallation complete!"
 	log info "All imgxsh files and PATH entries have been removed from your system."
 	[[ -n ${shell_config:-} ]] && log info "Please run 'source $shell_config' or restart your shell to update PATH"
+	exit 0
 }
 
 # Main installation
@@ -840,6 +839,40 @@ main() {
 	else
 		log info "Installing imgxsh from local directory"
 	fi
+
+	# Get user confirmation before proceeding
+	echo
+	echo -e "${YELLOW}This will install imgxsh to:${NC}"
+	echo -e "  ${CYAN}Scripts:${NC} $PREFIX"
+	echo -e "  ${CYAN}Libraries:${NC} $LIB_PREFIX"
+	echo
+	echo -ne "${YELLOW}Do you want to continue? [y/N]${NC} "
+
+	local response
+	# Try to read from stdin first (works for both interactive and piped input)
+	if read -r response; then
+		:  # Successfully read from stdin
+	elif [[ -r /dev/tty ]]; then
+		# Fallback to /dev/tty if stdin read fails
+		read -r response </dev/tty 2>/dev/null || {
+			log error "Unable to read user input, cancelling installation"
+			exit 0
+		}
+	else
+		log error "Unable to read user input (no terminal available), cancelling installation"
+		exit 0
+	fi
+
+	case "$response" in
+		[yY]|[yY][eE][sS])
+			log info "Proceeding with installation..."
+			;;
+		*)
+			log info "Installation cancelled by user"
+			exit 0
+			;;
+	esac
+	echo
 
 	# Initialize installation
 	init_manifest
