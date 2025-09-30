@@ -756,18 +756,17 @@ get_uninstall_confirmation() {
 	echo -e "${YELLOW}Are you sure you want to remove these files? [y/N]${NC} "
 	local response
 
-	# Check if stdin is a terminal, otherwise try /dev/tty
-	if [[ -t 0 ]]; then
-		# stdin is a terminal, read from it
-		read -r response
+	# Try to read from stdin first (works for both interactive and piped)
+	if read -r response; then
+		: # Successfully read from stdin
 	elif [[ -r /dev/tty ]]; then
-		# stdin is not a terminal (piped), try /dev/tty
+		# Fallback to /dev/tty if stdin read fails
 		read -r response </dev/tty 2>/dev/null || {
 			log warn "Unable to read user input, cancelling uninstallation"
 			exit 0
 		}
 	else
-		# Neither stdin nor /dev/tty available
+		# No input available
 		log warn "Unable to read user input (no terminal available), cancelling uninstallation"
 		exit 0
 	fi
@@ -833,13 +832,13 @@ run_uninstaller() {
 	log info "Starting imgxsh uninstallation..."
 
 	if [[ ! -f $MANIFEST_FILE ]]; then
-		log error "No installation manifest found at: $MANIFEST_FILE"
-		log error "Either imgxsh was never installed, or the manifest was deleted."
+		log info "No installation manifest found at: $MANIFEST_FILE"
+		log info "imgxsh does not appear to be installed (or manifest was deleted)."
 		log info "If you installed imgxsh manually, you'll need to remove files manually:"
 		log info "  - Check $PREFIX for scripts"
 		log info "  - Check $LIB_PREFIX for libraries"
 		log info "  - Check shell config files for PATH entries"
-		exit 1
+		exit 0
 	fi
 
 	# Validate manifest file is readable
