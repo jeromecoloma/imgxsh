@@ -1553,6 +1553,7 @@ main() {
 			fi
 			if command -v update-imgxsh >/dev/null 2>&1; then
 				update-imgxsh --check
+				exit 0
 			else
 				log::error "update-imgxsh not available"
 				exit 1
