@@ -525,6 +525,11 @@ install_scripts() {
 				sed -i.bak "s|\${SHELL_STARTER_ROOT}/lib/|$LIB_PREFIX/|g" "$dest_path" && rm -f "$dest_path.bak"
 			fi
 
+			# Update VERSION file path in update-imgxsh script
+			if [[ $(basename "$dest_path") == "update-imgxsh" ]]; then
+				sed -i.bak "s|\${PROJECT_ROOT}/VERSION|$LIB_PREFIX/VERSION|g" "$dest_path" && rm -f "$dest_path.bak"
+			fi
+
 			if ! chmod +x "$dest_path"; then
 				log warn "Failed to set executable permission on: $dest_path"
 			fi
@@ -548,9 +553,9 @@ install_scripts() {
 
 		# Copy VERSION file if it exists (required for version detection)
 		if [[ -f "$working_dir/VERSION" ]]; then
-			if cp "$working_dir/VERSION" "$LIB_PREFIX/../VERSION" 2>/dev/null; then
+			if cp "$working_dir/VERSION" "$LIB_PREFIX/VERSION" 2>/dev/null; then
 				log info "Installed VERSION file"
-				echo "$LIB_PREFIX/../VERSION" >>"$MANIFEST_FILE" || {
+				echo "$LIB_PREFIX/VERSION" >>"$MANIFEST_FILE" || {
 					log warn "Failed to add VERSION to manifest"
 				}
 			else
@@ -565,6 +570,11 @@ install_scripts() {
 				sed -i.bak "s|\${SHELL_STARTER_ROOT}/lib/|$LIB_PREFIX/|g" "$lib_file" && rm -f "$lib_file.bak"
 			fi
 
+			# Update SHELL_STARTER_ROOT_DIR references for VERSION file location
+			if grep -q 'SHELL_STARTER_ROOT_DIR' "$lib_file" 2>/dev/null; then
+				sed -i.bak "s|\${SHELL_STARTER_ROOT_DIR}/VERSION|$LIB_PREFIX/VERSION|g" "$lib_file" && rm -f "$lib_file.bak"
+			fi
+
 			if ! chmod 644 "$lib_file"; then
 				log warn "Failed to set permissions on library: $lib_file"
 			fi
@@ -575,7 +585,7 @@ install_scripts() {
 		done
 
 		# Count installed library files
-		lib_count=$(find "$LIB_PREFIX" -type f -name "*.sh" | wc -l)
+		lib_count=$(find "$LIB_PREFIX" -type f -name "*.sh" | wc -l | tr -d ' ')
 		log info "Installed $lib_count library files"
 	else
 		log warn "No 'lib' directory found, skipping library installation"
