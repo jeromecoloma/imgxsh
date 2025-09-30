@@ -1572,11 +1572,31 @@ main() {
 			shift
 			;;
 		--uninstall)
-			# Run the uninstaller via install.sh with proper stdin handling
-			log::info "Running uninstaller..."
+			# Run the uninstaller - confirm first, then call with piped confirmation
+			log::info "This will uninstall imgxsh from your system."
 			echo
-			curl -fsSL https://raw.githubusercontent.com/jeromecoloma/imgxsh/main/install.sh | bash -s -- --uninstall
-			exit $?
+			echo -n "Are you sure you want to continue? [y/N] "
+			read -r response
+			case "$response" in
+				[yY]|[yY][eE][sS])
+					log::info "Uninstalling imgxsh..."
+					# Download and run uninstaller directly (not piped) so stdin works
+					local temp_script="/tmp/imgxsh-uninstall-$$.sh"
+					if curl -fsSL https://raw.githubusercontent.com/jeromecoloma/imgxsh/main/install.sh -o "$temp_script"; then
+						echo "y" | bash "$temp_script" --uninstall
+						local exit_code=$?
+						rm -f "$temp_script"
+						exit $exit_code
+					else
+						log::error "Failed to download uninstaller"
+						exit 1
+					fi
+					;;
+				*)
+					log::info "Uninstallation cancelled"
+					exit 0
+					;;
+			esac
 			;;
 		--validate-workflow)
 			validate_workflow_file="$2"
