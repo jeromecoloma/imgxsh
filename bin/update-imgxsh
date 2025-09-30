@@ -259,7 +259,7 @@ main() {
 
 	if [[ $CHECK_ONLY == true ]]; then
 		check_updates
-		return
+		exit 0
 	fi
 
 	if [[ -z $TARGET_VERSION ]]; then
