@@ -725,6 +725,7 @@ remove_from_path() {
 	if mv "$temp_file" "$config_file"; then
 		log success "Removed imgxsh PATH entries from $config_file"
 		log info "Backup created: $backup_file"
+		return 0
 	else
 		log error "Failed to update $config_file"
 		# Restore from backup
