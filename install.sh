@@ -576,6 +576,7 @@ install_scripts() {
 			fi
 
 			# Update SHELL_STARTER_ROOT references for VERSION file location (in core.sh)
+			# shellcheck disable=SC2016
 			if grep -q '${SHELL_STARTER_ROOT}/VERSION' "$lib_file" 2>/dev/null; then
 				sed -i.bak "s|\${SHELL_STARTER_ROOT}/VERSION|$LIB_PREFIX/VERSION|g" "$lib_file" && rm -f "$lib_file.bak"
 			fi
