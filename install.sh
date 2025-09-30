@@ -530,6 +530,11 @@ install_scripts() {
 				sed -i.bak "s|\${PROJECT_ROOT}/VERSION|$LIB_PREFIX/VERSION|g" "$dest_path" && rm -f "$dest_path.bak"
 			fi
 
+			# Comment out non-existent check-version.sh calls in installed scripts
+			if grep -q 'check-version.sh' "$dest_path" 2>/dev/null; then
+				sed -i.bak 's|^\([[:space:]]*\)\(.*check-version\.sh.*\)$|\1# \2  # Disabled in installed version|g' "$dest_path" && rm -f "$dest_path.bak"
+			fi
+
 			if ! chmod +x "$dest_path"; then
 				log warn "Failed to set executable permission on: $dest_path"
 			fi
@@ -581,6 +586,17 @@ install_scripts() {
 				sed -i.bak "s|\${SHELL_STARTER_ROOT}/VERSION|$LIB_PREFIX/VERSION|g" "$lib_file" && rm -f "$lib_file.bak"
 			fi
 
+			# Update SHELL_STARTER_ROOT references for config directory (in yaml.sh)
+			# shellcheck disable=SC2016
+			if grep -q '${SHELL_STARTER_ROOT}/config/' "$lib_file" 2>/dev/null; then
+				sed -i.bak "s|\${SHELL_STARTER_ROOT}/config/|$LIB_PREFIX/config/|g" "$lib_file" && rm -f "$lib_file.bak"
+			fi
+
+			# Comment out non-existent check-version.sh calls in library files
+			if grep -q 'check-version.sh' "$lib_file" 2>/dev/null; then
+				sed -i.bak 's|^\([[:space:]]*\)\(.*check-version\.sh.*\)$|\1# \2  # Disabled in installed version|g' "$lib_file" && rm -f "$lib_file.bak"
+			fi
+
 			if ! chmod 644 "$lib_file"; then
 				log warn "Failed to set permissions on library: $lib_file"
 			fi
@@ -595,6 +611,24 @@ install_scripts() {
 		log info "Installed $lib_count library files"
 	else
 		log warn "No 'lib' directory found, skipping library installation"
+	fi
+
+	# Install config directory if it exists
+	if [[ -d "$working_dir/config" ]]; then
+		local config_dir="$LIB_PREFIX/config"
+		log info "Installing config files from: $working_dir/config/"
+
+		if ! mkdir -p "$config_dir"; then
+			log warn "Failed to create config directory: $config_dir"
+		elif ! cp -r "$working_dir"/config/* "$config_dir/" 2>/dev/null; then
+			log warn "Failed to copy config files to: $config_dir"
+		else
+			# Add config files to manifest
+			find "$config_dir" -type f | while read -r config_file; do
+				echo "$config_file" >>"$MANIFEST_FILE" || true
+			done
+			log success "Installed config files to: $config_dir"
+		fi
 	fi
 
 	# Report installation results
