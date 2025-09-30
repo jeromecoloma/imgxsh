@@ -30,7 +30,7 @@ steps:
       height: 200
       maintain_aspect: true
       quality: 80
-      output_template: "{output_dir}/thumbnails/{pdf_name}_thumb_{counter:03d}.jpg"
+      output_template: "{output_dir}/{pdf_name}/thumbnails/{pdf_name}_thumb_{counter:03d}.jpg"
 
   - name: create_full_size
     type: convert
@@ -42,7 +42,7 @@ steps:
       quality: 85
       max_width: 1200
       max_height: 800
-      output_template: "{output_dir}/full/{pdf_name}_full_{counter:03d}.{format}"
+      output_template: "{output_dir}/{pdf_name}/full/{pdf_name}_full_{counter:03d}.{format}"
       
   - name: generate_gallery_html
     type: custom
@@ -52,11 +52,15 @@ steps:
       script: |
         #!/bin/bash
         # Generate simple HTML gallery
-        output_dir="./output"
-        html_file="$output_dir/gallery.html"
-        
+        output_dir="{output_dir}"
+        pdf_name="{pdf_name}"
+        html_file="$output_dir/$pdf_name/gallery.html"
+
         echo "Creating gallery at $html_file"
-        
+
+        # Create output directory
+        mkdir -p "$(dirname "$html_file")"
+
         # Create the HTML gallery
         cat > "$html_file" << 'EOF'
         <!DOCTYPE html>
@@ -84,12 +88,12 @@ steps:
         
         # Add thumbnail entries
         counter=1
-        for thumb in "$output_dir/thumbnails"/*.jpg; do
+        for thumb in "$output_dir/$pdf_name/thumbnails"/*.jpg; do
             if [[ -f "$thumb" ]]; then
                 thumb_name=$(basename "$thumb")
                 full_name="${thumb_name/_thumb_/_full_}"
                 full_name="${full_name/.jpg/.webp}"
-                full_path="$output_dir/full/$full_name"
+                full_path="$output_dir/$pdf_name/full/$full_name"
                 
                 if [[ -f "$full_path" ]]; then
                     echo "                <div class=\"gallery-item\">" >> "$html_file"
@@ -144,7 +148,8 @@ hooks:
 
   on_success:
     - 'echo "PDF pages rendered successfully"'
-    - 'echo "Thumbnails and full-size images created in: {output_dir}"'
+    - 'echo "Output created in: {output_dir}/{pdf_name}/"'
+    - 'echo "View gallery at: {output_dir}/{pdf_name}/gallery.html"'
     - 'rm -rf {temp_dir}/pdf-web-{timestamp} 2>/dev/null || true'
 
   on_failure:

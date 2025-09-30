@@ -1037,9 +1037,15 @@ execute_pdf_extract_step() {
 	format=${format:-"png"}
 	quality=${quality:-"85"}
 
-	# Manually substitute template variables since they're not being processed
-	local temp_dir="/tmp/imgxsh/pdf-web"
+	# Get actual template variable values from WF_TEMPLATE context
+	local timestamp
+	timestamp=$(yaml::get_template_var "WF_TEMPLATE" "timestamp")
+	local temp_dir
+	temp_dir=$(yaml::get_template_var "WF_TEMPLATE" "temp_dir")
+
+	# Substitute template variables in output_dir_param
 	output_dir_param="${output_dir_param//\{temp_dir\}/$temp_dir}"
+	output_dir_param="${output_dir_param//\{timestamp\}/$timestamp}"
 
 	# Debug removed
 
@@ -1143,15 +1149,19 @@ execute_convert_step() {
 	format=${format:-"webp"}
 	quality=${quality:-"85"}
 
-	# Manually substitute template variables
-	local temp_dir="/tmp/imgxsh/pdf-web"
-	input_dir="${input_dir//\{temp_dir\}/$temp_dir}"
-	output_template="${output_template//\{output_dir\}/$output_dir}"
+	# Get actual template variable values from WF_TEMPLATE context
+	local timestamp
+	timestamp=$(yaml::get_template_var "WF_TEMPLATE" "timestamp")
+	local temp_dir
+	temp_dir=$(yaml::get_template_var "WF_TEMPLATE" "temp_dir")
+	local pdf_name
+	pdf_name=$(yaml::get_template_var "WF_TEMPLATE" "pdf_name")
 
-	# Create output directory
-	local output_subdir
-	output_subdir=$(dirname "$output_template")
-	mkdir -p "$output_subdir"
+	# Substitute template variables
+	input_dir="${input_dir//\{temp_dir\}/$temp_dir}"
+	input_dir="${input_dir//\{timestamp\}/$timestamp}"
+	output_template="${output_template//\{output_dir\}/$output_dir}"
+	output_template="${output_template//\{pdf_name\}/$pdf_name}"
 
 	local processed_count=0
 	local failed_count=0
@@ -1162,9 +1172,11 @@ execute_convert_step() {
 			local base_name
 			base_name=$(basename "$input_file" | sed 's/\.[^.]*$//')
 			local output_file
-			output_file="${output_template//\{pdf_name\}/document}"
-			output_file="${output_file//\{counter:03d\}/$(printf "%03d" $((processed_count + 1)))}"
+			output_file="${output_template//\{counter:03d\}/$(printf "%03d" $((processed_count + 1)))}"
 			output_file="${output_file//\{format\}/$format}"
+
+			# Create output directory for this file
+			mkdir -p "$(dirname "$output_file")"
 
 			# Use imgxsh-convert to process the image
 			local convert_cmd=("${SHELL_STARTER_ROOT}/bin/imgxsh-convert")
@@ -1234,15 +1246,19 @@ execute_resize_step() {
 	maintain_aspect=${maintain_aspect:-"true"}
 	quality=${quality:-"80"}
 
-	# Manually substitute template variables
-	local temp_dir="/tmp/imgxsh/pdf-web"
-	input_dir="${input_dir//\{temp_dir\}/$temp_dir}"
-	output_template="${output_template//\{output_dir\}/$output_dir}"
+	# Get actual template variable values from WF_TEMPLATE context
+	local timestamp
+	timestamp=$(yaml::get_template_var "WF_TEMPLATE" "timestamp")
+	local temp_dir
+	temp_dir=$(yaml::get_template_var "WF_TEMPLATE" "temp_dir")
+	local pdf_name
+	pdf_name=$(yaml::get_template_var "WF_TEMPLATE" "pdf_name")
 
-	# Create output directory
-	local output_subdir
-	output_subdir=$(dirname "$output_template")
-	mkdir -p "$output_subdir"
+	# Substitute template variables
+	input_dir="${input_dir//\{temp_dir\}/$temp_dir}"
+	input_dir="${input_dir//\{timestamp\}/$timestamp}"
+	output_template="${output_template//\{output_dir\}/$output_dir}"
+	output_template="${output_template//\{pdf_name\}/$pdf_name}"
 
 	local processed_count=0
 	local failed_count=0
@@ -1251,8 +1267,10 @@ execute_resize_step() {
 	for input_file in "$input_dir"/*; do
 		if [[ -f "$input_file" && "$input_file" =~ \.(png|jpg|jpeg|webp|tiff|bmp)$ ]]; then
 			local output_file
-			output_file="${output_template//\{pdf_name\}/document}"
-			output_file="${output_file//\{counter:03d\}/$(printf "%03d" $((processed_count + 1)))}"
+			output_file="${output_template//\{counter:03d\}/$(printf "%03d" $((processed_count + 1)))}"
+
+			# Create output directory for this file
+			mkdir -p "$(dirname "$output_file")"
 
 			# Use imgxsh-resize to create thumbnails
 			local resize_cmd=("${SHELL_STARTER_ROOT}/bin/imgxsh-resize")
@@ -1373,6 +1391,20 @@ execute_custom_step() {
 		log::error "Custom step missing script parameter"
 		return 1
 	fi
+
+	# Get template variable values and substitute in script
+	local timestamp
+	timestamp=$(yaml::get_template_var "WF_TEMPLATE" "timestamp")
+	local temp_dir
+	temp_dir=$(yaml::get_template_var "WF_TEMPLATE" "temp_dir")
+	local pdf_name
+	pdf_name=$(yaml::get_template_var "WF_TEMPLATE" "pdf_name")
+
+	# Substitute template variables in script content
+	script_content="${script_content//\{output_dir\}/$output_dir}"
+	script_content="${script_content//\{pdf_name\}/$pdf_name}"
+	script_content="${script_content//\{temp_dir\}/$temp_dir}"
+	script_content="${script_content//\{timestamp\}/$timestamp}"
 
 	log::info "Executing custom script"
 
