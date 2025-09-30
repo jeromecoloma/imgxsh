@@ -691,14 +691,21 @@ show_uninstall_files() {
 # Get user confirmation for uninstall
 get_uninstall_confirmation() {
 	echo -e "${YELLOW}Are you sure you want to remove these files? [y/N]${NC} "
-	# Try to read from /dev/tty if stdin is piped, otherwise use stdin
 	local response
-	if read -r response 2>/dev/null; then
-		: # Successfully read from stdin
-	elif read -r response </dev/tty 2>/dev/null; then
-		: # Successfully read from /dev/tty
+
+	# Check if stdin is a terminal, otherwise try /dev/tty
+	if [[ -t 0 ]]; then
+		# stdin is a terminal, read from it
+		read -r response
+	elif [[ -r /dev/tty ]]; then
+		# stdin is not a terminal (piped), try /dev/tty
+		read -r response </dev/tty 2>/dev/null || {
+			log warn "Unable to read user input, cancelling uninstallation"
+			exit 0
+		}
 	else
-		log warn "Unable to read user input, cancelling uninstallation"
+		# Neither stdin nor /dev/tty available
+		log warn "Unable to read user input (no terminal available), cancelling uninstallation"
 		exit 0
 	fi
 
