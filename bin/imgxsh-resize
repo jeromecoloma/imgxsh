@@ -46,6 +46,7 @@ OPTIONS:
     --stretch           Stretch to exact dimensions (ignores aspect ratio)
     --max-file-size SZ  Max output size (bytes, or with K/M/G suffix)
     --allow-upscale     Permit enlarging images (default: no upscaling)
+    --background COLOR  Set background color for transparent images (e.g., white, black, #FF0000)
     --backup            Create backup of original file
     --overwrite         Overwrite existing output files
     --dry-run           Preview operations without executing
@@ -88,6 +89,9 @@ EXAMPLES:
 
     # Convert format while resizing
     $(basename "$0") --width 800 --format webp input.jpg output.webp
+
+    # Resize with white background for transparent images
+    $(basename "$0") --width 800 --background white input.png output.png
 
     # Dry run to preview operations
     $(basename "$0") --dry-run --width 800 input.jpg output.jpg
@@ -336,6 +340,7 @@ build_resize_command() {
 	local crop_x="${13:-}"
 	local crop_y="${14:-}"
 	local crop_gravity="${15:-center}"
+	local background="${16:-}"
 
 	local magick_cmd
 	magick_cmd="$(get_imagemagick_cmd)"
@@ -434,6 +439,11 @@ build_resize_command() {
 
 	cmd_parts+=("$input_file")
 
+	# Add background color and flatten for transparent images
+	if [[ -n $background ]]; then
+		cmd_parts+=("-background" "$background" "-flatten")
+	fi
+
 	if [[ -n $resize_spec ]]; then
 		# Enforce smart no-upscale for fit mode when not using percentages
 		if [[ $is_percent_width != true && $is_percent_height != true && $resize_mode == "fit" && ${ALLOW_UPSCALE:-false} != true ]]; then
@@ -493,6 +503,7 @@ resize_image() {
 	local crop_x="${14:-}"
 	local crop_y="${15:-}"
 	local crop_gravity="${16:-center}"
+	local background="${17:-}"
 
 	# Validate input
 	if ! validate_input_file "$input_file"; then
@@ -529,7 +540,7 @@ resize_image() {
 
 	# Build resize command
 	local resize_cmd
-	resize_cmd="$(build_resize_command "$input_file" "$output_file" "$width" "$height" "$max_width" "$max_height" "$min_width" "$min_height" "$aspect_ratio" "$resize_mode" "$quality" "$output_format" "$crop_x" "$crop_y" "$crop_gravity")"
+	resize_cmd="$(build_resize_command "$input_file" "$output_file" "$width" "$height" "$max_width" "$max_height" "$min_width" "$min_height" "$aspect_ratio" "$resize_mode" "$quality" "$output_format" "$crop_x" "$crop_y" "$crop_gravity" "$background")"
 
 	if [[ $VERBOSE == "true" ]]; then
 		log::info "Resize command: $resize_cmd"
@@ -595,6 +606,7 @@ process_directory() {
 	local crop_x="${15:-}"
 	local crop_y="${16:-}"
 	local crop_gravity="${17:-center}"
+	local background="${18:-}"
 
 	local processed=0
 	local failed=0
@@ -660,7 +672,7 @@ process_directory() {
 			spinner::start "Resizing $relative_path"
 			spinner_active=true
 		fi
-		if resize_image "$input_file" "$output_file" "$width" "$height" "$max_width" "$max_height" "$min_width" "$min_height" "$aspect_ratio" "$resize_mode" "$quality" "$format" "$backup" "$crop_x" "$crop_y" "$crop_gravity"; then
+		if resize_image "$input_file" "$output_file" "$width" "$height" "$max_width" "$max_height" "$min_width" "$min_height" "$aspect_ratio" "$resize_mode" "$quality" "$format" "$backup" "$crop_x" "$crop_y" "$crop_gravity" "$background"; then
 			((processed++))
 		else
 			((failed++))
@@ -693,6 +705,7 @@ main() {
 	local format="$DEFAULT_FORMAT"
 	local max_file_size=""
 	local allow_upscale=false
+	local background=""
 	local backup=false
 	local overwrite=false
 	local dry_run=false
@@ -755,6 +768,10 @@ main() {
 		--allow-upscale)
 			allow_upscale=true
 			shift
+			;;
+		--background)
+			background="$2"
+			shift 2
 			;;
 		--aspect-ratio)
 			if ! aspect_ratio="$(parse_aspect_ratio "$2")"; then
@@ -958,11 +975,11 @@ main() {
 
 	# Process files
 	if [[ $input_is_dir == "true" ]]; then
-		if ! process_directory "$input_file" "$output_file" "$width" "$height" "$max_width" "$max_height" "$min_width" "$min_height" "$aspect_ratio" "$resize_mode" "$quality" "$format" "$backup" "$overwrite" "$crop_x" "$crop_y" "$crop_gravity"; then
+		if ! process_directory "$input_file" "$output_file" "$width" "$height" "$max_width" "$max_height" "$min_width" "$min_height" "$aspect_ratio" "$resize_mode" "$quality" "$format" "$backup" "$overwrite" "$crop_x" "$crop_y" "$crop_gravity" "$background"; then
 			exit 1
 		fi
 	else
-		if ! resize_image "$input_file" "$output_file" "$width" "$height" "$max_width" "$max_height" "$min_width" "$min_height" "$aspect_ratio" "$resize_mode" "$quality" "$format" "$backup" "$crop_x" "$crop_y" "$crop_gravity"; then
+		if ! resize_image "$input_file" "$output_file" "$width" "$height" "$max_width" "$max_height" "$min_width" "$min_height" "$aspect_ratio" "$resize_mode" "$quality" "$format" "$backup" "$crop_x" "$crop_y" "$crop_gravity" "$background"; then
 			exit 1
 		fi
 	fi

@@ -201,6 +201,7 @@ validate_output_dir() {
 		if [[ $DRY_RUN == true ]]; then
 			log::info "Would create output directory: $output_dir"
 		else
+			echo ""
 			log::info "Creating output directory: $output_dir"
 			if ! mkdir -p "$output_dir"; then
 				log::error "Failed to create output directory: $output_dir"
@@ -630,6 +631,7 @@ extract_rasterized_pages() {
 	if [[ $failed_count -gt 0 ]]; then
 		log::warn "Successfully processed $processed_count pages, $failed_count failed"
 	else
+		echo ""
 		log::success "Successfully rasterized $processed_count pages"
 	fi
 

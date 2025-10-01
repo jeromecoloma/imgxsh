@@ -631,7 +631,6 @@ yaml::increment_template_var() {
 	local new_value=$((current_value + increment))
 
 	yaml::set_template_var "$context_prefix" "$var_name" "$new_value"
-	echo "$new_value"
 }
 
 # Debug function to show all template variables

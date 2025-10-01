@@ -75,6 +75,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/jeromecoloma/imgxsh/main/uni
 - `imgxsh-convert` - Convert images between formats
 - `imgxsh-resize` - Resize images with aspect ratio control
   - Pixel/percentage sizing, batch directories, smart no-upscale (`--allow-upscale` to override), `--max-file-size`
+  - `--background COLOR` to set background color for transparent images (e.g., white, black, #FF0000)
 - `imgxsh-extract-pdf` - Extract images from PDF documents
   - Default: rasterize one image per page (ImageMagick, density 300, quality 90)
   - `--embedded-images` to extract original embedded raster images (pdfimages)

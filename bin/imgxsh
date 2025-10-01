@@ -281,7 +281,7 @@ execute_pdf_to_thumbnails() {
 		if pdfimages -png "$pdf_file" "$temp_dir/$pdf_name" 2>/dev/null; then
 			spinner::stop
 			local extracted_count
-			extracted_count=$(find "$temp_dir" -name "${pdf_name}-*.png" | wc -l)
+			extracted_count=$(find "$temp_dir" -name "${pdf_name}-*.png" | wc -l | tr -d ' ')
 			log::success "Extracted $extracted_count images from $pdf_name"
 		else
 			spinner::stop
@@ -299,7 +299,7 @@ execute_pdf_to_thumbnails() {
 					thumb_name=$(printf "%s_thumb_%03d.jpg" "$pdf_name" $counter)
 
 					if convert "$image" -resize "200x200>" -quality 80 "$output_dir/$thumb_name" 2>/dev/null; then
-						((counter++))
+						counter=$((counter + 1))
 					else
 						log::warn "Failed to create thumbnail for $(basename "$image")"
 					fi
@@ -405,7 +405,7 @@ execute_excel_extract() {
 			local media_dir="$temp_dir/xl/media"
 			if [[ -d $media_dir ]]; then
 				local image_count
-				image_count=$(find "$media_dir" -type f \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" -o -iname "*.gif" -o -iname "*.bmp" \) | wc -l)
+				image_count=$(find "$media_dir" -type f \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" -o -iname "*.gif" -o -iname "*.bmp" \) | wc -l | tr -d ' ')
 
 				if [[ $image_count -gt 0 ]]; then
 					log::success "Found $image_count images in $excel_name"
@@ -418,7 +418,7 @@ execute_excel_extract() {
 							local new_name
 							new_name=$(printf "%s_image_%03d.%s" "$excel_name" $counter "$ext")
 							cp "$image" "$output_dir/$new_name"
-							((counter++))
+							counter=$((counter + 1))
 						fi
 					done
 
@@ -592,7 +592,7 @@ execute_custom_workflow() {
 						if [[ -n $script_preview ]]; then
 							echo "$script_preview"
 							local line_count
-							line_count=$(echo "$param_value" | wc -l)
+							line_count=$(echo "$param_value" | wc -l | tr -d ' ')
 							if [[ $line_count -gt 3 ]]; then
 								echo "        ... ($((line_count - 3)) more lines)"
 							fi
@@ -876,13 +876,13 @@ execute_custom_workflow() {
 			else
 				log::info "Skipping step $((i + 1)) '$step_name' (condition not met: $step_condition)"
 				should_execute=false
-				((skipped_steps++))
+				skipped_steps=$((skipped_steps + 1))
 			fi
 		fi
 
 		if [[ $should_execute == true ]]; then
 			log::info "Executing step $((i + 1)): $step_name"
-			((executed_steps++))
+			executed_steps=$((executed_steps + 1))
 		else
 			continue
 		fi
@@ -1084,13 +1084,13 @@ execute_pdf_extract_step() {
 				echo # Ensure newline after spinner stop
 				# Count generated files (imgxsh-extract-pdf creates page-*.ext files)
 				local generated_files
-				generated_files=$(find "$output_dir_param" -name "page-*" 2>/dev/null | wc -l)
+				generated_files=$(find "$output_dir_param" -name "page-*" 2>/dev/null | wc -l | tr -d ' ')
 				processed_count=$((processed_count + generated_files))
 				log::success "Generated $generated_files page images from $(basename "$input")"
 			else
 				spinner::stop
 				echo # Ensure newline after spinner stop
-				((failed_count++))
+				failed_count=$((failed_count + 1))
 				log::error "Failed to extract PDF pages: $input"
 			fi
 		else
@@ -1196,12 +1196,12 @@ execute_convert_step() {
 			if error_output=$("${convert_cmd[@]}" 2>&1); then
 				spinner::stop
 				echo # Ensure newline after spinner stop
-				((processed_count++))
+				processed_count=$((processed_count + 1))
 				log::success "Converted: $(basename "$input_file") -> $(basename "$output_file")"
 			else
 				spinner::stop
 				echo # Ensure newline after spinner stop
-				((failed_count++))
+				failed_count=$((failed_count + 1))
 				log::warn "Failed to convert: $(basename "$input_file")"
 				log::error "Convert error: $error_output"
 			fi
@@ -1231,6 +1231,7 @@ execute_resize_step() {
 	local height
 	local maintain_aspect
 	local quality
+	local background
 	local output_template
 
 	input_dir=$(yaml::get_step_param "$workflow_prefix" "$step_index" "input_dir")
@@ -1238,6 +1239,7 @@ execute_resize_step() {
 	height=$(yaml::get_step_param "$workflow_prefix" "$step_index" "height")
 	maintain_aspect=$(yaml::get_step_param "$workflow_prefix" "$step_index" "maintain_aspect")
 	quality=$(yaml::get_step_param "$workflow_prefix" "$step_index" "quality")
+	background=$(yaml::get_step_param "$workflow_prefix" "$step_index" "background")
 	output_template=$(yaml::get_step_param "$workflow_prefix" "$step_index" "output_template")
 
 	# Set defaults
@@ -1276,7 +1278,17 @@ execute_resize_step() {
 			local resize_cmd=("${SHELL_STARTER_ROOT}/bin/imgxsh-resize")
 			resize_cmd+=("--width" "$width")
 			resize_cmd+=("--height" "$height")
-			resize_cmd+=("--quality" "$quality")
+
+			# Add quality only if specified (PNG doesn't need it)
+			if [[ -n "$quality" ]]; then
+				resize_cmd+=("--quality" "$quality")
+			fi
+
+			# Add background color if specified
+			if [[ -n "$background" ]]; then
+				resize_cmd+=("--background" "$background")
+			fi
+
 			resize_cmd+=("--overwrite") # Allow overwriting existing files
 
 			# imgxsh-resize maintains aspect ratio by default, no need for extra flag
@@ -1291,12 +1303,12 @@ execute_resize_step() {
 			if error_output=$("${resize_cmd[@]}" 2>&1); then
 				spinner::stop
 				echo # Ensure newline after spinner stop
-				((processed_count++))
+				processed_count=$((processed_count + 1))
 				log::success "Resized: $(basename "$input_file") -> $(basename "$output_file")"
 			else
 				spinner::stop
 				echo # Ensure newline after spinner stop
-				((failed_count++))
+				failed_count=$((failed_count + 1))
 				log::warn "Failed to resize: $(basename "$input_file")"
 				log::error "Resize error: $error_output"
 			fi
@@ -1859,8 +1871,12 @@ main() {
 
 	# Use preset if specified
 	if [[ -n $preset ]]; then
-		# Check if preset exists in configuration
-		if imgxsh::list_presets "$IMGXSH_CONFIG_FILE" | grep -q "^\s*$preset$"; then
+		# Check if preset exists in active configuration
+		log::debug "Checking for preset '$preset' in: $IMGXSH_ACTIVE_CONFIG"
+		local preset_list
+		preset_list=$(imgxsh::list_presets "$IMGXSH_ACTIVE_CONFIG")
+		log::debug "Available presets from list_presets: $preset_list"
+		if echo "$preset_list" | grep -q "^$preset$"; then
 			# Get base workflow from preset
 			local base_workflow
 			if command -v yq >/dev/null 2>&1; then
@@ -1890,7 +1906,7 @@ main() {
 		else
 			log::error "Unknown preset: $preset"
 			log::info "Available presets:"
-			imgxsh::list_presets "$IMGXSH_CONFIG_FILE" | while read -r available_preset; do
+			imgxsh::list_presets "$IMGXSH_ACTIVE_CONFIG" | while read -r available_preset; do
 				log::info "  - $available_preset"
 			done
 			exit 1

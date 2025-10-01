@@ -29,8 +29,8 @@ steps:
       width: 300
       height: 200
       maintain_aspect: true
-      quality: 80
-      output_template: "{output_dir}/{pdf_name}/thumbnails/{pdf_name}_thumb_{counter:03d}.jpg"
+      background: white
+      output_template: "{output_dir}/{pdf_name}/thumbnails/{pdf_name}_thumb_{counter:03d}.png"
 
   - name: create_full_size
     type: convert
@@ -88,11 +88,11 @@ steps:
         
         # Add thumbnail entries
         counter=1
-        for thumb in "$output_dir/$pdf_name/thumbnails"/*.jpg; do
+        for thumb in "$output_dir/$pdf_name/thumbnails"/*.png; do
             if [[ -f "$thumb" ]]; then
                 thumb_name=$(basename "$thumb")
                 full_name="${thumb_name/_thumb_/_full_}"
-                full_name="${full_name/.jpg/.webp}"
+                full_name="${full_name/.png/.webp}"
                 full_path="$output_dir/$pdf_name/full/$full_name"
                 
                 if [[ -f "$full_path" ]]; then
@@ -101,7 +101,7 @@ steps:
                     echo "                    <h3>Page $counter</h3>" >> "$html_file"
                     echo "                    <p>Click to view full size</p>" >> "$html_file"
                     echo "                </div>" >> "$html_file"
-                    ((counter++))
+                    counter=$((counter + 1))
                 fi
             fi
         done

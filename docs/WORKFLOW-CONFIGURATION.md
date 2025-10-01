@@ -126,8 +126,30 @@ Resizes images with various options.
     height: 200
     maintain_aspect: true
     quality: 80
+    background: white  # Set background color for transparent images (optional)
     allow_upscale: false
     output_template: "{output_dir}/thumbs/{counter:03d}.jpg"
+```
+
+**Parameters**:
+- `width`, `height` - Target dimensions in pixels
+- `maintain_aspect` - Preserve aspect ratio (default: true)
+- `quality` - Quality setting for lossy formats (1-100)
+- `background` - Background color for transparent images (e.g., "white", "black", "#FF0000")
+- `allow_upscale` - Allow enlarging images (default: false)
+- `output_template` - Template for output file names
+
+**Example with PNG thumbnails and white background**:
+```yaml
+- name: create_thumbnails
+  type: resize
+  description: "Create PNG thumbnails with white background"
+  params:
+    input_dir: "{temp_dir}/extracted"
+    width: 300
+    height: 200
+    background: white
+    output_template: "{output_dir}/thumbs/{counter:03d}.png"
 ```
 
 #### `watermark`

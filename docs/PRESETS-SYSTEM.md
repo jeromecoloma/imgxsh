@@ -122,30 +122,38 @@ imgxsh comes with several built-in presets for common use cases.
 
 ```yaml
 name: quick-thumbnails
-description: "Generate small thumbnails quickly for preview purposes"
+description: "Generate small PNG thumbnails quickly for preview purposes"
 base_workflow: pdf-to-web
 
 # Override settings for speed and smaller size
 overrides:
   settings:
     parallel_jobs: 8  # More parallel processing for speed
-    
+
   steps:
     create_thumbnails:
       params:
         width: 150
         height: 100
-        quality: 70
-        
+        # Note: Produces PNG thumbnails with white background
+
     create_full_size:
       # Skip full-size creation for quick mode
       enabled: false
+
+    generate_gallery_html:
+      # Skip gallery generation since no full-size images exist
+      enabled: false
 ```
+
+**Output**: PNG thumbnails only (no gallery.html)
 
 **Use Cases**:
 - Quick PDF preview generation
 - Batch processing where speed is priority over quality
 - Initial content review before full processing
+
+**Note**: This preset does not generate an HTML gallery since full-size images are disabled. Use the standard `pdf-to-web` workflow if you need a gallery.
 
 ### Web Optimization Preset
 
