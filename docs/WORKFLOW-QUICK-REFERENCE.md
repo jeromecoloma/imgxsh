@@ -25,6 +25,13 @@ imgxsh --workflow pdf-to-web --dry-run document.pdf
 
 # Get workflow info
 imgxsh --workflow-info pdf-to-web
+
+# Batch process multiple files
+imgxsh --workflow web-optimize *.jpg
+imgxsh --workflow pdf-to-thumbnails *.pdf
+
+# Batch process with parallel processing
+imgxsh --workflow web-optimize --parallel 8 *.jpg
 ```
 
 ## Workflow Structure
@@ -394,6 +401,25 @@ imgxsh --workflow excel-extract workbook.xlsx
     format: "webp"
     parallel: true
     max_parallel: 4
+```
+
+### Individual Tool Batch Processing
+```bash
+# Directory resizing with structure preservation
+imgxsh-resize --width 800 ./photos/ ./resized/
+
+# Batch format conversion with parallel processing
+imgxsh-batch-convert --format webp --parallel 8 ./images/ ./converted/
+
+# Extract from multiple PDFs
+for pdf in *.pdf; do
+    imgxsh-extract-pdf "$pdf" "./extracted/${pdf%.pdf}/"
+done
+
+# Extract from multiple Excel files
+for excel in *.xlsx; do
+    imgxsh-extract-excel "$excel" "./extracted/${excel%.xlsx}/"
+done
 ```
 
 ### File Filtering

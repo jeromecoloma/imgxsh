@@ -45,13 +45,13 @@ bats_load_library bats-assert
 @test "imgxsh-convert: fails when no arguments provided" {
     run_imgxsh "imgxsh-convert"
     assert_failure
-    assert_output --partial "Input file is required"
+    assert_output --partial "Input file or directory is required"
 }
 
 @test "imgxsh-convert: fails when only input provided" {
     run_imgxsh "imgxsh-convert" "input.png"
     assert_failure
-    assert_output --partial "Output file is required"
+    assert_output --partial "Output file or directory is required"
 }
 
 @test "imgxsh-convert: fails with non-existent input file" {
@@ -62,7 +62,7 @@ bats_load_library bats-assert
     if [[ "$output" == *"Missing required dependencies"* ]]; then
         assert_output --partial "Missing required dependencies"
     else
-        assert_output --partial "Cannot read input file"
+        assert_output --partial "Input path does not exist"
     fi
 }
 
@@ -312,4 +312,240 @@ bats_load_library bats-assert
     run_imgxsh "imgxsh-convert" --version
     assert_success
     assert_output --partial "$expected_version"
+}
+
+# Batch processing tests
+@test "imgxsh-convert: batch processing help mentions directory support" {
+    run_imgxsh "imgxsh-convert" --help
+    assert_success
+    assert_output --partial "Input image file or directory (supports batch processing)"
+    assert_output --partial "BATCH PROCESSING:"
+    assert_output --partial "Supports directory input for recursive batch processing"
+    assert_output --partial "Batch directory conversion"
+}
+
+@test "imgxsh-convert: batch processing with directory input" {
+    # Create test directory structure
+    local test_dir="${BATS_TEST_TMPDIR}/batch_test"
+    local output_dir="${BATS_TEST_TMPDIR}/batch_output"
+    mkdir -p "$test_dir"
+    mkdir -p "$test_dir/subdir"
+    
+    # Create test images
+    create_test_image "${test_dir}/image1.png" 100 100
+    create_test_image "${test_dir}/image2.jpg" 150 150
+    create_test_image "${test_dir}/subdir/image3.png" 200 200
+    
+    # Run batch conversion
+    run_imgxsh "imgxsh-convert" --format webp --quality 85 "$test_dir" "$output_dir"
+    
+    # Check results
+    assert_success
+    assert_output --partial "Found 3 image files to process"
+    assert_output --partial "Processed: 3 files, Failed: 0 files"
+    
+    # Verify output structure is preserved
+    [[ -f "${output_dir}/image1.webp" ]]
+    [[ -f "${output_dir}/image2.webp" ]]
+    [[ -f "${output_dir}/subdir/image3.webp" ]]
+    
+    # Verify files are valid images (basic check)
+    [[ -s "${output_dir}/image1.webp" ]]  # File exists and is not empty
+    [[ -s "${output_dir}/image2.webp" ]]
+    [[ -s "${output_dir}/subdir/image3.webp" ]]
+}
+
+@test "imgxsh-convert: batch processing with dry-run" {
+    # Create test directory structure
+    local test_dir="${BATS_TEST_TMPDIR}/batch_dry_test"
+    local output_dir="${BATS_TEST_TMPDIR}/batch_dry_output"
+    mkdir -p "$test_dir"
+    
+    # Create test images
+    create_test_image "${test_dir}/image1.png" 100 100
+    create_test_image "${test_dir}/image2.jpg" 150 150
+    
+    # Run batch conversion with dry-run
+    run_imgxsh "imgxsh-convert" --dry-run --format webp "$test_dir" "$output_dir"
+    
+    # Check results
+    assert_success
+    assert_output --partial "Found 2 image files to process"
+    assert_output --partial "Processed: 2 files, Failed: 0 files"
+    
+    # Verify no output files were created
+    [[ ! -f "${output_dir}/image1.webp" ]]
+    [[ ! -f "${output_dir}/image2.webp" ]]
+}
+
+@test "imgxsh-convert: batch processing with verbose output" {
+    # Create test directory structure
+    local test_dir="${BATS_TEST_TMPDIR}/batch_verbose_test"
+    local output_dir="${BATS_TEST_TMPDIR}/batch_verbose_output"
+    mkdir -p "$test_dir"
+    
+    # Create test images
+    create_test_image "${test_dir}/image1.png" 100 100
+    
+    # Run batch conversion with verbose output
+    run_imgxsh "imgxsh-convert" --verbose --format webp "$test_dir" "$output_dir"
+    
+    # Check results
+    assert_success
+    assert_output --partial "Starting image conversion operation..."
+    assert_output --partial "Input directory: $test_dir"
+    assert_output --partial "Output directory: $output_dir"
+    assert_output --partial "Format: webp"
+    assert_output --partial "Found 1 image files to process"
+    assert_output --partial "[1/1] Processing: image1.png"
+}
+
+@test "imgxsh-convert: batch processing with overwrite" {
+    # Create test directory structure
+    local test_dir="${BATS_TEST_TMPDIR}/batch_overwrite_test"
+    local output_dir="${BATS_TEST_TMPDIR}/batch_overwrite_output"
+    mkdir -p "$test_dir"
+    mkdir -p "$output_dir"
+    
+    # Create test images
+    create_test_image "${test_dir}/image1.png" 100 100
+    
+    # Create existing output file
+    create_test_image "${output_dir}/image1.webp" 50 50
+    
+    # Run batch conversion without overwrite (should skip)
+    run_imgxsh "imgxsh-convert" --format webp "$test_dir" "$output_dir"
+    assert_success
+    assert_output --partial "Output file exists, skipping:"
+    
+    # Run batch conversion with overwrite
+    run_imgxsh "imgxsh-convert" --overwrite --format webp "$test_dir" "$output_dir"
+    assert_success
+    assert_output --partial "Processed: 1 files, Failed: 0 files"
+}
+
+@test "imgxsh-convert: batch processing with backup" {
+    # Create test directory structure
+    local test_dir="${BATS_TEST_TMPDIR}/batch_backup_test"
+    local output_dir="${BATS_TEST_TMPDIR}/batch_backup_output"
+    mkdir -p "$test_dir"
+    
+    # Create test images
+    create_test_image "${test_dir}/image1.png" 100 100
+    
+    # Run batch conversion with backup
+    run_imgxsh "imgxsh-convert" --backup --format webp "$test_dir" "$output_dir"
+    
+    # Check results
+    assert_success
+    assert_output --partial "Processed: 1 files, Failed: 0 files"
+    
+    # Verify backup was created
+    local backup_files
+    backup_files=$(find "$test_dir" -name "*.backup.*" | wc -l | tr -d ' ')
+    assert_equal "$backup_files" "1"
+}
+
+@test "imgxsh-convert: batch processing error handling" {
+    # Create test directory structure
+    local test_dir="${BATS_TEST_TMPDIR}/batch_error_test"
+    local output_dir="${BATS_TEST_TMPDIR}/batch_error_output"
+    mkdir -p "$test_dir"
+    
+    # Create test images and one invalid file
+    create_test_image "${test_dir}/image1.png" 100 100
+    create_test_image "${test_dir}/image2.jpg" 150 150
+    echo "not an image" > "${test_dir}/invalid.txt"
+    
+    # Run batch conversion
+    run_imgxsh "imgxsh-convert" --format webp "$test_dir" "$output_dir"
+    
+    # Should succeed but report some failures
+    assert_success
+    assert_output --partial "Found 2 image files to process"
+    assert_output --partial "Processed: 2 files, Failed: 0 files"
+    
+    # Verify only valid images were processed
+    [[ -f "${output_dir}/image1.webp" ]]
+    [[ -f "${output_dir}/image2.webp" ]]
+    [[ ! -f "${output_dir}/invalid.webp" ]]
+}
+
+@test "imgxsh-convert: batch processing with different formats" {
+    # Create test directory structure
+    local test_dir="${BATS_TEST_TMPDIR}/batch_format_test"
+    local output_dir="${BATS_TEST_TMPDIR}/batch_format_output"
+    mkdir -p "$test_dir"
+    
+    # Create test images
+    create_test_image "${test_dir}/image1.png" 100 100
+    create_test_image "${test_dir}/image2.jpg" 150 150
+    
+    # Test different output formats
+    for format in webp jpg png tiff; do
+        local format_output="${output_dir}_${format}"
+        run_imgxsh "imgxsh-convert" --format "$format" "$test_dir" "$format_output"
+        assert_success
+        assert_output --partial "Processed: 2 files, Failed: 0 files"
+        [[ -f "${format_output}/image1.${format}" ]]
+        [[ -f "${format_output}/image2.${format}" ]]
+    done
+}
+
+@test "imgxsh-convert: batch processing with quality settings" {
+    # Create test directory structure
+    local test_dir="${BATS_TEST_TMPDIR}/batch_quality_test"
+    local output_dir="${BATS_TEST_TMPDIR}/batch_quality_output"
+    mkdir -p "$test_dir"
+    
+    # Create test images
+    create_test_image "${test_dir}/image1.jpg" 100 100
+    
+    # Test different quality settings
+    for quality in 50 75 90 95; do
+        local quality_output="${output_dir}_${quality}"
+        run_imgxsh "imgxsh-convert" --format jpg --quality "$quality" "$test_dir" "$quality_output"
+        assert_success
+        assert_output --partial "Processed: 1 files, Failed: 0 files"
+        [[ -f "${quality_output}/image1.jpg" ]]
+    done
+}
+
+@test "imgxsh-convert: batch processing empty directory" {
+    # Create empty test directory
+    local test_dir="${BATS_TEST_TMPDIR}/batch_empty_test"
+    local output_dir="${BATS_TEST_TMPDIR}/batch_empty_output"
+    mkdir -p "$test_dir"
+    
+    # Run batch conversion on empty directory
+    run_imgxsh "imgxsh-convert" --format webp "$test_dir" "$output_dir"
+    
+    # Check results
+    assert_success
+    assert_output --partial "No image files found in directory: $test_dir"
+}
+
+@test "imgxsh-convert: batch processing preserves directory structure" {
+    # Create nested test directory structure
+    local test_dir="${BATS_TEST_TMPDIR}/batch_nested_test"
+    local output_dir="${BATS_TEST_TMPDIR}/batch_nested_output"
+    mkdir -p "$test_dir/level1/level2"
+    
+    # Create test images at different levels
+    create_test_image "${test_dir}/image1.png" 100 100
+    create_test_image "${test_dir}/level1/image2.png" 150 150
+    create_test_image "${test_dir}/level1/level2/image3.png" 200 200
+    
+    # Run batch conversion
+    run_imgxsh "imgxsh-convert" --format webp "$test_dir" "$output_dir"
+    
+    # Check results
+    assert_success
+    assert_output --partial "Found 3 image files to process"
+    assert_output --partial "Processed: 3 files, Failed: 0 files"
+    
+    # Verify directory structure is preserved
+    [[ -f "${output_dir}/image1.webp" ]]
+    [[ -f "${output_dir}/level1/image2.webp" ]]
+    [[ -f "${output_dir}/level1/level2/image3.webp" ]]
 }

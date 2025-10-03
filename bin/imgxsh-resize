@@ -21,7 +21,7 @@ Usage: $(basename "$0") [OPTIONS] INPUT OUTPUT
 Resize images with aspect ratio preservation and quality control.
 
 ARGUMENTS:
-    INPUT               Input image file or directory
+    INPUT               Input image file or directory (supports batch processing)
     OUTPUT              Output image file or directory
 
 OPTIONS:
@@ -84,7 +84,7 @@ EXAMPLES:
     # Crop with gravity positioning
     $(basename "$0") --crop --size 800x600 --crop-gravity northeast input.jpg output.jpg
 
-    # Batch resize directory (preserves relative structure)
+    # Batch resize directory (preserves relative structure, processes recursively)
     $(basename "$0") --width 800 ./images/ ./resized/
 
     # Convert format while resizing
@@ -113,6 +113,13 @@ QUALITY SETTINGS:
     WebP:   1-100 (default: 90)
     TIFF:   Lossless (quality ignored)
     BMP:    Lossless (quality ignored)
+
+BATCH PROCESSING:
+    - Supports directory input for recursive batch processing
+    - Preserves directory structure in output
+    - Shows progress with file counts: [X/Y] Processing: filename
+    - Continues processing even if individual files fail
+    - All resize options work in batch mode
 
 NOTES:
     - Aspect ratio is preserved by default unless --crop or --stretch is used

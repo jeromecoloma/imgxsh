@@ -75,6 +75,11 @@ EXAMPLES:
     # Extract specific pages with custom naming
     $(basename "$0") --page-range "1-5" --prefix "chapter1" document.pdf ./images/
     
+    # Batch process multiple PDFs (use in scripts)
+    for pdf in *.pdf; do
+        \$(basename "\$0") "\$pdf" "./extracted/\${pdf%.pdf}/"
+    done
+    
     # Extract complex page ranges (mixed ranges and individual pages)
     $(basename "$0") --page-range "1,3,7,10-12" document.pdf ./images/
     

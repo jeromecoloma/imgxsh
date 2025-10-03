@@ -27,7 +27,7 @@ version: "1.0"
 settings:
   output_dir: "./output"
   temp_dir: "/tmp/imgxsh"
-  parallel_jobs: 4
+  parallel_jobs: 4  # Controls parallel processing for batch operations
 
 # Workflow steps
 steps:
@@ -461,6 +461,21 @@ settings:
   output_dir: "./output"  # Default output directory
   temp_dir: "/tmp/imgxsh"  # Temporary working directory
 ```
+
+### Batch Processing Settings
+
+```yaml
+settings:
+  parallel_jobs: 4  # Number of parallel jobs for batch processing
+  max_memory: "2GB"  # Maximum memory usage (optional)
+  timeout: 300  # Timeout in seconds (optional)
+```
+
+**Parallel Jobs Configuration**:
+- Controls the number of parallel processes for batch operations
+- Higher values = faster processing but more resource usage
+- Recommended: 4-8 for most systems, 12-16 for high-performance systems
+- Can be overridden with `--parallel N` command line option
 
 ### Performance Settings
 

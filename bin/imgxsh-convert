@@ -17,8 +17,8 @@ Usage: $(basename "$0") [OPTIONS] INPUT OUTPUT
 Convert images between different formats with quality control.
 
 ARGUMENTS:
-    INPUT             Input image file path
-    OUTPUT            Output image file path (format determined by extension)
+    INPUT             Input image file or directory (supports batch processing)
+    OUTPUT            Output image file or directory
 
 OPTIONS:
     -h, --help        Show this help message and exit
@@ -28,6 +28,7 @@ OPTIONS:
     --backup          Create backup of original file before conversion
     --overwrite       Overwrite output file if it exists
     --verbose         Enable verbose output
+    --quiet           Suppress non-essential output
     --dry-run         Show what would be done without executing
 
 SUPPORTED FORMATS:
@@ -43,14 +44,27 @@ QUALITY SETTINGS:
     WebP              1-100 (default: 90, recommended: 80-95)
 
 EXAMPLES:
+    # Single file conversion
     $(basename "$0") photo.png photo.jpg
     $(basename "$0") --quality 95 image.jpg image.webp
     $(basename "$0") --format png --backup document.pdf document.png
     $(basename "$0") --dry-run --verbose input.tiff output.jpg
+    
+    # Batch directory conversion
+    $(basename "$0") --format webp --quality 90 ./photos/ ./converted/
+    $(basename "$0") --format jpg --quality 85 --overwrite ./images/ ./web_images/
+    $(basename "$0") --dry-run --verbose --format png ./input/ ./output/
 
 DEPENDENCIES:
     ImageMagick       Required for all format conversions
     
+BATCH PROCESSING:
+    - Supports directory input for recursive batch processing
+    - Preserves directory structure in output
+    - Shows progress with file counts: [X/Y] Processing: filename
+    - Continues processing even if individual files fail
+    - All conversion options work in batch mode
+
 NOTES:
     - Output format is determined by file extension unless --format is specified
     - Use --dry-run to preview operations before execution
@@ -247,6 +261,161 @@ convert_image() {
 	fi
 }
 
+# Validate output path for batch processing
+validate_output_path() {
+	local output="$1"
+	local input_is_dir="$2"
+
+	if [[ $input_is_dir == "true" ]]; then
+		# For directory input, output should be a directory
+		if [[ -f $output ]]; then
+			log::error "Output must be a directory when input is a directory: $output"
+			return 1
+		fi
+
+		# Create output directory if it doesn't exist
+		if [[ ! -d $output ]]; then
+			if [[ ${DRY_RUN:-false} != "true" ]]; then
+				mkdir -p "$output" || {
+					log::error "Cannot create output directory: $output"
+					return 1
+				}
+				log::info "Created output directory: $output"
+			else
+				log::info "Would create output directory: $output"
+			fi
+		fi
+	else
+		# For file input, ensure output directory exists
+		local output_dir
+		output_dir="$(dirname "$output")"
+
+		if [[ ! -d $output_dir ]]; then
+			if [[ ${DRY_RUN:-false} != "true" ]]; then
+				mkdir -p "$output_dir" || {
+					log::error "Cannot create output directory: $output_dir"
+					return 1
+				}
+				log::info "Created output directory: $output_dir"
+			else
+				log::info "Would create output directory: $output_dir"
+			fi
+		fi
+	fi
+
+	return 0
+}
+
+# Process directory for batch conversion
+process_directory() {
+	local input_dir="$1"
+	local output_dir="$2"
+	local format="$3"
+	local quality="$4"
+	local backup="$5"
+	local overwrite="$6"
+	local verbose="$7"
+	local dry_run="$8"
+
+	local processed=0
+	local failed=0
+
+	# Find image files
+	local image_files=()
+	while IFS= read -r -d '' file; do
+		image_files+=("$file")
+	done < <(find "$input_dir" -type f \( -iname "*.png" -o -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.webp" -o -iname "*.tiff" -o -iname "*.tif" -o -iname "*.bmp" -o -iname "*.gif" \) -print0)
+
+	if [[ ${#image_files[@]} -eq 0 ]]; then
+		log::warn "No image files found in directory: $input_dir"
+		return 0
+	fi
+
+	log::info "Found ${#image_files[@]} image files to process"
+
+	for input_file in "${image_files[@]}"; do
+		# Determine output file path
+		local relative_path
+		relative_path="${input_file#"$input_dir"}"
+		relative_path="${relative_path#/}" # Remove leading slash
+
+		local output_file="$output_dir/$relative_path"
+
+		# Change extension if format is specified
+		if [[ $format != "auto" ]]; then
+			local base_name
+			base_name="${output_file%.*}"
+			output_file="${base_name}.${format}"
+		fi
+
+		# Ensure parent directory exists for nested outputs
+		local parent_dir
+		parent_dir="$(dirname "$output_file")"
+		if [[ ! -d $parent_dir ]]; then
+			if [[ ${DRY_RUN:-false} == "true" ]]; then
+				log::info "Would create output subdirectory: $parent_dir"
+			else
+				mkdir -p "$parent_dir" || {
+					log::error "Cannot create output subdirectory: $parent_dir"
+					((failed++))
+					continue
+				}
+			fi
+		fi
+
+		# Check if output file exists
+		if [[ -f $output_file && $overwrite != "true" ]]; then
+			log::warn "Output file exists, skipping: $output_file"
+			continue
+		fi
+
+		# Create backup if requested
+		if [[ $backup == "true" ]] && [[ ${DRY_RUN:-false} != "true" ]]; then
+			if [[ -f $input_file ]] && [[ $input_file != "$output_file" ]]; then
+				local backup_file="${input_file}.backup.$(date +%Y%m%d_%H%M%S)"
+				if cp "$input_file" "$backup_file"; then
+					if [[ $verbose == "true" ]]; then
+						log::info "Created backup: $backup_file"
+					fi
+				else
+					log::error "Failed to create backup of: $input_file"
+					((failed++))
+					continue
+				fi
+			fi
+		fi
+
+		# Process the file
+		# Progress indicator
+		if [[ ${QUIET:-false} != "true" ]]; then
+			local idx_msg
+			idx_msg="[$((processed + failed + 1))/${#image_files[@]}] Processing: $relative_path"
+			log::info "$idx_msg"
+		fi
+		local spinner_active=false
+		if [[ ${DRY_RUN:-false} != "true" && ${QUIET:-false} != "true" ]]; then
+			spinner::start "Converting $relative_path"
+			spinner_active=true
+		fi
+		if convert_image "$input_file" "$output_file" "$format" "$quality" "$verbose" "$dry_run"; then
+			((processed++))
+		else
+			((failed++))
+		fi
+		if [[ $spinner_active == true ]]; then
+			spinner::stop || true
+		fi
+	done
+
+	log::info "Processed: $processed files, Failed: $failed files"
+
+	if [[ $failed -gt 0 ]]; then
+		return 1
+	fi
+
+	return 0
+}
+
 main() {
 	# Default values
 	local quality=""
@@ -254,6 +423,7 @@ main() {
 	local backup=false
 	local overwrite=false
 	local verbose=false
+	local quiet=false
 	local dry_run=false
 	local input=""
 	local output=""
@@ -287,6 +457,10 @@ main() {
 			;;
 		--verbose)
 			verbose=true
+			shift
+			;;
+		--quiet)
+			quiet=true
 			shift
 			;;
 		--dry-run)
@@ -333,13 +507,13 @@ main() {
 
 	# Validate required arguments
 	if [[ -z $input ]]; then
-		log::error "Input file is required"
+		log::error "Input file or directory is required"
 		show_help
 		exit 1
 	fi
 
 	if [[ -z $output ]]; then
-		log::error "Output file is required"
+		log::error "Output file or directory is required"
 		show_help
 		exit 1
 	fi
@@ -349,8 +523,19 @@ main() {
 		exit 1
 	fi
 
-	# Validate input file
-	if [[ ! -r $input ]]; then
+	# Determine if input is directory
+	local input_is_dir=false
+	if [[ -d $input ]]; then
+		input_is_dir=true
+	elif [[ -f $input ]]; then
+		input_is_dir=false
+	else
+		log::error "Input path does not exist: $input"
+		exit 1
+	fi
+
+	# Validate input file/directory
+	if [[ $input_is_dir == "false" ]] && [[ ! -r $input ]]; then
 		log::error "Cannot read input file: $input"
 		exit 1
 	fi
@@ -378,6 +563,11 @@ main() {
 
 	# Validate quality
 	if ! validate_quality "$quality"; then
+		exit 1
+	fi
+
+	# Validate output path
+	if ! validate_output_path "$output" "$input_is_dir"; then
 		exit 1
 	fi
 
@@ -416,35 +606,71 @@ main() {
 		log::info "  Dry-run:  $dry_run"
 	fi
 
-	# Perform conversion
-	if [[ $verbose == true ]] && [[ $dry_run != true ]]; then
-		spinner::start "Converting $input to $format format"
+	# Set global variables for use in functions
+	export DRY_RUN="$dry_run"
+	export VERBOSE="$verbose"
+	export QUIET="$quiet"
+
+	# Show operation summary
+	if [[ $verbose == true ]] || [[ $dry_run == true ]]; then
+		log::info "Starting image conversion operation..."
+		if [[ $input_is_dir == "true" ]]; then
+			log::info "Input directory: $input"
+			log::info "Output directory: $output"
+		else
+			log::info "Input file: $input"
+			log::info "Output file: $output"
+		fi
+		log::info "Format: $format"
+		log::info "Quality: $quality"
+		if [[ $backup == "true" ]]; then
+			log::info "Backup: enabled"
+		fi
+		if [[ $dry_run == "true" ]]; then
+			log::info "Mode: dry-run (preview only)"
+		fi
 	fi
 
-	if convert_image "$input" "$output" "$format" "$quality" "$verbose" "$dry_run"; then
-		if [[ $verbose == true ]] && [[ $dry_run != true ]]; then
-			spinner::stop
-		fi
-
-		if [[ $dry_run == true ]]; then
-			log::success "Dry-run completed - no files were modified"
-		else
-			log::success "Successfully converted $input to $output"
-
-			# Show output file information
-			if [[ $verbose == true ]]; then
-				local output_info
-				if output_info=$(get_image_info "$output"); then
-					log::info "Output image: $output_info"
-				fi
-			fi
+	# Process files
+	if [[ $input_is_dir == "true" ]]; then
+		if ! process_directory "$input" "$output" "$format" "$quality" "$backup" "$overwrite" "$verbose" "$dry_run"; then
+			exit 1
 		fi
 	else
+		# Single file processing
 		if [[ $verbose == true ]] && [[ $dry_run != true ]]; then
-			spinner::stop
+			spinner::start "Converting $input to $format format"
 		fi
-		log::error "Conversion failed"
-		exit 1
+
+		if convert_image "$input" "$output" "$format" "$quality" "$verbose" "$dry_run"; then
+			if [[ $verbose == true ]] && [[ $dry_run != true ]]; then
+				spinner::stop
+			fi
+
+			if [[ $dry_run == true ]]; then
+				log::success "Dry-run completed - no files were modified"
+			else
+				log::success "Successfully converted $input to $output"
+
+				# Show output file information
+				if [[ $verbose == true ]]; then
+					local output_info
+					if output_info=$(get_image_info "$output"); then
+						log::info "Output image: $output_info"
+					fi
+				fi
+			fi
+		else
+			if [[ $verbose == true ]] && [[ $dry_run != true ]]; then
+				spinner::stop
+			fi
+			log::error "Conversion failed"
+			exit 1
+		fi
+	fi
+
+	if [[ $verbose != "true" ]] && [[ $dry_run != "true" ]]; then
+		log::success "Conversion operation completed successfully"
 	fi
 }
 

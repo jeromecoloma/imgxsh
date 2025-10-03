@@ -62,8 +62,22 @@ OPTIONS:
     --check-version       Check current version information
 
 EXAMPLES:
+    # Extract all embedded images
     $(basename "$0") workbook.xlsx ./extracted/
+    
+    # Preview embedded media without extracting
     $(basename "$0") --list-only workbook.xlsx ./temp/
+    
+    # Extract with format conversion
+    $(basename "$0") --format jpg --quality 85 workbook.xlsx ./converted/
+    
+    # Keep original embedded names
+    $(basename "$0") --keep-names workbook.xlsx ./extracted/
+    
+    # Batch process multiple Excel files (use in scripts)
+    for excel in *.xlsx; do
+        \$(basename "\$0") "\$excel" "./extracted/\${excel%.xlsx}/"
+    done
 
 DEPENDENCIES:
     unzip                 Required for .xlsx archive inspection/extraction

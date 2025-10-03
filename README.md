@@ -10,7 +10,7 @@ imgxsh is a workflow-driven image processing CLI tool built on the [Shell Starte
 
 - **Multi-source Extraction**: Extract images from PDFs, Excel files, and process individual images
 - **Workflow Orchestration**: YAML-based workflow configuration with conditional logic
-- **Batch Processing**: Parallel processing with progress tracking
+- **Advanced Batch Processing**: Full directory processing with parallel execution and progress tracking
 - **Format Conversion**: Support for PNG, JPG, WebP, TIFF, BMP with quality control
 - **Template-based Naming**: Flexible output file naming with variables
 - **Plugin System**: Extensible through custom workflow steps
@@ -39,6 +39,242 @@ imgxsh --preset web-thumbnails *.jpg
 
 # Preview operations without execution
 imgxsh --config custom.yaml --dry-run ./images/
+```
+
+## 🔄 Batch Processing
+
+imgxsh provides powerful batch processing capabilities across all tools, allowing you to process entire directories efficiently with parallel execution and progress tracking.
+
+### Batch Processing Overview
+
+| Tool | Directory Support | Parallel Processing | Progress Tracking | Use Case |
+|------|-------------------|-------------------|------------------|----------|
+| `imgxsh-resize` | ✅ Full recursive | ✅ Built-in | ✅ Yes | Resize entire directory trees |
+| `imgxsh-convert` | ✅ Full recursive | ✅ Built-in | ✅ Yes | Convert formats in batch |
+| `imgxsh-extract-pdf` | ✅ Output dir | ❌ Single PDF | ✅ Yes | Extract from single PDF |
+| `imgxsh-extract-excel` | ✅ Output dir | ❌ Single Excel | ✅ Yes | Extract from single Excel |
+| `imgxsh` (workflows) | ✅ Full recursive | ✅ Configurable | ✅ Yes | Advanced batch workflows |
+
+### Quick Batch Examples
+
+```bash
+# Resize entire directory with parallel processing
+imgxsh-resize --width 800 --format webp ./photos/ ./web_photos/
+
+# Batch convert with directory processing
+imgxsh-convert --format webp --quality 90 ./images/ ./converted/
+
+# Process multiple files with workflows
+imgxsh --workflow web-optimize *.jpg
+imgxsh --workflow pdf-to-thumbnails *.pdf
+
+# Batch process with custom parallel settings
+imgxsh --workflow batch-convert --parallel 12 ./large_dataset/
+```
+
+### Detailed Batch Processing Guide
+
+#### 1. Directory Resizing (`imgxsh-resize`)
+
+The most comprehensive batch tool - processes entire directory trees recursively:
+
+```bash
+# Basic batch resize (preserves directory structure)
+imgxsh-resize --width 1200 ./photos/ ./resized/
+
+# Batch resize with format conversion and quality control
+imgxsh-resize --width 800 --format webp --quality 85 ./images/ ./web_images/
+
+# Batch resize with constraints and aspect ratio
+imgxsh-resize --max-width 1920 --max-height 1080 --aspect-ratio 16:9 ./photos/ ./gallery/
+
+# Batch resize with crop and background handling
+imgxsh-resize --crop --size 800x600 --background white ./transparent/ ./cropped/
+
+# Dry run to preview batch operations
+imgxsh-resize --dry-run --verbose --width 800 ./photos/ ./resized/
+```
+
+**Features:**
+- ✅ **Recursive processing**: Handles nested directory structures
+- ✅ **Structure preservation**: Maintains relative paths in output
+- ✅ **Progress tracking**: Shows `[X/Y] Processing: filename` for each file
+- ✅ **Spinner animations**: Visual feedback during processing
+- ✅ **Error handling**: Continues processing on individual file failures
+- ✅ **Comprehensive options**: All resize options work in batch mode
+
+#### 2. Batch Format Conversion (`imgxsh-convert`)
+
+Integrated batch processing for converting image formats:
+
+```bash
+# Convert all images to WebP format
+imgxsh-convert --format webp --quality 90 ./photos/ ./web_photos/
+
+# Convert with backup and overwrite control
+imgxsh-convert --format webp --backup --overwrite ./photos/ ./optimized/
+
+# Preview batch operations
+imgxsh-convert --dry-run --verbose --format webp ./photos/ ./converted/
+```
+
+**Features:**
+- ✅ **Directory processing**: Handles entire directory trees recursively
+- ✅ **Structure preservation**: Maintains relative directory structure
+- ✅ **Progress tracking**: Shows `[X/Y] Processing: filename` for each file
+- ✅ **Backup creation**: `--backup` to preserve originals
+- ✅ **Overwrite control**: `--overwrite` to replace existing files
+- ✅ **Dry-run mode**: Preview operations without execution
+
+#### 3. PDF Image Extraction (`imgxsh-extract-pdf`)
+
+Extract multiple images from PDF documents:
+
+```bash
+# Extract all pages as images
+imgxsh-extract-pdf document.pdf ./extracted/
+
+# Extract specific page ranges
+imgxsh-extract-pdf --page-range "1-5" document.pdf ./pages/
+
+# Extract embedded images instead of rasterizing
+imgxsh-extract-pdf --embedded-images document.pdf ./embedded/
+
+# Extract with format conversion
+imgxsh-extract-pdf --format png --quality 95 document.pdf ./extracted/
+```
+
+**Features:**
+- ✅ **Multiple extraction methods**: Rasterization or embedded image extraction
+- ✅ **Page range selection**: `1-5`, `1,3,7`, `5-`, `1-3,5,7-9`
+- ✅ **Sequential numbering**: Maintains consistent naming scheme
+- ✅ **Progress tracking**: Shows extraction progress and file counts
+
+#### 4. Excel Image Extraction (`imgxsh-extract-excel`)
+
+Extract embedded images from Excel files:
+
+```bash
+# Extract all embedded images
+imgxsh-extract-excel workbook.xlsx ./extracted/
+
+# Extract with format conversion
+imgxsh-extract-excel --format jpg --quality 85 workbook.xlsx ./converted/
+
+# Keep original embedded names
+imgxsh-extract-excel --keep-names workbook.xlsx ./extracted/
+
+# Preview embedded media
+imgxsh-extract-excel --list-only workbook.xlsx ./out
+```
+
+#### 5. Advanced Workflow Batch Processing (`imgxsh`)
+
+The main workflow system provides the most sophisticated batch processing:
+
+```bash
+# Batch process multiple files with workflows
+imgxsh --workflow web-optimize *.jpg
+imgxsh --workflow pdf-to-thumbnails *.pdf
+imgxsh --workflow excel-extract *.xlsx
+
+# Batch process directories
+imgxsh --workflow web-optimize ./images/
+imgxsh --workflow batch-convert ./photos/
+
+# Parallel processing control
+imgxsh --workflow web-optimize --parallel 8 *.jpg
+
+# Batch processing with custom config
+imgxsh --config batch-config.yaml --workflow custom-batch ./large_dataset/
+```
+
+**Features:**
+- ✅ **Multi-file processing**: Handle multiple input files/directories
+- ✅ **Parallel execution**: Configurable parallel job limits
+- ✅ **Conditional processing**: Smart processing based on file types
+- ✅ **Template variables**: Dynamic file naming and paths
+- ✅ **Progress tracking**: Comprehensive progress reporting
+- ✅ **Error recovery**: Robust error handling and continuation
+
+### Batch Processing Best Practices
+
+#### Performance Optimization
+
+```bash
+# Process directories efficiently
+imgxsh-resize --width 800 ./photos/ ./resized/  # Uses default parallel processing
+imgxsh-convert --format webp ./images/ ./converted/  # Batch conversion
+imgxsh --workflow web-optimize --parallel 12 ./large_dataset/  # High parallel for workflows
+
+# Use appropriate quality settings for batch processing
+imgxsh-resize --width 1200 --quality 85 ./photos/ ./web_photos/  # Balanced quality/size
+imgxsh-convert --format webp --quality 90 ./images/ ./optimized/  # High quality
+```
+
+#### Error Handling
+
+```bash
+# Use dry-run to preview batch operations
+imgxsh-resize --dry-run --verbose --width 800 ./photos/ ./resized/
+imgxsh-convert --dry-run --format webp ./images/ ./converted/
+
+# Enable verbose logging for debugging
+imgxsh-resize --verbose --width 800 ./photos/ ./resized/
+imgxsh --workflow web-optimize --verbose *.jpg
+```
+
+#### Directory Structure Management
+
+```bash
+# Preserve directory structure (imgxsh-resize)
+imgxsh-resize --width 800 ./photos/vacation/ ./resized/vacation/
+
+# Flatten directory structure (imgxsh-convert)
+imgxsh-convert --format webp ./photos/vacation/ ./flattened/
+
+# Custom output organization (workflows)
+imgxsh --workflow web-optimize ./photos/  # Uses workflow-defined structure
+```
+
+### Batch Processing Examples
+
+#### Example 1: Web Gallery Preparation
+
+```bash
+# Resize photos for web gallery
+imgxsh-resize --width 1200 --format webp --quality 85 ./photos/ ./web_gallery/
+
+# Create thumbnails
+imgxsh-resize --width 300 --format jpg --quality 80 ./photos/ ./thumbnails/
+
+# Batch convert remaining images
+imgxsh-convert --format webp --quality 90 ./other_images/ ./web_gallery/
+```
+
+#### Example 2: Document Processing Pipeline
+
+```bash
+# Extract images from multiple PDFs
+for pdf in *.pdf; do
+    imgxsh-extract-pdf "$pdf" "./extracted/${pdf%.pdf}/"
+done
+
+# Batch resize all extracted images
+imgxsh-resize --width 800 --format webp ./extracted/ ./web_ready/
+
+# Process Excel files
+imgxsh-extract-excel --format png workbook.xlsx ./extracted/excel/
+```
+
+#### Example 3: Large Dataset Processing
+
+```bash
+# Use workflow for complex batch processing
+imgxsh --workflow web-optimize --parallel 16 ./large_dataset/
+
+# Custom batch workflow with progress tracking
+imgxsh --config batch-processing.yaml --workflow custom-batch ./dataset/
 ```
 
 ## 🛠️ Installation

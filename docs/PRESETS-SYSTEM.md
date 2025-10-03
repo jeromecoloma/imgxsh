@@ -133,6 +133,80 @@ overrides:
   steps:
     create_thumbnails:
       params:
+```
+
+### Batch Processing Presets
+
+#### High-Performance Batch Preset
+
+**File**: `config/presets/high-performance-batch.yaml`
+
+```yaml
+name: high-performance-batch
+description: "High-performance batch processing with maximum parallelization"
+base_workflow: batch-convert
+
+overrides:
+  settings:
+    parallel_jobs: 16  # Maximum parallel processing
+    max_memory: "4GB"  # High memory allocation
+    
+  steps:
+    convert_format:
+      params:
+        parallel: true
+        max_parallel: 16
+        quality: 85
+        format: "webp"
+```
+
+#### Conservative Batch Preset
+
+**File**: `config/presets/conservative-batch.yaml`
+
+```yaml
+name: conservative-batch
+description: "Conservative batch processing for resource-limited systems"
+base_workflow: batch-convert
+
+overrides:
+  settings:
+    parallel_jobs: 2  # Limited parallel processing
+    max_memory: "1GB"  # Low memory usage
+    
+  steps:
+    convert_format:
+      params:
+        parallel: true
+        max_parallel: 2
+        quality: 80
+        format: "jpg"
+```
+
+#### Web Optimization Batch Preset
+
+**File**: `config/presets/web-optimization-batch.yaml`
+
+```yaml
+name: web-optimization-batch
+description: "Batch optimize images for web use with multiple sizes"
+base_workflow: web-optimize
+
+overrides:
+  settings:
+    parallel_jobs: 8
+    output_dir: "./web-optimized"
+    
+  steps:
+    resize_for_web:
+      params:
+        max_width: 1200
+        max_height: 800
+        quality: 85
+        format: "webp"
+        parallel: true
+        max_parallel: 8
+```
         width: 150
         height: 100
         # Note: Produces PNG thumbnails with white background

@@ -70,6 +70,15 @@ EXAMPLES:
     # Dry-run to preview operations
     $(basename "$0") --workflow web-optimize --dry-run ./images/
     
+    # Batch process multiple files with parallel processing
+    $(basename "$0") --workflow web-optimize --parallel 8 *.jpg
+    $(basename "$0") --workflow pdf-to-thumbnails *.pdf
+    $(basename "$0") --workflow excel-extract *.xlsx
+    
+    # Batch process directories
+    $(basename "$0") --workflow web-optimize ./images/
+    $(basename "$0") --workflow batch-convert ./photos/
+    
     # Custom config with parallel processing
     $(basename "$0") --config custom.yaml --parallel 8 --workflow batch-convert *.jpg
     

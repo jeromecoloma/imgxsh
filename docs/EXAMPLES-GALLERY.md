@@ -11,6 +11,7 @@ This gallery provides real-world examples of imgxsh workflows and presets for co
 - [E-commerce](#e-commerce)
 - [Archival & Backup](#archival--backup)
 - [Automation & CI/CD](#automation--cicd)
+- [Batch Processing](#batch-processing)
 - [Advanced Use Cases](#advanced-use-cases)
 
 ## Content Management
@@ -1136,6 +1137,222 @@ jobs:
       with:
         name: processed-images
         path: build/images/
+```
+
+## Batch Processing
+
+### Large Dataset Processing
+
+**Use Case**: Process thousands of images efficiently with parallel processing and progress tracking.
+
+**Individual Tool Approach**:
+```bash
+# Resize entire directory tree with structure preservation
+imgxsh-resize --width 1200 --format webp --quality 85 ./photos/ ./web_photos/
+
+# Batch convert with parallel processing
+imgxsh-batch-convert --format webp --quality 90 --parallel 12 ./images/ ./converted/
+
+# Extract from multiple PDFs
+for pdf in *.pdf; do
+    imgxsh-extract-pdf "$pdf" "./extracted/${pdf%.pdf}/"
+done
+
+# Extract from multiple Excel files
+for excel in *.xlsx; do
+    imgxsh-extract-excel "$excel" "./extracted/${excel%.xlsx}/"
+done
+```
+
+**Workflow Approach**:
+```bash
+# Process large datasets with workflows
+imgxsh --workflow web-optimize --parallel 16 ./large_dataset/
+
+# Custom batch workflow
+imgxsh --config batch-processing.yaml --workflow custom-batch ./dataset/
+```
+
+### Multi-format Document Processing
+
+**Use Case**: Process mixed document types (PDFs, Excel files, images) in batch.
+
+**Workflow**: `multi-format-batch.yaml`
+
+```yaml
+name: multi-format-batch
+description: "Process mixed document types in batch"
+version: "1.0"
+
+settings:
+  output_dir: "./batch-output"
+  temp_dir: "/tmp/imgxsh/batch"
+  parallel_jobs: 8
+
+steps:
+  - name: detect_format
+    type: custom
+    description: "Detect input document format"
+    params:
+      script: |
+        #!/bin/bash
+        input_file="{workflow_input}"
+        extension="${input_file##*.}"
+        echo "Detected format: $extension"
+        echo "$extension" > "{temp_dir}/format.txt"
+        
+  - name: extract_pdf
+    type: pdf_extract
+    description: "Extract from PDF documents"
+    condition: "format == 'pdf'"
+    params:
+      input: "{workflow_input}"
+      output_dir: "{temp_dir}/extracted"
+      format: "png"
+      
+  - name: extract_excel
+    type: excel_extract
+    description: "Extract from Excel documents"
+    condition: "format == 'xlsx'"
+    params:
+      input: "{workflow_input}"
+      output_dir: "{temp_dir}/extracted"
+      
+  - name: process_images
+    type: convert
+    description: "Process individual image files"
+    condition: "format == 'jpg' || format == 'png'"
+    params:
+      input: "{workflow_input}"
+      output_dir: "{temp_dir}/extracted"
+      format: "png"
+      
+  - name: unified_processing
+    type: resize
+    description: "Unified processing for all extracted images"
+    condition: "extracted_count > 0"
+    params:
+      input_dir: "{temp_dir}/extracted"
+      width: 800
+      height: 600
+      maintain_aspect: true
+      quality: 85
+      format: "webp"
+      output_template: "{output_dir}/{input_name}_processed_{counter:03d}.webp"
+
+hooks:
+  on_success:
+    - echo "Multi-format processing completed"
+    - echo "Processed {processed_count} images from {format} document"
+```
+
+**Usage**:
+```bash
+# Process mixed document types
+imgxsh --workflow multi-format-batch *.pdf *.xlsx *.jpg *.png
+
+# Process directories
+imgxsh --workflow multi-format-batch ./documents/
+```
+
+### Web Gallery Batch Processing
+
+**Use Case**: Create web galleries from large photo collections with multiple sizes.
+
+**Individual Tool Approach**:
+```bash
+# Create web-optimized images
+imgxsh-resize --width 1200 --format webp --quality 85 ./photos/ ./web_gallery/
+
+# Create thumbnails
+imgxsh-resize --width 300 --format jpg --quality 80 ./photos/ ./thumbnails/
+
+# Create multiple sizes for responsive design
+imgxsh-resize --width 800 --format webp --quality 85 ./photos/ ./web_800/
+imgxsh-resize --width 1200 --format webp --quality 85 ./photos/ ./web_1200/
+imgxsh-resize --width 1920 --format webp --quality 85 ./photos/ ./web_1920/
+```
+
+**Workflow Approach**:
+```yaml
+name: web-gallery-batch
+description: "Create web gallery with multiple sizes"
+version: "1.0"
+
+settings:
+  output_dir: "./web-gallery"
+  parallel_jobs: 6
+
+steps:
+  - name: create_thumbnails
+    type: resize
+    description: "Create thumbnail versions"
+    params:
+      input_dir: "{workflow_input}"
+      width: 300
+      height: 300
+      maintain_aspect: true
+      quality: 80
+      format: "jpg"
+      output_template: "{output_dir}/thumbnails/{original_name}_thumb.jpg"
+      
+  - name: create_web_images
+    type: resize
+    description: "Create web-optimized images"
+    params:
+      input_dir: "{workflow_input}"
+      width: 1200
+      height: 1200
+      maintain_aspect: true
+      quality: 85
+      format: "webp"
+      output_template: "{output_dir}/web/{original_name}_web.webp"
+      
+  - name: create_full_size
+    type: resize
+    description: "Create full-size images"
+    params:
+      input_dir: "{workflow_input}"
+      max_width: 1920
+      max_height: 1920
+      maintain_aspect: true
+      quality: 95
+      format: "webp"
+      output_template: "{output_dir}/full/{original_name}_full.webp"
+```
+
+### Social Media Batch Processing
+
+**Use Case**: Create social media images in batch with platform-specific dimensions.
+
+**Individual Tool Approach**:
+```bash
+# Instagram square format (1080x1080)
+imgxsh-resize --crop --size 1080x1080 --crop-gravity center ./photos/ ./instagram/
+
+# Facebook cover format (1200x630)
+imgxsh-resize --crop --size 1200x630 --crop-gravity center ./photos/ ./facebook/
+
+# Twitter header format (1500x500)
+imgxsh-resize --crop --size 1500x500 --crop-gravity center ./photos/ ./twitter/
+
+# LinkedIn post format (1200x627)
+imgxsh-resize --crop --size 1200x627 --crop-gravity center ./photos/ ./linkedin/
+```
+
+### Archive Preparation
+
+**Use Case**: Prepare images for archival with high quality and multiple formats.
+
+**Individual Tool Approach**:
+```bash
+# High-resolution archival images
+imgxsh-resize --width 2400 --format tiff --quality 100 ./photos/ ./archive/
+
+# Convert to multiple formats for compatibility
+imgxsh-batch-convert --format tiff --quality 100 ./photos/ ./archive_tiff/
+imgxsh-batch-convert --format png --quality 100 ./photos/ ./archive_png/
+imgxsh-batch-convert --format jpg --quality 95 ./photos/ ./archive_jpg/
 ```
 
 ## Advanced Use Cases
