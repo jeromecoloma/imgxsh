@@ -585,7 +585,7 @@ install_scripts() {
 			echo "$dest_path" >>"$MANIFEST_FILE" || {
 				log warn "Failed to add to manifest: $dest_path"
 			}
-			((script_count++))
+			script_count=$((script_count + 1))
 			log info "Installed script: $name"
 		fi
 	done
@@ -837,13 +837,13 @@ remove_files() {
 		if [[ -f $file_path ]]; then
 			log info "Removing: $file_path"
 			if rm "$file_path"; then
-				((removed_count++))
+				removed_count=$((removed_count + 1))
 			else
 				log error "Failed to remove: $file_path"
 			fi
 		else
 			log warn "File not found (already removed?): $file_path"
-			((not_found_count++))
+			not_found_count=$((not_found_count + 1))
 		fi
 	done <"$MANIFEST_FILE"
 
