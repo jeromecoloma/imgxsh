@@ -453,19 +453,26 @@ download_release() {
 sed_inplace() {
 	local pattern="$1" file="$2"
 	local temp_file="${file}.tmp.$$"
+	local error_file="${file}.err.$$"
 
-	if sed "$pattern" "$file" >"$temp_file" 2>/dev/null; then
-		if mv "$temp_file" "$file"; then
+	# Run sed and capture stderr to error file
+	if sed "$pattern" "$file" >"$temp_file" 2>"$error_file"; then
+		if mv "$temp_file" "$file" 2>/dev/null; then
+			rm -f "$error_file"
 			return 0
 		else
 			log error "Failed to move temp file during sed operation on: $file"
-			rm -f "$temp_file"
+			rm -f "$temp_file" "$error_file"
 			return 1
 		fi
 	else
 		local exit_code=$?
-		log error "sed operation failed on: $file (pattern: $pattern)"
-		rm -f "$temp_file"
+		log error "sed operation failed on: $file"
+		log error "Pattern: $pattern"
+		if [[ -s $error_file ]]; then
+			log error "Error: $(cat "$error_file")"
+		fi
+		rm -f "$temp_file" "$error_file"
 		return $exit_code
 	fi
 }
@@ -549,18 +556,26 @@ install_scripts() {
 			# Update library paths in installed scripts
 			# Replace SHELL_STARTER_ROOT variable references with actual LIB_PREFIX path
 			if grep -q 'SHELL_STARTER_ROOT' "$dest_path" 2>/dev/null; then
-				sed_inplace "s|\${SHELL_STARTER_ROOT}/lib/|$LIB_PREFIX/|g" "$dest_path"
-				sed_inplace "s|\${SHELL_STARTER_ROOT}/config/|$LIB_PREFIX/config/|g" "$dest_path"
+				if ! sed_inplace "s|\${SHELL_STARTER_ROOT}/lib/|$LIB_PREFIX/|g" "$dest_path"; then
+					log warn "Failed to update SHELL_STARTER_ROOT/lib path in: $name"
+				fi
+				if ! sed_inplace "s|\${SHELL_STARTER_ROOT}/config/|$LIB_PREFIX/config/|g" "$dest_path"; then
+					log warn "Failed to update SHELL_STARTER_ROOT/config path in: $name"
+				fi
 			fi
 
 			# Update VERSION file path in update-imgxsh script
 			if [[ $(basename "$dest_path") == "update-imgxsh" ]]; then
-				sed_inplace "s|\${PROJECT_ROOT}/VERSION|$LIB_PREFIX/VERSION|g" "$dest_path"
+				if ! sed_inplace "s|\${PROJECT_ROOT}/VERSION|$LIB_PREFIX/VERSION|g" "$dest_path"; then
+					log warn "Failed to update PROJECT_ROOT/VERSION path in: $name"
+				fi
 			fi
 
 			# Comment out non-existent check-version.sh calls in installed scripts (except update-imgxsh)
 			if [[ $(basename "$dest_path") != "update-imgxsh" ]] && grep -q 'check-version.sh' "$dest_path" 2>/dev/null; then
-				sed_inplace 's|^\([[:space:]]*\)\(.*check-version\.sh.*\)$|\1# \2  # Disabled in installed version|g' "$dest_path"
+				if ! sed_inplace 's|^\([[:space:]]*\)\(.*check-version\.sh.*\)$|\1# \2  # Disabled in installed version|g' "$dest_path"; then
+					log warn "Failed to comment out check-version.sh calls in: $name"
+				fi
 			fi
 
 			if ! chmod +x "$dest_path"; then
@@ -600,29 +615,29 @@ install_scripts() {
 		find "$LIB_PREFIX" -type f -name "*.sh" | while read -r lib_file; do
 			# Update library paths in library files
 			if grep -q 'SHELL_STARTER_ROOT' "$lib_file" 2>/dev/null; then
-				sed_inplace "s|\${SHELL_STARTER_ROOT}/lib/|$LIB_PREFIX/|g" "$lib_file"
+				sed_inplace "s|\${SHELL_STARTER_ROOT}/lib/|$LIB_PREFIX/|g" "$lib_file" || log warn "Failed to update SHELL_STARTER_ROOT/lib in: $lib_file"
 			fi
 
 			# Update SHELL_STARTER_ROOT_DIR references for VERSION file location
 			if grep -q 'SHELL_STARTER_ROOT_DIR' "$lib_file" 2>/dev/null; then
-				sed_inplace "s|\${SHELL_STARTER_ROOT_DIR}/VERSION|$LIB_PREFIX/VERSION|g" "$lib_file"
+				sed_inplace "s|\${SHELL_STARTER_ROOT_DIR}/VERSION|$LIB_PREFIX/VERSION|g" "$lib_file" || log warn "Failed to update SHELL_STARTER_ROOT_DIR/VERSION in: $lib_file"
 			fi
 
 			# Update SHELL_STARTER_ROOT references for VERSION file location (in core.sh)
 			# shellcheck disable=SC2016
 			if grep -q '${SHELL_STARTER_ROOT}/VERSION' "$lib_file" 2>/dev/null; then
-				sed_inplace "s|\${SHELL_STARTER_ROOT}/VERSION|$LIB_PREFIX/VERSION|g" "$lib_file"
+				sed_inplace "s|\${SHELL_STARTER_ROOT}/VERSION|$LIB_PREFIX/VERSION|g" "$lib_file" || log warn "Failed to update SHELL_STARTER_ROOT/VERSION in: $lib_file"
 			fi
 
 			# Update SHELL_STARTER_ROOT references for config directory (in yaml.sh)
 			# shellcheck disable=SC2016
 			if grep -q '${SHELL_STARTER_ROOT}/config/' "$lib_file" 2>/dev/null; then
-				sed_inplace "s|\${SHELL_STARTER_ROOT}/config/|$LIB_PREFIX/config/|g" "$lib_file"
+				sed_inplace "s|\${SHELL_STARTER_ROOT}/config/|$LIB_PREFIX/config/|g" "$lib_file" || log warn "Failed to update SHELL_STARTER_ROOT/config in: $lib_file"
 			fi
 
 			# Comment out non-existent check-version.sh calls in library files
 			if grep -q 'check-version.sh' "$lib_file" 2>/dev/null; then
-				sed_inplace 's|^\([[:space:]]*\)\(.*check-version\.sh.*\)$|\1# \2  # Disabled in installed version|g' "$lib_file"
+				sed_inplace 's|^\([[:space:]]*\)\(.*check-version\.sh.*\)$|\1# \2  # Disabled in installed version|g' "$lib_file" || log warn "Failed to comment out check-version.sh in: $lib_file"
 			fi
 
 			if ! chmod 644 "$lib_file"; then
