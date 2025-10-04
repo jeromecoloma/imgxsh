@@ -27,6 +27,13 @@ This documentation is organized into several sections to help you get started qu
 - **[Main README - Available Commands](../README.md#available-commands)** - Documentation for all individual tools
 - **[Main README - Usage Examples](../README.md#usage-examples)** - Examples for PDF extraction, Excel processing, etc.
 
+### Batch Processing
+- **[Main README - Batch Processing](../README.md#batch-processing)** - Comprehensive batch processing guide for all tools
+- **[IMGXSH-CONVERT.md](IMGXSH-CONVERT.md)** - Detailed batch conversion documentation
+- **[IMGXSH-RESIZE.md](IMGXSH-RESIZE.md)** - Comprehensive batch resizing documentation
+- **[IMGXSH-EXTRACT-PDF.md](IMGXSH-EXTRACT-PDF.md)** - PDF extraction with batch examples
+- **[IMGXSH-EXTRACT-EXCEL.md](IMGXSH-EXTRACT-EXCEL.md)** - Excel extraction with batch examples
+
 ## 🛠️ Development
 
 ### Testing & Quality Assurance
@@ -47,6 +54,14 @@ This documentation is organized into several sections to help you get started qu
 | [Workflow Configuration Guide](WORKFLOW-CONFIGURATION.md) | Complete workflow system documentation | Advanced users, developers |
 | [Presets System Guide](PRESETS-SYSTEM.md) | Creating and using workflow presets | All users |
 | [Examples Gallery](EXAMPLES-GALLERY.md) | Real-world use cases and complete examples | All users |
+
+### Tool-Specific Documentation
+| Document | Purpose | Audience |
+|----------|---------|----------|
+| [IMGXSH-CONVERT.md](IMGXSH-CONVERT.md) | Comprehensive conversion and batch processing guide | All users |
+| [IMGXSH-RESIZE.md](IMGXSH-RESIZE.md) | Detailed resizing and batch processing documentation | All users |
+| [IMGXSH-EXTRACT-PDF.md](IMGXSH-EXTRACT-PDF.md) | PDF extraction with batch processing examples | All users |
+| [IMGXSH-EXTRACT-EXCEL.md](IMGXSH-EXTRACT-EXCEL.md) | Excel extraction with batch processing examples | All users |
 
 ### Development Documentation
 | Document | Purpose | Audience |
@@ -106,10 +121,10 @@ This documentation is organized into several sections to help you get started qu
 
 ### By Tool
 - **imgxsh**: [Main README - Main Binary](../README.md#main-binary)
-- **imgxsh-convert**: [Main README - Individual Tools](../README.md#individual-tools)
-- **imgxsh-resize**: [Main README - Individual Tools](../README.md#individual-tools)
-- **imgxsh-extract-pdf**: [Main README - PDF Extraction](../README.md#pdf-extraction-imgxsh-extract-pdf)
-- **imgxsh-extract-excel**: [Main README - Excel Extraction](../README.md#excel-extraction-imgxsh-extract-excel)
+- **imgxsh-convert**: [IMGXSH-CONVERT.md](IMGXSH-CONVERT.md) | [Main README - Individual Tools](../README.md#individual-tools)
+- **imgxsh-resize**: [IMGXSH-RESIZE.md](IMGXSH-RESIZE.md) | [Main README - Individual Tools](../README.md#individual-tools)
+- **imgxsh-extract-pdf**: [IMGXSH-EXTRACT-PDF.md](IMGXSH-EXTRACT-PDF.md) | [Main README - PDF Extraction](../README.md#pdf-extraction-imgxsh-extract-pdf)
+- **imgxsh-extract-excel**: [IMGXSH-EXTRACT-EXCEL.md](IMGXSH-EXTRACT-EXCEL.md) | [Main README - Excel Extraction](../README.md#excel-extraction-imgxsh-extract-excel)
 
 ## 🆘 Getting Help
 
@@ -172,6 +187,10 @@ This documentation is maintained alongside the codebase. When adding new feature
 | [Workflow Configuration Guide](WORKFLOW-CONFIGURATION.md) | ✅ Complete | Current | Complete workflow system |
 | [Presets System Guide](PRESETS-SYSTEM.md) | ✅ Complete | Current | Full presets system |
 | [Examples Gallery](EXAMPLES-GALLERY.md) | ✅ Complete | Current | 15+ real-world examples |
+| [IMGXSH-CONVERT.md](IMGXSH-CONVERT.md) | ✅ Complete | Current | Conversion and batch processing |
+| [IMGXSH-RESIZE.md](IMGXSH-RESIZE.md) | ✅ Complete | Current | Resizing and batch processing |
+| [IMGXSH-EXTRACT-PDF.md](IMGXSH-EXTRACT-PDF.md) | ✅ Complete | Current | PDF extraction with batch examples |
+| [IMGXSH-EXTRACT-EXCEL.md](IMGXSH-EXTRACT-EXCEL.md) | ✅ Complete | Current | Excel extraction with batch examples |
 | [Testing Documentation](../tests/README.md) | ✅ Complete | Current | Full testing framework |
 | [Git Hooks Setup](SETUP-HOOKS.md) | ✅ Complete | Current | Pre-push validation |
 

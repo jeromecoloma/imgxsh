@@ -41,6 +41,167 @@ imgxsh --preset web-thumbnails *.jpg
 imgxsh --config custom.yaml --dry-run ./images/
 ```
 
+
+## 🛠️ Installation
+
+> **Note**: imgxsh is currently in development. Installation instructions will be available once the first release is ready.
+
+```bash
+# Remote installation (recommended)
+bash <(curl -fsSL https://raw.githubusercontent.com/jeromecoloma/imgxsh/main/install.sh)
+
+# Local installation (if you've cloned the repository)
+./install.sh --prefix ~/.local/bin
+```
+
+### Uninstallation
+
+```bash
+# Method 1: Using imgxsh built-in uninstaller (recommended)
+imgxsh --uninstall
+
+# Method 2: Standalone uninstaller
+bash <(curl -fsSL https://raw.githubusercontent.com/jeromecoloma/imgxsh/main/uninstall.sh)
+
+# Automatic uninstall without confirmation
+bash <(curl -fsSL https://raw.githubusercontent.com/jeromecoloma/imgxsh/main/uninstall.sh) -y
+```
+
+## 📋 Available Commands
+
+### Main Binary
+- `imgxsh` - Main workflow orchestrator with subcommand support
+
+### Individual Tools
+- `imgxsh-convert` - Convert images between formats
+- `imgxsh-resize` - Resize images with aspect ratio control
+  - Pixel/percentage sizing, batch directories, smart no-upscale (`--allow-upscale` to override), `--max-file-size`
+  - `--background COLOR` to set background color for transparent images (e.g., white, black, #FF0000)
+- `imgxsh-extract-pdf` - Extract images from PDF documents
+  - Default: rasterize one image per page (ImageMagick, density 300, quality 90)
+  - `--embedded-images` to extract original embedded raster images (pdfimages)
+  - `--list-only` shows both Pages (via `pdfinfo`) and Embedded images (via `pdfimages`)
+  - Advanced page range selection: simple ranges (`1-5`), individual pages (`1,3,7`), open ranges (`5-`), mixed ranges (`1-3,5,7-9`)
+  - Sequential output numbering preserves naming scheme while skipping non-selected pages
+  - Format conversion, metadata preservation, template-based naming, quality control, dry-run mode
+- `imgxsh-extract-excel` - Extract images from Excel files
+  - .xlsx support via `unzip` (lists and extracts `xl/media/*`)
+  - .xls (legacy) support via `7z/p7zip` for Composite Document Format
+  - `--list-only` to preview embedded media; verbose shows file list
+  - Naming: default `{prefix}_{NNN}.{ext}` or `--keep-names`
+  - Optional conversion with `-f/--format` and `--quality`
+  - Dry-run support with detailed logs
+- `imgxsh-watermark` - Add watermarks to images
+- `imgxsh-ocr` - Extract text from images using OCR
+
+## 📂 Project Structure
+
+```
+imgxsh/
+├── bin/                # imgxsh binaries (main tool and individual utilities)
+├── tests/              # Comprehensive testing framework with CI integration
+│   ├── run-tests.sh   # Local development test runner
+│   ├── run-tests-ci.sh # CI-optimized test runner (Shell Starter pattern)
+│   ├── setup-ci-environment.sh # CI environment configuration
+│   ├── imgxsh-convert.bats # Comprehensive test suite (30+ tests)
+│   ├── imgxsh-resize.bats  # Resize test suite (CLI, sizing modes, batch)
+│   ├── imgxsh-extract-pdf.bats # PDF extraction test suite (40+ tests)
+│   ├── fixtures/      # Test data (images, PDFs, Excel files)
+│   └── bats-*/        # Bats testing framework and libraries
+├── .github/workflows/  # GitHub Actions CI/CD workflows
+├── docs/               # Project documentation
+│   └── SETUP-HOOKS.md  # Git hooks setup guide
+├── demo/               # Shell Starter example scripts (for reference)
+├── lib/                # Shell Starter library (colors, logging, spinners)
+├── shell-starter-tests/# Shell Starter framework tests (temporary)
+├── shell-starter-docs/ # Shell Starter framework documentation (temporary)
+├── .ai-workflow/       # AI development workflow and requirements
+├── VERSION             # imgxsh version file (SemVer)
+├── .shell-starter-version  # Shell Starter dependency version tracking
+├── install.sh          # imgxsh installer
+└── uninstall.sh        # imgxsh uninstaller
+```
+
+## ⬆️ Updating imgxsh
+
+You can update the imgxsh project itself using the built-in updater.
+
+```bash
+# Quick check for available updates (no changes)
+bin/update-imgxsh --check
+
+# Update to the latest release
+bin/update-imgxsh
+
+# Specify a target version
+bin/update-imgxsh --target-version 0.1.0
+
+# Dry run (show actions without applying changes)
+bin/update-imgxsh --dry-run
+
+# From any tool, check project version and latest release status
+imgxsh --check-version
+imgxsh-convert --check-version
+imgxsh-extract-pdf --check-version
+
+# From any tool, quickly check for updates
+imgxsh --update
+```
+
+## 📘 Usage Examples
+
+### PDF Extraction (`imgxsh-extract-pdf`)
+
+```bash
+# Show PDF summary (pages and embedded images)
+imgxsh-extract-pdf --list-only document.pdf ./out
+
+# Rasterize pages to JPG (default): page-00.jpg, page-01.jpg, ...
+imgxsh-extract-pdf document.pdf ./out
+
+# Extract specific page ranges with sequential numbering
+imgxsh-extract-pdf --page-range "1-5" document.pdf ./out
+imgxsh-extract-pdf --page-range "1,3,7" document.pdf ./out
+imgxsh-extract-pdf --page-range "5-" document.pdf ./out
+imgxsh-extract-pdf --page-range "1-3,5,7-9" document.pdf ./out
+
+# Extract embedded images instead of rasterizing pages
+imgxsh-extract-pdf --embedded-images document.pdf ./out
+
+# Dry run with verbose output
+imgxsh-extract-pdf --dry-run --verbose document.pdf ./out
+```
+
+Notes:
+- Raster mode uses `magick`/`convert -density 300 -quality 90` by default.
+- Complex page ranges are fully supported: simple ranges (`1-5`), individual pages (`1,3,7`), open ranges (`5-`), mixed ranges (`1-3,5,7-9`).
+- Pages are processed individually to maintain correct sequential output numbering (page-01.jpg, page-02.jpg, etc.).
+- Embedded images mode uses `pdfimages` and may produce many images per page depending on the document.
+
+### Excel Extraction (`imgxsh-extract-excel`)
+
+```bash
+# List embedded media without extracting
+imgxsh-extract-excel --list-only workbook.xlsx ./out
+
+# Extract with default naming (image_001.png, ...)
+imgxsh-extract-excel workbook.xlsx ./extracted
+
+# Extract and convert to JPG with quality 85
+imgxsh-extract-excel -f jpg --quality 85 workbook.xlsx ./extracted
+
+# Keep original embedded media names
+imgxsh-extract-excel --keep-names workbook.xlsx ./extracted
+
+# Dry run (show planned actions only)
+imgxsh-extract-excel --dry-run --verbose workbook.xlsx ./extracted
+```
+
+Notes:
+- Project updates use `bin/update-imgxsh`. Shell Starter library updates remain available via `bin/update-shell-starter`.
+- `--check-version` reports the current imgxsh version and the latest GitHub release.
+- In CI or tests, `TEST_MODE=true` ensures update commands are no-ops for speed.
+
 ## 🔄 Batch Processing
 
 imgxsh provides powerful batch processing capabilities across all tools, allowing you to process entire directories efficiently with parallel execution and progress tracking.
@@ -276,166 +437,6 @@ imgxsh --workflow web-optimize --parallel 16 ./large_dataset/
 # Custom batch workflow with progress tracking
 imgxsh --config batch-processing.yaml --workflow custom-batch ./dataset/
 ```
-
-## 🛠️ Installation
-
-> **Note**: imgxsh is currently in development. Installation instructions will be available once the first release is ready.
-
-```bash
-# Remote installation (recommended)
-bash <(curl -fsSL https://raw.githubusercontent.com/jeromecoloma/imgxsh/main/install.sh)
-
-# Local installation (if you've cloned the repository)
-./install.sh --prefix ~/.local/bin
-```
-
-### Uninstallation
-
-```bash
-# Method 1: Using imgxsh built-in uninstaller (recommended)
-imgxsh --uninstall
-
-# Method 2: Standalone uninstaller
-bash <(curl -fsSL https://raw.githubusercontent.com/jeromecoloma/imgxsh/main/uninstall.sh)
-
-# Automatic uninstall without confirmation
-bash <(curl -fsSL https://raw.githubusercontent.com/jeromecoloma/imgxsh/main/uninstall.sh) -y
-```
-
-## 📋 Available Commands
-
-### Main Binary
-- `imgxsh` - Main workflow orchestrator with subcommand support
-
-### Individual Tools
-- `imgxsh-convert` - Convert images between formats
-- `imgxsh-resize` - Resize images with aspect ratio control
-  - Pixel/percentage sizing, batch directories, smart no-upscale (`--allow-upscale` to override), `--max-file-size`
-  - `--background COLOR` to set background color for transparent images (e.g., white, black, #FF0000)
-- `imgxsh-extract-pdf` - Extract images from PDF documents
-  - Default: rasterize one image per page (ImageMagick, density 300, quality 90)
-  - `--embedded-images` to extract original embedded raster images (pdfimages)
-  - `--list-only` shows both Pages (via `pdfinfo`) and Embedded images (via `pdfimages`)
-  - Advanced page range selection: simple ranges (`1-5`), individual pages (`1,3,7`), open ranges (`5-`), mixed ranges (`1-3,5,7-9`)
-  - Sequential output numbering preserves naming scheme while skipping non-selected pages
-  - Format conversion, metadata preservation, template-based naming, quality control, dry-run mode
-- `imgxsh-extract-excel` - Extract images from Excel files
-  - .xlsx support via `unzip` (lists and extracts `xl/media/*`)
-  - .xls (legacy) support via `7z/p7zip` for Composite Document Format
-  - `--list-only` to preview embedded media; verbose shows file list
-  - Naming: default `{prefix}_{NNN}.{ext}` or `--keep-names`
-  - Optional conversion with `-f/--format` and `--quality`
-  - Dry-run support with detailed logs
-- `imgxsh-watermark` - Add watermarks to images
-- `imgxsh-ocr` - Extract text from images using OCR
-
-## 📂 Project Structure
-
-```
-imgxsh/
-├── bin/                # imgxsh binaries (main tool and individual utilities)
-├── tests/              # Comprehensive testing framework with CI integration
-│   ├── run-tests.sh   # Local development test runner
-│   ├── run-tests-ci.sh # CI-optimized test runner (Shell Starter pattern)
-│   ├── setup-ci-environment.sh # CI environment configuration
-│   ├── imgxsh-convert.bats # Comprehensive test suite (30+ tests)
-│   ├── imgxsh-resize.bats  # Resize test suite (CLI, sizing modes, batch)
-│   ├── imgxsh-extract-pdf.bats # PDF extraction test suite (40+ tests)
-│   ├── fixtures/      # Test data (images, PDFs, Excel files)
-│   └── bats-*/        # Bats testing framework and libraries
-├── .github/workflows/  # GitHub Actions CI/CD workflows
-├── docs/               # Project documentation
-│   └── SETUP-HOOKS.md  # Git hooks setup guide
-├── demo/               # Shell Starter example scripts (for reference)
-├── lib/                # Shell Starter library (colors, logging, spinners)
-├── shell-starter-tests/# Shell Starter framework tests (temporary)
-├── shell-starter-docs/ # Shell Starter framework documentation (temporary)
-├── .ai-workflow/       # AI development workflow and requirements
-├── VERSION             # imgxsh version file (SemVer)
-├── .shell-starter-version  # Shell Starter dependency version tracking
-├── install.sh          # imgxsh installer
-└── uninstall.sh        # imgxsh uninstaller
-```
-
-## ⬆️ Updating imgxsh
-
-You can update the imgxsh project itself using the built-in updater.
-
-```bash
-# Quick check for available updates (no changes)
-bin/update-imgxsh --check
-
-# Update to the latest release
-bin/update-imgxsh
-
-# Specify a target version
-bin/update-imgxsh --target-version 0.1.0
-
-# Dry run (show actions without applying changes)
-bin/update-imgxsh --dry-run
-
-# From any tool, check project version and latest release status
-imgxsh --check-version
-imgxsh-convert --check-version
-imgxsh-extract-pdf --check-version
-
-# From any tool, quickly check for updates
-imgxsh --update
-```
-
-## 📘 Usage Examples
-
-### PDF Extraction (`imgxsh-extract-pdf`)
-
-```bash
-# Show PDF summary (pages and embedded images)
-imgxsh-extract-pdf --list-only document.pdf ./out
-
-# Rasterize pages to JPG (default): page-00.jpg, page-01.jpg, ...
-imgxsh-extract-pdf document.pdf ./out
-
-# Extract specific page ranges with sequential numbering
-imgxsh-extract-pdf --page-range "1-5" document.pdf ./out
-imgxsh-extract-pdf --page-range "1,3,7" document.pdf ./out
-imgxsh-extract-pdf --page-range "5-" document.pdf ./out
-imgxsh-extract-pdf --page-range "1-3,5,7-9" document.pdf ./out
-
-# Extract embedded images instead of rasterizing pages
-imgxsh-extract-pdf --embedded-images document.pdf ./out
-
-# Dry run with verbose output
-imgxsh-extract-pdf --dry-run --verbose document.pdf ./out
-```
-
-Notes:
-- Raster mode uses `magick`/`convert -density 300 -quality 90` by default.
-- Complex page ranges are fully supported: simple ranges (`1-5`), individual pages (`1,3,7`), open ranges (`5-`), mixed ranges (`1-3,5,7-9`).
-- Pages are processed individually to maintain correct sequential output numbering (page-01.jpg, page-02.jpg, etc.).
-- Embedded images mode uses `pdfimages` and may produce many images per page depending on the document.
-
-### Excel Extraction (`imgxsh-extract-excel`)
-
-```bash
-# List embedded media without extracting
-imgxsh-extract-excel --list-only workbook.xlsx ./out
-
-# Extract with default naming (image_001.png, ...)
-imgxsh-extract-excel workbook.xlsx ./extracted
-
-# Extract and convert to JPG with quality 85
-imgxsh-extract-excel -f jpg --quality 85 workbook.xlsx ./extracted
-
-# Keep original embedded media names
-imgxsh-extract-excel --keep-names workbook.xlsx ./extracted
-
-# Dry run (show planned actions only)
-imgxsh-extract-excel --dry-run --verbose workbook.xlsx ./extracted
-```
-
-Notes:
-- Project updates use `bin/update-imgxsh`. Shell Starter library updates remain available via `bin/update-shell-starter`.
-- `--check-version` reports the current imgxsh version and the latest GitHub release.
-- In CI or tests, `TEST_MODE=true` ensures update commands are no-ops for speed.
 
 ## 🔧 Configuration & Workflows
 
