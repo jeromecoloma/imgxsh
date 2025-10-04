@@ -164,9 +164,18 @@ show_install_guide() {
 		echo "Note: unzip is typically pre-installed on macOS"
 		;;
 	"ubuntu")
-		echo "Install via apt:"
+		echo "Install via apt and snap:"
 		echo "  sudo apt-get update"
-		echo "  sudo apt-get install imagemagick poppler-utils unzip yq"
+		echo "  sudo apt-get install imagemagick poppler-utils unzip"
+		echo "  sudo snap install yq"
+		echo ""
+		echo "Alternative yq installation (if snap is unavailable):"
+		echo "  # Via binary:"
+		echo "  VERSION=v4.40.5"
+		echo "  wget https://github.com/mikefarah/yq/releases/download/\${VERSION}/yq_linux_amd64 -O /tmp/yq"
+		echo "  sudo mv /tmp/yq /usr/local/bin/yq && sudo chmod +x /usr/local/bin/yq"
+		echo "  # Or via PPA:"
+		echo "  sudo add-apt-repository ppa:rmescandon/yq && sudo apt update && sudo apt install yq -y"
 		;;
 	"centos")
 		echo "Install via yum:"

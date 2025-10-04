@@ -764,7 +764,9 @@ We welcome contributions to imgxsh! The project follows Shell Starter convention
    brew install lefthook shellcheck shfmt imagemagick poppler tesseract yq
 
    # Ubuntu/Debian
-   sudo apt-get install shellcheck imagemagick poppler-utils tesseract-ocr yq
+   sudo apt-get install shellcheck imagemagick poppler-utils tesseract-ocr
+   sudo snap install yq
+   # Alternative yq install: wget binary from https://github.com/mikefarah/yq/releases
    # For lefthook: https://github.com/evilmartians/lefthook#installation
    ```
 
