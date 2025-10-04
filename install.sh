@@ -2,6 +2,11 @@
 
 set -euo pipefail
 
+# Enable error tracing in debug mode
+if [[ ${DEBUG:-0} == 1 ]]; then
+	set -x
+fi
+
 # imgxsh Installer
 # Configuration
 DEFAULT_PREFIX="$HOME/.local/bin"
@@ -449,11 +454,19 @@ sed_inplace() {
 	local pattern="$1" file="$2"
 	local temp_file="${file}.tmp.$$"
 
-	if sed "$pattern" "$file" >"$temp_file"; then
-		mv "$temp_file" "$file"
+	if sed "$pattern" "$file" >"$temp_file" 2>/dev/null; then
+		if mv "$temp_file" "$file"; then
+			return 0
+		else
+			log error "Failed to move temp file during sed operation on: $file"
+			rm -f "$temp_file"
+			return 1
+		fi
 	else
+		local exit_code=$?
+		log error "sed operation failed on: $file (pattern: $pattern)"
 		rm -f "$temp_file"
-		return 1
+		return $exit_code
 	fi
 }
 
@@ -527,6 +540,7 @@ install_scripts() {
 			[[ $skip == true ]] && continue
 
 			dest_path="$PREFIX/$name"
+			log info "Installing script: $name"
 
 			if ! cp "$script" "$dest_path"; then
 				fatal_error "Failed to copy script: $script -> $dest_path"
