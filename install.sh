@@ -889,10 +889,16 @@ main() {
 	fi
 
 	# Auto-detect if we should install from GitHub
-	# If no local bin/ directory exists and --from-github wasn't explicitly set, enable GitHub installation
-	if [[ $FROM_GITHUB == false && ! -d "./bin" ]]; then
-		log info "No local imgxsh files found - downloading from GitHub"
-		FROM_GITHUB=true
+	# Only use local installation if we're in an actual imgxsh source directory
+	if [[ $FROM_GITHUB == false ]]; then
+		# Check if this is a real imgxsh source directory by verifying:
+		# 1. bin/ directory exists with imgxsh executable
+		# 2. lib/ directory exists
+		# 3. Script is being run from a file (not piped/process substitution)
+		if [[ ! -f ./bin/imgxsh ]] || [[ ! -d ./lib ]] || [[ ! -f ${BASH_SOURCE[0]:-} ]]; then
+			log info "Not in imgxsh source directory - downloading from GitHub"
+			FROM_GITHUB=true
+		fi
 	fi
 
 	# Check system prerequisites for installation
