@@ -444,6 +444,19 @@ download_release() {
 	echo "$temp_dir"
 }
 
+# Portable sed in-place editing (works on both macOS and Linux)
+sed_inplace() {
+	local pattern="$1" file="$2"
+	local temp_file="${file}.tmp.$$"
+
+	if sed "$pattern" "$file" >"$temp_file"; then
+		mv "$temp_file" "$file"
+	else
+		rm -f "$temp_file"
+		return 1
+	fi
+}
+
 # Validate directory permissions
 validate_directory_permissions() {
 	local dir="$1" purpose="$2"
@@ -522,18 +535,18 @@ install_scripts() {
 			# Update library paths in installed scripts
 			# Replace SHELL_STARTER_ROOT variable references with actual LIB_PREFIX path
 			if grep -q 'SHELL_STARTER_ROOT' "$dest_path" 2>/dev/null; then
-				sed -i.bak "s|\${SHELL_STARTER_ROOT}/lib/|$LIB_PREFIX/|g" "$dest_path" && rm -f "$dest_path.bak"
-				sed -i.bak "s|\${SHELL_STARTER_ROOT}/config/|$LIB_PREFIX/config/|g" "$dest_path" && rm -f "$dest_path.bak"
+				sed_inplace "s|\${SHELL_STARTER_ROOT}/lib/|$LIB_PREFIX/|g" "$dest_path"
+				sed_inplace "s|\${SHELL_STARTER_ROOT}/config/|$LIB_PREFIX/config/|g" "$dest_path"
 			fi
 
 			# Update VERSION file path in update-imgxsh script
 			if [[ $(basename "$dest_path") == "update-imgxsh" ]]; then
-				sed -i.bak "s|\${PROJECT_ROOT}/VERSION|$LIB_PREFIX/VERSION|g" "$dest_path" && rm -f "$dest_path.bak"
+				sed_inplace "s|\${PROJECT_ROOT}/VERSION|$LIB_PREFIX/VERSION|g" "$dest_path"
 			fi
 
 			# Comment out non-existent check-version.sh calls in installed scripts (except update-imgxsh)
 			if [[ $(basename "$dest_path") != "update-imgxsh" ]] && grep -q 'check-version.sh' "$dest_path" 2>/dev/null; then
-				sed -i.bak 's|^\([[:space:]]*\)\(.*check-version\.sh.*\)$|\1# \2  # Disabled in installed version|g' "$dest_path" && rm -f "$dest_path.bak"
+				sed_inplace 's|^\([[:space:]]*\)\(.*check-version\.sh.*\)$|\1# \2  # Disabled in installed version|g' "$dest_path"
 			fi
 
 			if ! chmod +x "$dest_path"; then
@@ -573,29 +586,29 @@ install_scripts() {
 		find "$LIB_PREFIX" -type f -name "*.sh" | while read -r lib_file; do
 			# Update library paths in library files
 			if grep -q 'SHELL_STARTER_ROOT' "$lib_file" 2>/dev/null; then
-				sed -i.bak "s|\${SHELL_STARTER_ROOT}/lib/|$LIB_PREFIX/|g" "$lib_file" && rm -f "$lib_file.bak"
+				sed_inplace "s|\${SHELL_STARTER_ROOT}/lib/|$LIB_PREFIX/|g" "$lib_file"
 			fi
 
 			# Update SHELL_STARTER_ROOT_DIR references for VERSION file location
 			if grep -q 'SHELL_STARTER_ROOT_DIR' "$lib_file" 2>/dev/null; then
-				sed -i.bak "s|\${SHELL_STARTER_ROOT_DIR}/VERSION|$LIB_PREFIX/VERSION|g" "$lib_file" && rm -f "$lib_file.bak"
+				sed_inplace "s|\${SHELL_STARTER_ROOT_DIR}/VERSION|$LIB_PREFIX/VERSION|g" "$lib_file"
 			fi
 
 			# Update SHELL_STARTER_ROOT references for VERSION file location (in core.sh)
 			# shellcheck disable=SC2016
 			if grep -q '${SHELL_STARTER_ROOT}/VERSION' "$lib_file" 2>/dev/null; then
-				sed -i.bak "s|\${SHELL_STARTER_ROOT}/VERSION|$LIB_PREFIX/VERSION|g" "$lib_file" && rm -f "$lib_file.bak"
+				sed_inplace "s|\${SHELL_STARTER_ROOT}/VERSION|$LIB_PREFIX/VERSION|g" "$lib_file"
 			fi
 
 			# Update SHELL_STARTER_ROOT references for config directory (in yaml.sh)
 			# shellcheck disable=SC2016
 			if grep -q '${SHELL_STARTER_ROOT}/config/' "$lib_file" 2>/dev/null; then
-				sed -i.bak "s|\${SHELL_STARTER_ROOT}/config/|$LIB_PREFIX/config/|g" "$lib_file" && rm -f "$lib_file.bak"
+				sed_inplace "s|\${SHELL_STARTER_ROOT}/config/|$LIB_PREFIX/config/|g" "$lib_file"
 			fi
 
 			# Comment out non-existent check-version.sh calls in library files
 			if grep -q 'check-version.sh' "$lib_file" 2>/dev/null; then
-				sed -i.bak 's|^\([[:space:]]*\)\(.*check-version\.sh.*\)$|\1# \2  # Disabled in installed version|g' "$lib_file" && rm -f "$lib_file.bak"
+				sed_inplace 's|^\([[:space:]]*\)\(.*check-version\.sh.*\)$|\1# \2  # Disabled in installed version|g' "$lib_file"
 			fi
 
 			if ! chmod 644 "$lib_file"; then
