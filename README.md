@@ -28,23 +28,13 @@ imgxsh requires the following tools:
 - **yq** (YAML parsing)
 - **Tesseract** (OCR - optional)
 
-### Basic Usage
-
-```bash
-# Extract images from PDF and convert to web format
-imgxsh --workflow pdf-to-web document.pdf
-
-# Use built-in presets
-imgxsh --preset web-thumbnails *.jpg
-
-# Preview operations without execution
-imgxsh --config custom.yaml --dry-run ./images/
-```
-
+See [Installing Dependencies](#installing-dependencies) below for detailed installation instructions.
 
 ## 🛠️ Installation
 
 > **Note**: imgxsh is currently in development. Installation instructions will be available once the first release is ready.
+
+**Before installing imgxsh**, make sure you have installed the required dependencies (see [Installing Dependencies](#installing-dependencies) below).
 
 ```bash
 # Remote installation (recommended)
@@ -65,6 +55,66 @@ bash <(curl -fsSL https://raw.githubusercontent.com/jeromecoloma/imgxsh/main/uni
 
 # Automatic uninstall without confirmation
 bash <(curl -fsSL https://raw.githubusercontent.com/jeromecoloma/imgxsh/main/uninstall.sh) -y
+```
+
+## 📦 Installing Dependencies
+
+Before installing imgxsh, you need to install the required dependencies for your platform.
+
+### macOS
+
+```bash
+# Install via Homebrew
+brew install imagemagick poppler yq
+
+# Optional: Install Tesseract for OCR features
+brew install tesseract
+```
+
+### Ubuntu/Debian
+
+```bash
+# Install core dependencies
+sudo apt-get update
+sudo apt-get install imagemagick poppler-utils unzip
+
+# Install yq (YAML processor) - recommended binary installation:
+sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
+sudo chmod +x /usr/local/bin/yq
+
+# Alternative: yq via snap (requires granting home directory access)
+# sudo snap install yq && sudo snap connect yq:home
+
+# Optional: Install Tesseract for OCR features
+sudo apt-get install tesseract-ocr
+```
+
+### Verify Dependencies
+
+After installing dependencies, verify they are available:
+
+```bash
+# Manually verify each tool
+convert -version        # ImageMagick
+pdfimages -v           # poppler-utils
+yq --version           # yq YAML processor
+tesseract --version    # Tesseract (optional)
+
+# After installing imgxsh, you can also use:
+imgxsh-check-deps
+```
+
+## 🎨 Basic Usage
+
+```bash
+# Extract images from PDF and convert to web format
+imgxsh --workflow pdf-to-web document.pdf
+
+# Use built-in presets
+imgxsh --preset web-thumbnails *.jpg
+
+# Preview operations without execution
+imgxsh --config custom.yaml --dry-run ./images/
 ```
 
 ## 📋 Available Commands
@@ -765,8 +815,14 @@ We welcome contributions to imgxsh! The project follows Shell Starter convention
 
    # Ubuntu/Debian
    sudo apt-get install shellcheck imagemagick poppler-utils tesseract-ocr
-   sudo snap install yq
-   # Alternative yq install: wget binary from https://github.com/mikefarah/yq/releases
+
+   # yq (YAML processor) - recommended binary installation:
+   sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
+   sudo chmod +x /usr/local/bin/yq
+
+   # Alternative yq via snap (requires: sudo snap connect yq:home for home access)
+   # sudo snap install yq && sudo snap connect yq:home
+
    # For lefthook: https://github.com/evilmartians/lefthook#installation
    ```
 
