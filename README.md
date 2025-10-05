@@ -89,6 +89,30 @@ sudo chmod +x /usr/local/bin/yq
 sudo apt-get install tesseract-ocr
 ```
 
+**⚠️ Ubuntu ImageMagick PDF Policy Fix**
+
+By default, ImageMagick on Ubuntu blocks PDF operations for security reasons. You need to enable PDF processing:
+
+```bash
+# Edit the ImageMagick policy file
+sudo nano /etc/ImageMagick-6/policy.xml
+
+# Find this line near the end:
+#   <policy domain="coder" rights="none" pattern="PDF" />
+#
+# Change it to:
+#   <policy domain="coder" rights="read|write" pattern="PDF" />
+#
+# Save and exit (Ctrl+O, Enter, Ctrl+X)
+```
+
+Verify the fix works:
+```bash
+convert document.pdf test-output.png
+```
+
+If you see `attempt to perform an operation not allowed by the security policy 'PDF'`, the policy file needs to be updated.
+
 ### Verify Dependencies
 
 After installing dependencies, verify they are available:

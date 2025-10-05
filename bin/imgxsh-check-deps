@@ -181,6 +181,15 @@ show_install_guide() {
 		echo "  # Via PPA:"
 		echo "  sudo add-apt-repository ppa:rmescandon/yq"
 		echo "  sudo apt update && sudo apt install yq -y"
+		echo ""
+		echo "IMPORTANT: ImageMagick PDF Policy Fix"
+		echo "  Ubuntu blocks PDF operations by default. Enable PDF processing:"
+		echo "  sudo nano /etc/ImageMagick-6/policy.xml"
+		echo ""
+		echo "  Find: <policy domain=\"coder\" rights=\"none\" pattern=\"PDF\" />"
+		echo "  Change to: <policy domain=\"coder\" rights=\"read|write\" pattern=\"PDF\" />"
+		echo ""
+		echo "  Verify: convert test.pdf output.png"
 		;;
 	"centos")
 		echo "Install via yum:"
