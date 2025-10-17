@@ -1087,10 +1087,13 @@ execute_pdf_extract_step() {
 			# Start spinner for PDF extraction
 			spinner::start "Rasterizing PDF pages: $(basename "$input")"
 
-			# Execute extraction
-			if "${extract_cmd[@]}"; then
+			# Execute extraction and capture output
+			local extract_output
+			if extract_output=$("${extract_cmd[@]}" 2>&1); then
 				spinner::stop
 				echo # Ensure newline after spinner stop
+				# Display captured output
+				echo "$extract_output"
 				# Count generated files (imgxsh-extract-pdf creates page-*.ext files)
 				local generated_files
 				generated_files=$(find "$output_dir_param" -name "page-*" 2>/dev/null | wc -l | tr -d ' ')
@@ -1099,6 +1102,8 @@ execute_pdf_extract_step() {
 			else
 				spinner::stop
 				echo # Ensure newline after spinner stop
+				# Display captured output
+				echo "$extract_output"
 				failed_count=$((failed_count + 1))
 				log::error "Failed to extract PDF pages: $input"
 			fi

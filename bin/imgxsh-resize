@@ -456,7 +456,7 @@ build_resize_command() {
 		if [[ $is_percent_width != true && $is_percent_height != true && $resize_mode == "fit" && ${ALLOW_UPSCALE:-false} != true ]]; then
 			resize_spec+=">"
 		fi
-		cmd_parts+=("-resize" "\"$resize_spec\"")
+		cmd_parts+=("-resize" "$resize_spec")
 	fi
 
 	# Add crop operations for crop/fill modes
@@ -488,8 +488,8 @@ build_resize_command() {
 
 	cmd_parts+=("$output_file")
 
-	# Join command parts with spaces
-	printf '%s ' "${cmd_parts[@]}"
+	# Return the command array (don't join with spaces)
+	printf '%s\n' "${cmd_parts[@]}"
 }
 
 # Resize single image
@@ -546,11 +546,13 @@ resize_image() {
 	fi
 
 	# Build resize command
-	local resize_cmd
-	resize_cmd="$(build_resize_command "$input_file" "$output_file" "$width" "$height" "$max_width" "$max_height" "$min_width" "$min_height" "$aspect_ratio" "$resize_mode" "$quality" "$output_format" "$crop_x" "$crop_y" "$crop_gravity" "$background")"
+	local resize_cmd_array=()
+	while IFS= read -r line; do
+		resize_cmd_array+=("$line")
+	done < <(build_resize_command "$input_file" "$output_file" "$width" "$height" "$max_width" "$max_height" "$min_width" "$min_height" "$aspect_ratio" "$resize_mode" "$quality" "$output_format" "$crop_x" "$crop_y" "$crop_gravity" "$background")
 
 	if [[ $VERBOSE == "true" ]]; then
-		log::info "Resize command: $resize_cmd"
+		log::info "Resize command: ${resize_cmd_array[*]}"
 	fi
 
 	if [[ $DRY_RUN == "true" ]]; then
@@ -559,7 +561,7 @@ resize_image() {
 	fi
 
 	# Execute resize command
-	if eval "$resize_cmd"; then
+	if "${resize_cmd_array[@]}"; then
 		# Enforce max file size if requested
 		if [[ -n ${MAX_FILE_SIZE_LIMIT:-} ]]; then
 			if [[ $DRY_RUN == "true" ]]; then
